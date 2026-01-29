@@ -1,4 +1,7 @@
 # Dev Interview AI (Frontend + FastAPI + Firebase)
+![CI](https://github.com/cleberfarias/Dev-Interview-AI/actions/workflows/ci.yml/badge.svg)
+![Deploy](https://github.com/cleberfarias/Dev-Interview-AI/actions/workflows/deploy.yml/badge.svg)
+
 
 Este projeto foi ajustado para um fluxo real de producao:
 
