@@ -1,0 +1,39 @@
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Regras para documentos de usuário
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+
+      // Permite create apenas se for o próprio usuário e não tentar setar campos proibidos
+      allow create: if request.auth != null
+                    && request.auth.uid == userId
+                    && request.resource.data.uid == userId
+                    && !request.resource.data.keys().hasAny(["credits", "plan", "ledger"]);
+
+      // Permite atualizações limitadas pelo cliente: só campos públicos são permitidos
+      allow update: if request.auth != null
+                    && request.auth.uid == userId
+                    && isAllowedUserUpdate();
+
+      // Bloqueia deleção pelo cliente
+      allow delete: if false;
+
+      function isAllowedUserUpdate() {
+        // Campos que o client NUNCA pode alterar
+        let forbidden = ["credits", "plan", "ledger", "uid", "createdAt"];
+        if (request.resource.data.keys().hasAny(forbidden)) {
+          return false;
+        }
+        // Opcional: restrinja o tamanho/format dos campos públicos
+        return true;
+      }
+    }
+
+    // Por padrão, negar qualquer acesso direto ao restante das coleções pelo client
+    match /{document=**} {
+      allow read: if false;
+      allow write: if false;
+    }
+  }
+}
