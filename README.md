@@ -1,22 +1,23 @@
 # Dev Interview AI (Frontend + FastAPI + Firebase)
 
-Este projeto foi ajustado para um fluxo **real de produção**:
+Este projeto foi ajustado para um fluxo real de producao:
 
-- **Frontend (Vite + React)** usando **Firebase Auth**
-- **Backend (FastAPI)** para chamadas de IA (Gemini) e regras de negócio
-- **Banco**: **Firebase Firestore** (usuários, créditos e histórico)
-- **Créditos**: consumidos **no backend** ao iniciar uma sessão (`/sessions/start`)
+- Frontend (Vite + React) usando Firebase Auth
+- Backend (FastAPI) para chamadas de IA e regras de negocio
+- Banco: Firebase Firestore (usuarios, creditos e historico)
+- Creditos: consumidos no backend ao iniciar uma sessao (/sessions/start)
+- Limites: duracao e perguntas ajustadas por plano (free/pro)
 
 ---
 
 ## 1) Configurar Firebase
 
 1. Crie um projeto no Firebase
-2. Ative **Authentication** (Google + Email/Password)
-3. Crie o **Firestore Database**
-4. Gere uma **Service Account** (para o backend):
-   - Project settings → Service accounts → Generate new private key
-   - Salve como `backend/service-account.json` (não commitar)
+2. Ative Authentication (Google + Email/Password)
+3. Crie o Firestore Database
+4. Gere uma Service Account (para o backend):
+   - Project settings -> Service accounts -> Generate new private key
+   - Salve como backend/service-account.json (nao commitar)
 
 ---
 
@@ -33,7 +34,7 @@ pip install -r requirements.txt
 ./run.sh
 ```
 
-Backend: `http://localhost:8000`
+Backend: http://localhost:8000
 
 ---
 
@@ -46,44 +47,75 @@ npm install
 npm run dev
 ```
 
-Frontend: `http://localhost:3000`
+Frontend: http://localhost:3000
 
 ---
 
 ## 4) Endpoints principais
 
-- `GET /me` → retorna perfil (cria automaticamente no primeiro login)
-- `POST /sessions/start` → **consome 1 crédito** e retorna `{ sessionId, plan, credits }`
-- `POST /ai/name-extract` → extrai nome do áudio
-- `POST /ai/evaluate-audio` → avalia resposta + transcrição (JSON)
-- `POST /ai/final-report` → gera relatório final (JSON)
-- `POST /sessions/{id}/finish` → salva relatório e histórico
-- `POST /credits/dev-add?amount=3` → **DEV ONLY** (controlado por `ALLOW_DEV_CREDITS=true`)
+- GET /me -> retorna perfil (cria automaticamente no primeiro login)
+- POST /sessions/start -> consome 1 credito e retorna { sessionId, plan, credits }
+- POST /ai/name-extract -> extrai nome do audio
+- POST /ai/evaluate-audio -> avalia resposta + transcricao (JSON)
+- POST /ai/final-report -> gera relatorio final (JSON)
+- POST /sessions/{id}/finish -> salva relatorio e historico
+- POST /credits/dev-add?amount=3 -> DEV ONLY (controlado por ALLOW_DEV_CREDITS=true)
 
 ---
 
-## Deploy (visão geral)
+## Limites e teste gratuito
 
-- **Frontend**: Vercel/Netlify (variáveis `VITE_*`)
-- **Backend**: Render/Fly.io/Cloud Run
-  - configure `GEMINI_API_KEY`
-  - configure `FIREBASE_SERVICE_ACCOUNT_JSON` ou `GOOGLE_APPLICATION_CREDENTIALS`
+Backend:
+- FREE_TRIAL_CREDITS (ex: 1)
+- INTERVIEW_MIN_MINUTES (ex: 10)
+- INTERVIEW_MAX_MINUTES_FREE (ex: 15)
+- INTERVIEW_MAX_MINUTES_PRO (ex: 25)
 
----
+Frontend (build):
+- VITE_INTERVIEW_MIN_MINUTES
+- VITE_INTERVIEW_MAX_MINUTES_FREE
+- VITE_INTERVIEW_MAX_MINUTES_PRO
 
-## Observações importantes
-
-- **Nenhuma API Key fica no frontend.** Todas as chamadas de IA ficam no **backend**.
-- O app usa **SpeechSynthesis** do navegador para a voz do entrevistador (mais barato e simples).
-- Para voz premium, use **OpenAI TTS** no backend (env `TTS_PROVIDER=openai`).
-- Pagamento real de créditos: ideal implementar **Stripe/Mercado Pago + webhook** substituindo `/credits/dev-add`.
-
+O relatorio final inclui scoresSummary com a media real das respostas.
 
 ---
 
-## Documenta????o de corre????es
+## Testes
 
-Veja o plano t??cnico em: `docs/PLANO_CORRECOES.md`
+Backend:
+```bash
+python -m pytest backend/tests
+```
+
+Frontend:
+```bash
+cd frontend
+npm test
+```
+
+---
+
+## Deploy (visao geral)
+
+- Frontend: Vercel/Netlify (variaveis VITE_*)
+- Backend: Render/Fly.io/Cloud Run
+  - configure GEMINI_API_KEY
+  - configure FIREBASE_SERVICE_ACCOUNT_JSON ou GOOGLE_APPLICATION_CREDENTIALS
+
+---
+
+## Observacoes importantes
+
+- Nenhuma API Key fica no frontend. Todas as chamadas de IA ficam no backend.
+- O app usa SpeechSynthesis do navegador para a voz do entrevistador (mais barato e simples).
+- Para voz premium, use OpenAI TTS no backend (env TTS_PROVIDER=openai).
+- Pagamento real de creditos: ideal implementar Stripe/Mercado Pago + webhook substituindo /credits/dev-add.
+
+---
+
+## Documentacao de correcoes
+
+Veja o plano tecnico em: docs/PLANO_CORRECOES.md
 
 
 ## Deploy (Firebase Hosting + Cloud Run)
@@ -99,12 +131,12 @@ firebase use --add  # selecione seu projeto
 firebase deploy --only hosting
 ```
 
-- O `firebase.json` já está configurado como SPA e com cache correto.
-- Por padrão o frontend chama o backend em **`/api`**.
+- O firebase.json ja esta configurado como SPA e com cache correto.
+- Em producao use VITE_API_BASE_URL=/api (rewrite para o Cloud Run).
 
 ### 2) Backend (Cloud Run)
 
-Na pasta `backend/`:
+Na pasta backend/:
 
 ```bash
 gcloud builds submit --tag gcr.io/PROJECT_ID/dev-interview-api
@@ -116,10 +148,10 @@ gcloud run deploy dev-interview-api \
   --set-env-vars FIREBASE_SERVICE_ACCOUNT_JSON='{"type":"service_account",...}'
 ```
 
-> Dica: você pode usar `FIREBASE_SERVICE_ACCOUNT_PATH` localmente e `FIREBASE_SERVICE_ACCOUNT_JSON` no Cloud Run.
+Dica: voce pode usar FIREBASE_SERVICE_ACCOUNT_PATH localmente e FIREBASE_SERVICE_ACCOUNT_JSON no Cloud Run.
 
 ### 3) CORS
 
-Se você **não** usar o rewrite `/api` do Hosting, defina no backend:
+Se voce nao usar o rewrite /api do Hosting, defina no backend:
 
-`CORS_ORIGINS=http://localhost:3000,https://YOUR_PROJECT.web.app,https://YOUR_PROJECT.firebaseapp.com`
+CORS_ORIGINS=http://localhost:3000,https://YOUR_PROJECT.web.app,https://YOUR_PROJECT.firebaseapp.com

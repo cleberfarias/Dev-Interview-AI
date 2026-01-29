@@ -15,6 +15,7 @@ backend/.env.*
 frontend/.env
 frontend/.env.*
 openai-key.txt
+ai_diagnostic_report.json
 
 node_modules
 dist
@@ -32,6 +33,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Python caches
+__pycache__/
+*.pyc
 
 # Firebase service account keys
 backend/service-account.json
