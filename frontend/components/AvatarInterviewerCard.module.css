@@ -1,0 +1,130 @@
+.card {
+  background: rgba(10, 14, 34, 0.72);
+  border: 1px solid rgba(140, 160, 255, 0.2);
+  border-radius: 26px;
+  padding: 12px;
+  box-shadow: 0 26px 60px rgba(2, 6, 23, 0.6);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.status {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 999px;
+  color: var(--neon-blue);
+  background: rgba(94, 231, 255, 0.15);
+  border: 1px solid rgba(94, 231, 255, 0.4);
+}
+
+.avatarFrame {
+  position: relative;
+  height: var(--avatar-height, 220px);
+  border-radius: 20px;
+  border: 1px solid rgba(94, 231, 255, 0.65);
+  background: radial-gradient(circle at 50% 20%, rgba(120, 150, 255, 0.25), transparent 60%),
+    linear-gradient(180deg, rgba(12, 18, 48, 0.75), rgba(6, 8, 24, 0.92));
+  box-shadow: 0 0 35px rgba(94, 231, 255, 0.25);
+  overflow: hidden;
+}
+
+.avatarFrame::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 50% 28%, rgba(255, 255, 255, 0.16) 0 60px, transparent 62px),
+    radial-gradient(ellipse at 50% 80%, rgba(255, 255, 255, 0.1) 0 150px, transparent 152px);
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.avatarCanvas {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  z-index: 1;
+}
+
+.avatarPlaceholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(196, 209, 255, 0.72);
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  background: rgba(6, 10, 28, 0.35);
+  z-index: 2;
+}
+
+.speaking .avatarFrame {
+  border-color: rgba(94, 231, 255, 0.95);
+  box-shadow: 0 0 40px rgba(94, 231, 255, 0.45);
+}
+
+.wave {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.waveBar {
+  width: 5px;
+  height: 18px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--neon-blue), var(--neon-violet));
+  transform-origin: bottom;
+  animation: wave 1.2s ease-in-out infinite;
+}
+
+.waveBar:nth-child(2) {
+  animation-delay: 0.1s;
+}
+
+.waveBar:nth-child(3) {
+  animation-delay: 0.2s;
+}
+
+.waveBar:nth-child(4) {
+  animation-delay: 0.3s;
+}
+
+@keyframes wave {
+  0%,
+  100% {
+    transform: scaleY(0.45);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}

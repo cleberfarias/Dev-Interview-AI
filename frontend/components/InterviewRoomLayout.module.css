@@ -1,0 +1,168 @@
+.room {
+  --panel-bg: rgba(12, 16, 40, 0.82);
+  --panel-strong: rgba(11, 15, 38, 0.92);
+  --panel-border: rgba(148, 163, 255, 0.18);
+  --text-muted: #9aa7d1;
+  --text-soft: #c4d1ff;
+  --neon-blue: #5ee7ff;
+  --neon-violet: #8f5bff;
+  --neon-pink: #ff5ddf;
+  --shadow-strong: 0 35px 80px rgba(2, 6, 23, 0.72);
+
+  position: relative;
+  height: 100%;
+  min-height: 100dvh;
+  padding: 18px 16px 120px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  color: #f8fafc;
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 20% 15%, rgba(43, 55, 130, 0.65), transparent 55%),
+    radial-gradient(circle at 70% 10%, rgba(92, 32, 142, 0.35), transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(0, 150, 255, 0.18), transparent 55%),
+    #020617;
+  overflow: hidden;
+}
+
+.room::before {
+  content: '';
+  position: absolute;
+  top: -180px;
+  right: -140px;
+  width: 360px;
+  height: 360px;
+  background: radial-gradient(circle, rgba(94, 231, 255, 0.35), transparent 70%);
+  filter: blur(8px);
+  opacity: 0.7;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.room::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(rgba(255, 255, 255, 0.12) 1px, transparent 0),
+    radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 0);
+  background-size: 120px 120px, 200px 200px;
+  background-position: 0 0, 40px 60px;
+  opacity: 0.25;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.content {
+  flex: 1;
+  display: flex;
+  align-items: stretch;
+  min-height: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.grid {
+  width: min(420px, 100%);
+  margin: 0 auto;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 10px;
+  height: 100%;
+  position: relative;
+  z-index: 1;
+}
+
+.leftColumn,
+.centerColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.leftColumn {
+  width: min(280px, 82%);
+  justify-self: start;
+  --avatar-height: 200px;
+}
+
+.centerColumn {
+  min-width: 0;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.cameraSlot {
+  justify-self: end;
+  width: min(190px, 58%);
+}
+
+.presentationChip {
+  align-self: flex-start;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(14, 20, 44, 0.75);
+  border: 1px solid rgba(120, 150, 255, 0.2);
+  color: rgba(220, 232, 255, 0.9);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  box-shadow: 0 10px 22px rgba(2, 6, 23, 0.35);
+}
+
+.topBarArea {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  left: 16px;
+  display: flex;
+  justify-content: center;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.topBarInner {
+  width: min(420px, 100%);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.topBarArea button {
+  pointer-events: auto;
+}
+
+.actionArea {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 10px;
+  display: flex;
+  justify-content: center;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.actionArea button {
+  pointer-events: auto;
+}
+
+@media (min-width: 768px) {
+  .room {
+    padding: 22px 18px 120px;
+  }
+
+  .grid {
+    width: min(460px, 100%);
+    gap: 12px;
+  }
+
+  .topBarInner {
+    width: min(460px, 100%);
+  }
+}
+
+.ttsAudio {
+  display: none;
+}

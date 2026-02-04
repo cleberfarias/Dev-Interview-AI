@@ -45,7 +45,8 @@ const App: React.FC = () => {
     style: 'friendly',
     duration: clampDuration(INTERVIEW_LIMITS.free, 'free'),
     plan: 'free',
-    jobDescription: ''
+    jobDescription: '',
+    difficultyLevel: 3
   });
 
   const [plan, setPlan] = useState<InterviewPlan | null>(null);
@@ -207,9 +208,13 @@ const App: React.FC = () => {
               <Lobby
                 config={config}
                 userCredits={user?.credits || 0}
-                onStart={(p, sid, credits) => {
+                onStart={(p, sid, credits, difficultyLevel) => {
                   setPlan(p);
                   setSessionId(sid);
+                  setConfig((prev) => ({
+                    ...prev,
+                    difficultyLevel: difficultyLevel ?? prev.difficultyLevel ?? 3,
+                  }));
                   if (user) setUser({ ...user, credits });
                   setState(AppState.INTERVIEWING);
                 }}

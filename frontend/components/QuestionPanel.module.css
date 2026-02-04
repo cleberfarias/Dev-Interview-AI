@@ -1,0 +1,221 @@
+﻿.panel {
+  background: rgba(10, 14, 34, 0.65);
+  border: 1px solid rgba(140, 160, 255, 0.2);
+  border-radius: 22px;
+  padding: 16px 18px;
+  box-shadow: 0 24px 50px rgba(2, 6, 23, 0.55);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.eyebrow {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.subtitle {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-soft);
+}
+
+.levelChip {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgba(94, 231, 255, 0.12);
+  border: 1px solid rgba(94, 231, 255, 0.35);
+  color: var(--neon-blue);
+}
+
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 255, 0.16);
+  background: rgba(8, 12, 32, 0.6);
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.option:hover {
+  border-color: rgba(94, 231, 255, 0.4);
+  transform: translateY(-1px);
+}
+
+.optionSelected {
+  border-color: rgba(94, 231, 255, 0.6);
+  box-shadow: 0 0 20px rgba(94, 231, 255, 0.2);
+}
+
+.option:focus-within {
+  outline: 2px solid rgba(94, 231, 255, 0.75);
+  outline-offset: 2px;
+}
+
+.radio {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.optionBadge {
+  width: 26px;
+  height: 26px;
+  border-radius: 10px;
+  background: rgba(94, 231, 255, 0.12);
+  border: 1px solid rgba(94, 231, 255, 0.3);
+  color: #d8fbff;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.optionText {
+  font-size: 12px;
+  color: var(--text-soft);
+  line-height: 1.4;
+}
+
+.justification {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.textareaLabel {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 80px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 255, 0.2);
+  background: rgba(6, 10, 28, 0.65);
+  color: #f8fafc;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.textarea:focus {
+  outline: 2px solid rgba(143, 91, 255, 0.6);
+  outline-offset: 2px;
+}
+
+.instruction {
+  font-size: 12px;
+  color: var(--text-soft);
+  background: rgba(143, 91, 255, 0.1);
+  border: 1px dashed rgba(143, 91, 255, 0.4);
+  border-radius: 14px;
+  padding: 10px 12px;
+}
+
+.statusRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.statusChip {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgba(94, 231, 255, 0.1);
+  border: 1px solid rgba(94, 231, 255, 0.3);
+  color: #c9f6ff;
+}
+
+.confirmRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.confirmButton {
+  background: linear-gradient(120deg, rgba(94, 231, 255, 0.85), rgba(143, 91, 255, 0.85));
+  color: #05070f;
+  border: none;
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 18px 40px rgba(94, 231, 255, 0.25);
+}
+
+.confirmButton:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 22px 50px rgba(94, 231, 255, 0.35);
+}
+
+.confirmButton:focus-visible {
+  outline: 2px solid rgba(94, 231, 255, 0.8);
+  outline-offset: 3px;
+}
+
+.confirmButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.confirmedBadge {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  color: #8bffb5;
+}
+
+@media (max-width: 640px) {
+  .panel {
+    padding: 14px;
+  }
+
+  .option {
+    padding: 9px 10px;
+  }
+}

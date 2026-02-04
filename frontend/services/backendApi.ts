@@ -1,4 +1,4 @@
-import { auth } from "../src/lib/firebase";
+﻿import { auth } from "../src/lib/firebase";
 import type { InterviewConfig, InterviewPlan, AnswerEvaluation, FinalReport, User, SessionStartResponse, PlanGenerateResponse } from "../types";
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || "/api";
@@ -7,7 +7,7 @@ async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers || {});
   headers.set("Content-Type", "application/json");
 
-  // Se o caller já passou Authorization, use-o
+  // Se o caller jÃ¡ passou Authorization, use-o
   if (!headers.get('Authorization')) {
     try {
       const user = auth.currentUser;
@@ -79,10 +79,10 @@ export const BackendApi = {
       body: JSON.stringify(payload),
     }),
 
-  tts: (text: string, language = 'pt-BR') =>
+  tts: (text: string, language = 'pt-BR', voice?: string) =>
     apiFetch<{ audioBase64: string; mimeType: string }>("/ai/tts", {
       method: 'POST',
-      body: JSON.stringify({ text, language }),
+      body: JSON.stringify({ text, language, voice }),
     }),
 
   finishSession: (sessionId: string, report: FinalReport, meta: any = {}) =>
@@ -97,3 +97,4 @@ export const BackendApi = {
   devAddCredits: (amount = 3) =>
     apiFetch<{ credits: number }>(`/credits/dev-add?amount=${amount}`, { method: "POST" }),
 };
+
