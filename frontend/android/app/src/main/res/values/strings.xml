@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Dev Interview AI</string>
+    <string name="title_activity_main">Dev Interview AI</string>
+    <string name="package_name">com.cleberfarias.devinterviewai</string>
+    <string name="custom_url_scheme">com.cleberfarias.devinterviewai</string>
+</resources>
