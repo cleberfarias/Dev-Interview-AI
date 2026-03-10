@@ -65,3 +65,12 @@
     opacity: 1;
   }
 }
+
+@media (min-width: 1024px) {
+  .button {
+    width: min(560px, 100%);
+    padding: 24px 44px;
+    font-size: 13px;
+    letter-spacing: 0.32em;
+  }
+}

@@ -1,5 +1,5 @@
 ﻿import { auth } from "../src/lib/firebase";
-import type { InterviewConfig, InterviewPlan, AnswerEvaluation, FinalReport, User, SessionStartResponse, PlanGenerateResponse } from "../types";
+import type { InterviewConfig, InterviewPlan, AnswerEvaluation, FinalReport, User, SessionStartResponse, PlanGenerateResponse, NextQuestionResponse } from "../types";
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || "/api";
 
@@ -75,6 +75,12 @@ export const BackendApi = {
 
   finalReport: (payload: { config: InterviewConfig; history: any[] }) =>
     apiFetch<FinalReport>("/ai/final-report", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  nextQuestion: (payload: { config: InterviewConfig; history: any[]; remainingSeconds: number; difficultyLevel?: number }) =>
+    apiFetch<NextQuestionResponse>("/ai/next-question", {
       method: "POST",
       body: JSON.stringify(payload),
     }),

@@ -117,7 +117,7 @@
 }
 
 .compact .preview {
-  height: 140px;
+  height: var(--camera-height, 140px);
 }
 
 @media (max-width: 960px) {

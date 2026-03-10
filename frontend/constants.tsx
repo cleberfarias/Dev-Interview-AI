@@ -61,7 +61,11 @@ export const I18N: Record<LanguageCode, any> = {
     interviewerSpeaking: 'Interviewer speaking...',
     recordingAnswer: 'Recording your answer...',
     yourTurn: 'Your turn to speak',
-    timeLimitReached: 'Time limit reached. Finishing the interview...'
+    timeLimitReached: 'Time limit reached. Finishing the interview...',
+    noResponseDetected: 'No response detected',
+    noResponseQuestion: 'Do you want to continue or cancel?',
+    continueInterview: 'Continue',
+    cancelInterview: 'Cancel'
   },
   'pt-BR': {
     title: 'Dev Interview AI',
@@ -104,7 +108,11 @@ export const I18N: Record<LanguageCode, any> = {
     interviewerSpeaking: 'Entrevistador falando...',
     recordingAnswer: 'Gravando sua resposta...',
     yourTurn: 'Sua vez de falar',
-    timeLimitReached: 'Tempo limite atingido. Finalizando a entrevista...'
+    timeLimitReached: 'Tempo limite atingido. Finalizando a entrevista...',
+    noResponseDetected: 'Nenhuma resposta detectada',
+    noResponseQuestion: 'Voce deseja continuar ou cancelar?',
+    continueInterview: 'Continuar',
+    cancelInterview: 'Cancelar'
   },
   'es': {
     title: 'Dev Interview AI',
@@ -147,7 +155,11 @@ export const I18N: Record<LanguageCode, any> = {
     interviewerSpeaking: 'Entrevistador hablando...',
     recordingAnswer: 'Grabando tu respuesta...',
     yourTurn: 'Tu turno de hablar',
-    timeLimitReached: 'LÃ­mite de tiempo alcanzado. Finalizando la entrevista...'
+    timeLimitReached: 'LÃ­mite de tiempo alcanzado. Finalizando la entrevista...',
+    noResponseDetected: 'No se detecto respuesta',
+    noResponseQuestion: 'Â¿Quieres continuar o cancelar?',
+    continueInterview: 'Continuar',
+    cancelInterview: 'Cancelar'
   }
 };
 

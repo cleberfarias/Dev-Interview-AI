@@ -245,8 +245,11 @@ class AIRouter:
         # Log startup configuration for debugging
         self._log_startup_config()
 
-    def _provider_order(self) -> List[str]:
-        raw = os.environ.get("AI_PROVIDER_ORDER", "openai,groq,gemini")
+    def _provider_order(self, media: Optional[List[Dict[str, Any]]] = None) -> List[str]:
+        if media:
+            raw = os.environ.get("AI_PROVIDER_ORDER_MEDIA", "gemini,openai,groq")
+        else:
+            raw = os.environ.get("AI_PROVIDER_ORDER", "openai,groq,gemini")
         return [p.strip() for p in raw.split(",") if p.strip()]
 
     def _model_for_task(self, task_name: str, provider: str) -> Optional[str]:
@@ -291,7 +294,7 @@ class AIRouter:
         last_retry_after = None
         tried = []
 
-        for provider_name in self._provider_order():
+        for provider_name in self._provider_order(media):
             provider = self.providers.get(provider_name)
             if not provider or not provider.is_configured():
                 continue

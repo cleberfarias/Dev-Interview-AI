@@ -149,9 +149,12 @@ const App: React.FC = () => {
 
   const showHeader = ![AppState.INTERVIEWING, AppState.LOGIN, AppState.PROFILE].includes(state);
 
-  const containerClass =
-    state === AppState.DASHBOARD || state === AppState.INTERVIEWING
-      ? 'w-full h-full'
+  const wideStates = [AppState.DASHBOARD, AppState.INTERVIEWING];
+  const mediumStates = [AppState.ONBOARDING, AppState.LOBBY, AppState.PROFILE, AppState.REPORT];
+  const containerClass = wideStates.includes(state)
+    ? 'w-full h-full'
+    : mediumStates.includes(state)
+      ? 'w-full h-full max-w-5xl mx-auto'
       : 'max-w-md mx-auto h-full';
 
   return (

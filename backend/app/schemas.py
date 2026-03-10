@@ -101,6 +101,21 @@ class FinalReportRequest(BaseModel):
     config: InterviewConfig
     history: List[Dict[str, Any]]
 
+class NextQuestionRequest(BaseModel):
+    config: InterviewConfig
+    history: List[Dict[str, Any]]
+    remainingSeconds: int = 0
+    difficultyLevel: Optional[int] = None
+
+class NextQuestionResponse(BaseModel):
+    shouldFinish: bool = False
+    reason: Optional[str] = None
+    question: Optional[InterviewQuestion] = None
+    provider_used: Optional[str] = None
+    model_used: Optional[str] = None
+    latency_ms: Optional[int] = None
+    tokens_used: Optional[int] = None
+
 class SessionFinishRequest(BaseModel):
     report: FinalReport
     meta: Dict[str, Any] = Field(default_factory=dict)

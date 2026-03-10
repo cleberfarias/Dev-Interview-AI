@@ -29,6 +29,17 @@ const UserProfile: React.FC<Props> = ({ user, config, onBack, onLogout, onAddCre
     { label: 'Média AI', value: averageScore, icon: '⭐' },
   ];
 
+  const formatDate = (value?: string) => {
+    if (!value) return '';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return value;
+    const locale = typeof navigator !== 'undefined' ? navigator.language : 'pt-BR';
+    return new Intl.DateTimeFormat(locale, {
+      dateStyle: 'short',
+      timeStyle: 'short',
+    }).format(parsed);
+  };
+
   const handleRecharge = async (amount: number, label: string) => {
     try {
       setBuying(true);
@@ -51,7 +62,7 @@ const UserProfile: React.FC<Props> = ({ user, config, onBack, onLogout, onAddCre
 
   return (
     <div className="flex flex-col h-full bg-slate-950 animate-in slide-in-from-right duration-500">
-      <header className="px-6 py-12 flex flex-col items-center text-center gap-4">
+      <header className="px-6 py-12 flex flex-col items-center text-center gap-4 max-w-5xl mx-auto w-full">
         <div className="relative">
           <div className="w-24 h-24 rounded-[2.5rem] bg-indigo-600 flex items-center justify-center text-4xl font-black text-white shadow-2xl shadow-indigo-600/40 overflow-hidden border-4 border-white/5">
             {user.avatar ? (
@@ -68,7 +79,7 @@ const UserProfile: React.FC<Props> = ({ user, config, onBack, onLogout, onAddCre
         </div>
       </header>
 
-      <div className="flex-1 px-6 space-y-8 overflow-y-auto no-scrollbar pb-32">
+      <div className="flex-1 px-6 space-y-8 overflow-y-auto no-scrollbar pb-32 max-w-5xl mx-auto w-full">
         {/* Stats Grid */}
         <div className="grid grid-cols-3 gap-3">
           {stats.map(s => (
@@ -139,8 +150,8 @@ const UserProfile: React.FC<Props> = ({ user, config, onBack, onLogout, onAddCre
           
           {user.interviews.length > 0 ? (
             user.interviews.map(item => (
-              <div key={item.id} className="native-glass p-5 rounded-3xl flex items-center justify-between border border-white/5 animate-in fade-in slide-in-from-bottom-2">
-                <div className="flex items-center gap-4">
+              <div key={item.id} className="native-glass p-5 rounded-3xl flex flex-col gap-4 border border-white/5 animate-in fade-in slide-in-from-bottom-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-4 min-w-0">
                   <div className={`w-10 h-10 rounded-2xl flex items-center justify-center text-xs font-black ${item.score >= 8 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>
                     {item.score}
                   </div>
@@ -149,7 +160,7 @@ const UserProfile: React.FC<Props> = ({ user, config, onBack, onLogout, onAddCre
                     <p className="text-[9px] font-medium text-slate-500 uppercase">{item.date} • {item.style}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <div className="px-3 py-1 bg-slate-800 rounded-lg text-[8px] font-black text-slate-400 uppercase">
                     {item.track}
                   </div>
@@ -187,12 +198,14 @@ const UserProfile: React.FC<Props> = ({ user, config, onBack, onLogout, onAddCre
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-slate-950 via-slate-950 to-transparent">
-        <button 
-          onClick={onBack}
-          className="w-full py-6 bg-white text-slate-950 rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-2xl active:scale-95 transition-all"
-        >
-          Voltar ao Início
-        </button>
+        <div className="max-w-md lg:max-w-5xl mx-auto">
+          <button 
+            onClick={onBack}
+            className="w-full py-6 bg-white text-slate-950 rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-2xl active:scale-95 transition-all"
+          >
+            Voltar ao Início
+          </button>
+        </div>
       </div>
     </div>
   );

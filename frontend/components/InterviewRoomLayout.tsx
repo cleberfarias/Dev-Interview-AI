@@ -11,6 +11,7 @@ import { BackendApi } from '../services/backendApi';
 import { useLipSync } from '../src/hooks/useLipSync';
 import type { AnswerEvaluation, FinalReport, InterviewConfig, InterviewPlan } from '../types';
 import type { DifficultyLevel, InterviewQuestion } from '../types/interview';
+import { I18N } from '../constants';
 
 type InterviewFlowState =
   | 'idle'
@@ -18,6 +19,7 @@ type InterviewFlowState =
   | 'awaiting_answer'
   | 'recording'
   | 'evaluating'
+  | 'no_response'
   | 'next_question'
   | 'finished';
 
@@ -35,6 +37,10 @@ type HistoryItem = {
 };
 
 const MEDIA_CONSTRAINTS: MediaStreamConstraints = { video: true, audio: true };
+const NO_RESPONSE_MS = 5000;
+const SILENCE_STOP_MS = 1500;
+const SILENCE_THRESHOLD = 0.02;
+const AUTO_MODE = true;
 
 const mapDifficultyToLevel = (value?: number): DifficultyLevel => {
   const diff = typeof value === 'number' ? value : 3;
@@ -58,18 +64,110 @@ const mapSectionToTopic = (section?: string): string => {
   }
 };
 
+const toUiQuestion = (
+  question: { id?: string; prompt: string; section?: string; difficulty?: number },
+  index: number,
+  bullets: string[],
+): UiQuestion => ({
+  id: question.id || `q${index + 1}`,
+  title: question.prompt,
+  type: 'open',
+  difficulty: mapDifficultyToLevel(question.difficulty),
+  topic: mapSectionToTopic(question.section),
+  bullets,
+  section: question.section,
+  sourceDifficulty: question.difficulty,
+});
+
 const buildUiQuestions = (plan: InterviewPlan): UiQuestion[] => {
   const baseBullets = (plan.mustHaveSkills ?? []).slice(0, 3);
-  return (plan.questions ?? []).map((question, index) => ({
-    id: question.id || `q${index + 1}`,
-    title: question.prompt,
-    type: 'open',
-    difficulty: mapDifficultyToLevel(question.difficulty),
-    topic: mapSectionToTopic(question.section),
-    bullets: baseBullets,
-    section: question.section,
-    sourceDifficulty: question.difficulty,
-  }));
+  return (plan.questions ?? []).map((question, index) =>
+    toUiQuestion(question, index, baseBullets),
+  );
+};
+
+const pickVariant = (items: string[], index: number): string =>
+  items.length ? items[index % items.length] : '';
+
+const buildSpokenPrompt = (
+  question: string,
+  index: number,
+  style: string,
+  language: string,
+): string => {
+  const script: Record<string, any> = {
+    'pt-BR': {
+      friendly: {
+        intro: ['Oi! Vamos comecar.', 'Tudo certo? Vamos iniciar.'],
+        next: ['Legal, vamos para a proxima.', 'Beleza, proxima pergunta.'],
+        suffix: ['Pode ficar a vontade.', 'Sem pressa.'],
+      },
+      neutral: {
+        intro: ['Vamos iniciar a entrevista.', 'Comecando agora.'],
+        next: ['Proxima pergunta.', 'Seguinte.'],
+        suffix: [''],
+      },
+      strict: {
+        intro: ['Vamos direto ao ponto.', 'Comecemos sem rodeios.'],
+        next: ['Responda objetivamente.', 'Proxima pergunta.'],
+        suffix: ['Seja direto.'],
+      },
+    },
+    en: {
+      friendly: {
+        intro: ['Hi! Let us get started.', 'Ready? Let us begin.'],
+        next: ['Great, onto the next one.', 'Awesome, next question.'],
+        suffix: ['Take your time.', 'No rush.'],
+      },
+      neutral: {
+        intro: ['Starting the interview now.', 'Let us begin.'],
+        next: ['Next question.', 'Moving on.'],
+        suffix: [''],
+      },
+      strict: {
+        intro: ['Let us go straight to it.', 'We will begin now.'],
+        next: ['Answer directly.', 'Next question.'],
+        suffix: ['Be concise.'],
+      },
+    },
+    es: {
+      friendly: {
+        intro: ['Hola, vamos a empezar.', 'Todo listo? Comencemos.'],
+        next: ['Bien, vamos a la siguiente.', 'Perfecto, siguiente pregunta.'],
+        suffix: ['Toma tu tiempo.', 'Sin prisa.'],
+      },
+      neutral: {
+        intro: ['Iniciamos la entrevista.', 'Empecemos ahora.'],
+        next: ['Siguiente pregunta.', 'Continuamos.'],
+        suffix: [''],
+      },
+      strict: {
+        intro: ['Vamos directo al punto.', 'Comencemos sin rodeos.'],
+        next: ['Responde de forma objetiva.', 'Siguiente pregunta.'],
+        suffix: ['Se conciso.'],
+      },
+    },
+  };
+
+  const langKey = script[language] ? language : 'pt-BR';
+  const styleKey = script[langKey][style] ? style : 'neutral';
+  const variants = script[langKey][styleKey];
+  const intro = pickVariant(variants.intro, index);
+  const next = pickVariant(variants.next, index);
+  const suffix = pickVariant(variants.suffix, index);
+  const opener = index === 0 ? intro : next;
+  const spacer = opener ? `${opener} ` : '';
+  const tail = suffix ? ` ${suffix}` : '';
+  return `${spacer}${question}${tail}`.trim();
+};
+
+const buildNoResponsePrompt = (language: string): string => {
+  const map: Record<string, string> = {
+    'pt-BR': 'Nao detectei resposta. Voce quer continuar ou cancelar?',
+    en: "I didn't detect a response. Do you want to continue or cancel?",
+    es: 'No detecte respuesta. Â¿Quieres continuar o cancelar?',
+  };
+  return map[language] || map['pt-BR'];
 };
 
 const deriveContextLabel = (
@@ -187,8 +285,27 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
   const [currentIndex, setCurrentIndex] = useState(0);
   const [flowState, setFlowState] = useState<InterviewFlowState>('idle');
   const [audioEl, setAudioEl] = useState<HTMLAudioElement | null>(null);
+  const [remainingSeconds, setRemainingSeconds] = useState(() =>
+    Math.max(0, Math.round((config.duration ?? 0) * 60)),
+  );
+  const [timeLimitReached, setTimeLimitReached] = useState(false);
   const historyRef = useRef<HistoryItem[]>([]);
   const finishingRef = useRef(false);
+  const timerRef = useRef<number | null>(null);
+  const startTimeRef = useRef<number | null>(null);
+  const noResponseTimerRef = useRef<number | null>(null);
+  const stopInProgressRef = useRef(false);
+  const hasSpokenRef = useRef(false);
+  const lastSoundAtRef = useRef(0);
+  const autoStopRef = useRef(false);
+  const noiseThresholdRef = useRef(SILENCE_THRESHOLD);
+  const baselineDoneRef = useRef(false);
+  const voiceMonitorRef = useRef<{
+    ctx: AudioContext | null;
+    analyser: AnalyserNode | null;
+    data: Uint8Array | null;
+    rafId: number | null;
+  }>({ ctx: null, analyser: null, data: null, rafId: null });
 
   const { stream, status: mediaStatus, error: mediaError } = useUserMedia(MEDIA_CONSTRAINTS);
   const {
@@ -200,22 +317,49 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
 
   const { mouthOpen, isSpeaking } = useLipSync(audioEl);
 
-  const uiQuestions = useMemo(() => buildUiQuestions(plan), [plan]);
+  const selectedLevel = config.difficultyLevel ?? 3;
+  const baseBullets = useMemo(() => (plan.mustHaveSkills ?? []).slice(0, 3), [plan]);
+  const baseQuestions = useMemo(() => {
+    const all = buildUiQuestions(plan);
+    const filtered = all.filter((question) => question.difficulty === selectedLevel);
+    return filtered.length ? filtered : all;
+  }, [plan, selectedLevel]);
+  const [questions, setQuestions] = useState<UiQuestion[]>(() => baseQuestions);
   const sanitizedConfig = useMemo(() => {
     const { difficultyLevel, ...rest } = config;
     return rest;
   }, [config]);
-  const selectedLevel = config.difficultyLevel ?? 3;
-  const filteredQuestions = useMemo(
-    () => uiQuestions.filter((question) => question.difficulty === selectedLevel),
-    [uiQuestions, selectedLevel],
-  );
-  const activeQuestions = filteredQuestions.length ? filteredQuestions : uiQuestions;
-  const currentQuestion = activeQuestions[currentIndex] ?? activeQuestions[0];
+  const currentQuestion = questions[currentIndex] ?? questions[0];
   const contextLabel = useMemo(
     () => deriveContextLabel(currentQuestion, config.stacks),
     [currentQuestion, config.stacks],
   );
+  const totalSeconds = useMemo(
+    () => Math.max(0, Math.round((config.duration ?? 0) * 60)),
+    [config.duration],
+  );
+  const t = I18N[config.uiLanguage];
+
+  const stageLabel = useMemo(() => {
+    const total = questions.length;
+    if (!total) return t.introLabel ?? 'INTRODUCAO';
+    const current = Math.min(currentIndex + 1, total);
+    const template = t.stepLabel ?? 'Stage {current} of {total}';
+    return template.replace('{current}', String(current)).replace('{total}', String(total));
+  }, [questions.length, currentIndex, t.introLabel, t.stepLabel]);
+
+  const chipLabel = useMemo(() => {
+    if (!questions.length) return t.introLabel ?? 'INTRODUCAO';
+    if (currentIndex === 0) return t.introLabel ?? 'INTRODUCAO';
+    return stageLabel;
+  }, [questions.length, currentIndex, stageLabel, t.introLabel]);
+
+  const timerLabel = useMemo(() => {
+    const clamped = Math.max(0, remainingSeconds);
+    const minutes = Math.floor(clamped / 60);
+    const seconds = clamped % 60;
+    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }, [remainingSeconds]);
 
   const stopTTS = useCallback(() => {
     if (!audioEl) return;
@@ -263,11 +407,89 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
     [audioEl, config.interviewLanguage, stopTTS],
   );
 
+  const clearNoResponseTimer = useCallback(() => {
+    if (noResponseTimerRef.current) {
+      window.clearTimeout(noResponseTimerRef.current);
+      noResponseTimerRef.current = null;
+    }
+  }, []);
+
+  const stopVoiceMonitor = useCallback(() => {
+    const monitor = voiceMonitorRef.current;
+    if (monitor.rafId) {
+      cancelAnimationFrame(monitor.rafId);
+      monitor.rafId = null;
+    }
+    if (monitor.ctx) {
+      monitor.ctx.close().catch(() => {});
+    }
+    voiceMonitorRef.current = { ctx: null, analyser: null, data: null, rafId: null };
+  }, []);
+
+  const startVoiceMonitor = useCallback(() => {
+    if (!stream) return;
+    stopVoiceMonitor();
+
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 2048;
+      const data = new Uint8Array(analyser.fftSize);
+
+      const source = ctx.createMediaStreamSource(stream);
+      source.connect(analyser);
+
+      const baselineStart = Date.now();
+      const baselineSamples: number[] = [];
+
+      const tick = () => {
+        analyser.getByteTimeDomainData(data);
+        let sum = 0;
+        for (let i = 0; i < data.length; i += 1) {
+          const v = (data[i] - 128) / 128;
+          sum += v * v;
+        }
+        const rms = Math.sqrt(sum / data.length);
+
+        if (!baselineDoneRef.current) {
+          baselineSamples.push(rms);
+          if (Date.now() - baselineStart >= 400) {
+            const avg =
+              baselineSamples.reduce((acc, val) => acc + val, 0) / Math.max(baselineSamples.length, 1);
+            noiseThresholdRef.current = Math.max(SILENCE_THRESHOLD, avg * 2.5);
+            baselineDoneRef.current = true;
+          }
+        }
+
+        if (baselineDoneRef.current && rms > noiseThresholdRef.current) {
+          hasSpokenRef.current = true;
+          lastSoundAtRef.current = Date.now();
+        }
+
+        if (hasSpokenRef.current && !autoStopRef.current) {
+          if (Date.now() - lastSoundAtRef.current > SILENCE_STOP_MS) {
+            autoStopRef.current = true;
+            void stopRecordingFlow('auto');
+            return;
+          }
+        }
+
+        voiceMonitorRef.current.rafId = requestAnimationFrame(tick);
+      };
+
+      voiceMonitorRef.current = { ctx, analyser, data, rafId: requestAnimationFrame(tick) };
+    } catch (error) {
+      console.warn('Falha ao iniciar monitor de voz', error);
+    }
+  }, [stream, stopVoiceMonitor]);
+
   const finalizeInterview = useCallback(
     async (history: HistoryItem[]) => {
       if (finishingRef.current) return;
       finishingRef.current = true;
       setFlowState('finished');
+      clearNoResponseTimer();
+      stopVoiceMonitor();
       stopTTS();
       try {
         const report = await BackendApi.finalReport({ config: sanitizedConfig, history });
@@ -282,78 +504,80 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
     [config, onFinish, plan, sanitizedConfig, stopTTS],
   );
 
-  useEffect(() => {
-    historyRef.current = [];
-    setCurrentIndex(0);
-    setFlowState('idle');
-  }, [plan, selectedLevel]);
+  const handleFinish = useCallback(async () => {
+    if (isRecorderActive) {
+      try {
+        await stopRecording();
+      } catch {}
+    }
+    clearNoResponseTimer();
+    stopVoiceMonitor();
+    await finalizeInterview(historyRef.current);
+  }, [clearNoResponseTimer, finalizeInterview, isRecorderActive, stopRecording, stopVoiceMonitor]);
 
-  useEffect(() => {
-    if (!currentQuestion) return;
-    let cancelled = false;
-
-    const run = async () => {
+  const askCurrentQuestion = useCallback(
+    async (overridePrompt?: string) => {
+      if (!currentQuestion) return;
       setFlowState('asking');
       if (!audioEl) {
         setFlowState('awaiting_answer');
         return;
       }
-      await speakQuestion(currentQuestion.title);
-      if (!cancelled) {
-        setFlowState('awaiting_answer');
-      }
-    };
+      const prompt = overridePrompt || buildSpokenPrompt(
+        currentQuestion.title,
+        currentIndex,
+        config.style,
+        config.interviewLanguage,
+      );
+      await speakQuestion(prompt);
+      setFlowState('awaiting_answer');
+    },
+    [audioEl, config.interviewLanguage, config.style, currentIndex, currentQuestion, speakQuestion],
+  );
 
-    run();
-
-    return () => {
-      cancelled = true;
-      stopTTS();
-    };
-  }, [audioEl, currentQuestion?.id, currentQuestion?.title, speakQuestion, stopTTS]);
-
-  useEffect(() => {
-    if (flowState !== 'next_question') return;
-    if (!activeQuestions.length) return;
-    const id = window.setTimeout(() => {
-      setCurrentIndex((prev) => Math.min(prev + 1, activeQuestions.length - 1));
-    }, 1200);
-    return () => window.clearTimeout(id);
-  }, [flowState, activeQuestions.length]);
-
-  const isRecording = flowState === 'recording' || isRecorderActive;
-  const isLoading = flowState === 'idle' || !currentQuestion;
-  const isAvatarSpeaking = isSpeaking || flowState === 'asking';
-  const isMediaReady = mediaStatus === 'ready';
-  const isFinished = flowState === 'finished';
-
-  const canStartRecording = flowState === 'awaiting_answer' && isMediaReady;
-  const actionDisabled = isFinished || flowState === 'evaluating' || !(canStartRecording || flowState === 'recording');
-
-  const actionLabel =
-    flowState === 'evaluating'
-      ? 'AVALIANDO'
-      : isFinished
-        ? 'ENCERRADO'
-        : isRecording
-          ? 'PARAR GRAVACAO'
-          : 'COMECAR RESPOSTA';
-
-  const handlePrimaryAction = async () => {
-    if (!currentQuestion) return;
-    if (flowState === 'evaluating' || isFinished) return;
-
-    if (flowState === 'awaiting_answer') {
+  const handleNoResponse = useCallback(async () => {
+    clearNoResponseTimer();
+    stopVoiceMonitor();
+    if (isRecorderActive) {
       try {
-        startRecording();
-        setFlowState('recording');
-      } catch (error) {
-        console.warn(error);
-      }
-      return;
+        await stopRecording();
+      } catch {}
     }
+    setFlowState('no_response');
+    try {
+      await speakQuestion(buildNoResponsePrompt(config.interviewLanguage));
+    } catch {}
+  }, [clearNoResponseTimer, config.interviewLanguage, isRecorderActive, speakQuestion, stopRecording, stopVoiceMonitor]);
 
-    if (flowState === 'recording') {
+  const startRecordingFlow = useCallback(async () => {
+    if (flowState !== 'awaiting_answer') return;
+    try {
+      startRecording();
+      setFlowState('recording');
+      hasSpokenRef.current = false;
+      lastSoundAtRef.current = Date.now();
+      autoStopRef.current = false;
+      baselineDoneRef.current = false;
+      noiseThresholdRef.current = SILENCE_THRESHOLD;
+      startVoiceMonitor();
+      clearNoResponseTimer();
+      noResponseTimerRef.current = window.setTimeout(() => {
+        if (!hasSpokenRef.current) {
+          void handleNoResponse();
+        }
+      }, NO_RESPONSE_MS);
+    } catch (error) {
+      console.warn(error);
+    }
+  }, [clearNoResponseTimer, flowState, handleNoResponse, startRecording, startVoiceMonitor]);
+
+  const stopRecordingFlow = useCallback(
+    async (_reason: 'manual' | 'auto') => {
+      if (flowState !== 'recording') return;
+      if (stopInProgressRef.current) return;
+      stopInProgressRef.current = true;
+      clearNoResponseTimer();
+      stopVoiceMonitor();
       setFlowState('evaluating');
       try {
         const blob = await stopRecording();
@@ -377,26 +601,184 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
         ];
         historyRef.current = nextHistory;
 
-        const isLastQuestion = currentIndex >= activeQuestions.length - 1;
-        if (isLastQuestion) {
+        const nextIndex = currentIndex + 1;
+        const hasPlannedNext = Boolean(questions[nextIndex]);
+        if (remainingSeconds <= 0 || timeLimitReached) {
           await finalizeInterview(nextHistory);
-        } else {
+          return;
+        }
+
+        try {
+          const nextRes = await BackendApi.nextQuestion({
+            config: sanitizedConfig,
+            history: nextHistory,
+            remainingSeconds,
+            difficultyLevel: selectedLevel,
+          });
+
+          if (nextRes.shouldFinish || !nextRes.question) {
+            await finalizeInterview(nextHistory);
+            return;
+          }
+
+          const mapped = toUiQuestion(nextRes.question, nextIndex, baseBullets);
+          setQuestions((prev) => {
+            const next = [...prev];
+            if (next[nextIndex]) {
+              next[nextIndex] = mapped;
+            } else {
+              next.push(mapped);
+            }
+            return next;
+          });
+
           setFlowState('next_question');
+        } catch (error) {
+          console.warn(error);
+          if (hasPlannedNext) {
+            setFlowState('next_question');
+          } else {
+            await finalizeInterview(nextHistory);
+          }
         }
       } catch (error) {
         console.warn(error);
         setFlowState('awaiting_answer');
+      } finally {
+        stopInProgressRef.current = false;
       }
-    }
-  };
+    },
+    [
+      baseBullets,
+      clearNoResponseTimer,
+      currentIndex,
+      currentQuestion?.id,
+      currentQuestion?.section,
+      currentQuestion?.sourceDifficulty,
+      currentQuestion?.title,
+      finalizeInterview,
+      flowState,
+      questions,
+      remainingSeconds,
+      sanitizedConfig,
+      selectedLevel,
+      stopRecording,
+      stopVoiceMonitor,
+      timeLimitReached,
+    ],
+  );
 
-  const handleFinish = async () => {
-    if (isRecorderActive) {
-      try {
-        await stopRecording();
-      } catch {}
+  useEffect(() => {
+    historyRef.current = [];
+    setCurrentIndex(0);
+    setFlowState('idle');
+    setTimeLimitReached(false);
+    setRemainingSeconds(totalSeconds);
+    setQuestions(baseQuestions);
+    startTimeRef.current = Date.now();
+    if (timerRef.current) {
+      window.clearInterval(timerRef.current);
     }
-    await finalizeInterview(historyRef.current);
+    if (totalSeconds > 0) {
+      timerRef.current = window.setInterval(() => {
+        if (!startTimeRef.current) return;
+        const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
+        const remaining = Math.max(0, totalSeconds - elapsed);
+        setRemainingSeconds(remaining);
+      }, 1000);
+    }
+    return () => {
+      if (timerRef.current) {
+        window.clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      clearNoResponseTimer();
+      stopVoiceMonitor();
+    };
+  }, [baseQuestions, clearNoResponseTimer, stopVoiceMonitor, totalSeconds]);
+
+  useEffect(() => {
+    if (timeLimitReached) return;
+    if (totalSeconds <= 0) return;
+    if (flowState === 'finished') return;
+    if (remainingSeconds > 0) return;
+    if (finishingRef.current) return;
+    setTimeLimitReached(true);
+    handleFinish();
+  }, [flowState, handleFinish, remainingSeconds, timeLimitReached, totalSeconds]);
+
+  useEffect(() => {
+    if (flowState !== 'finished') return;
+    if (timerRef.current) {
+      window.clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  }, [flowState]);
+
+  useEffect(() => {
+    if (!currentQuestion) return;
+    const run = async () => {
+      await askCurrentQuestion();
+    };
+
+    run();
+
+    return () => {
+      stopTTS();
+    };
+  }, [askCurrentQuestion, currentQuestion?.id, stopTTS]);
+
+  useEffect(() => {
+    if (flowState !== 'next_question') return;
+    if (!questions.length) return;
+    const id = window.setTimeout(() => {
+      setCurrentIndex((prev) => Math.min(prev + 1, questions.length - 1));
+    }, 1200);
+    return () => window.clearTimeout(id);
+  }, [flowState, questions.length]);
+
+  useEffect(() => {
+    if (flowState !== 'awaiting_answer') return;
+    if (!isMediaReady) return;
+    if (flowState === 'no_response') return;
+    if (isRecorderActive) return;
+    startRecordingFlow();
+  }, [flowState, isMediaReady, isRecorderActive, startRecordingFlow]);
+
+  const isRecording = flowState === 'recording' || isRecorderActive;
+  const isLoading = flowState === 'idle' || !currentQuestion;
+  const isAvatarSpeaking = isSpeaking || flowState === 'asking';
+  const isMediaReady = mediaStatus === 'ready';
+  const isFinished = flowState === 'finished';
+
+  const canStartRecording = flowState === 'awaiting_answer' && isMediaReady;
+  const actionDisabled =
+    isFinished ||
+    flowState === 'evaluating' ||
+    flowState === 'no_response' ||
+    !(canStartRecording || flowState === 'recording');
+
+  const actionLabel =
+    flowState === 'evaluating'
+      ? 'AVALIANDO'
+      : isFinished
+        ? 'ENCERRADO'
+        : isRecording
+          ? 'PARAR GRAVACAO'
+          : 'COMECAR RESPOSTA';
+
+  const handlePrimaryAction = async () => {
+    if (!currentQuestion) return;
+    if (flowState === 'evaluating' || isFinished) return;
+
+    if (flowState === 'awaiting_answer') {
+      await startRecordingFlow();
+      return;
+    }
+
+    if (flowState === 'recording') {
+      await stopRecordingFlow('manual');
+    }
   };
 
   return (
@@ -404,11 +786,11 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
       <div className={styles.topBarArea}>
         <div className={styles.topBarInner}>
           <TopBar
-            timer="00:12"
-            stage="INTRODUCAO"
+            timer={timerLabel}
+            stage={stageLabel}
             finishLabel="FINALIZAR CONSULTA"
             onFinish={handleFinish}
-            showMeta={false}
+            showMeta={true}
           />
         </div>
       </div>
@@ -427,7 +809,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
           </div>
           <div className={styles.centerColumn}>
             <div className={styles.presentationChip} aria-label="Tela de apresentacao">
-              APRESENTACAO
+              {chipLabel}
             </div>
             <QuestionVisualCard
               title={currentQuestion?.title ?? 'Carregando pergunta...'}
@@ -451,12 +833,49 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
       </section>
 
       <div className={styles.actionArea}>
-        <PrimaryActionButton
-          label={actionLabel}
-          variant={isRecording ? 'recording' : 'idle'}
-          disabled={actionDisabled}
-          onClick={handlePrimaryAction}
-        />
+        <div className={styles.actionStack}>
+          {timeLimitReached && (
+            <div className={styles.timeNotice} role="status">
+              {t.timeLimitReached}
+            </div>
+          )}
+          {flowState === 'no_response' && (
+            <div className={styles.noResponsePanel} role="status" aria-live="polite">
+              <p className={styles.noResponseTitle}>{t.noResponseDetected}</p>
+              <p className={styles.noResponseText}>{t.noResponseQuestion}</p>
+              <div className={styles.noResponseActions}>
+                <button
+                  type="button"
+                  className={styles.noResponsePrimary}
+                  onClick={async () => {
+                    if (timeLimitReached) {
+                      await handleFinish();
+                      return;
+                    }
+                    await askCurrentQuestion();
+                  }}
+                >
+                  {t.continueInterview}
+                </button>
+                <button
+                  type="button"
+                  className={styles.noResponseSecondary}
+                  onClick={handleFinish}
+                >
+                  {t.cancelInterview}
+                </button>
+              </div>
+            </div>
+          )}
+          {!AUTO_MODE && (
+            <PrimaryActionButton
+              label={actionLabel}
+              variant={isRecording ? 'recording' : 'idle'}
+              disabled={actionDisabled}
+              onClick={handlePrimaryAction}
+            />
+          )}
+        </div>
       </div>
     </div>
   );

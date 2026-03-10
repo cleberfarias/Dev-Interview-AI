@@ -96,6 +96,7 @@
 .cameraSlot {
   justify-self: end;
   width: min(190px, 58%);
+  --camera-height: 140px;
 }
 
 .presentationChip {
@@ -134,14 +135,89 @@
 }
 
 .actionArea {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 10px;
+  margin-top: auto;
+  padding: 10px 0 6px;
   display: flex;
   justify-content: center;
   z-index: 3;
   pointer-events: none;
+}
+
+.actionStack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.timeNotice {
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(78, 26, 40, 0.75);
+  border: 1px solid rgba(255, 96, 120, 0.55);
+  color: #ff6b7f;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  box-shadow: 0 12px 30px rgba(255, 93, 139, 0.22);
+}
+
+.noResponsePanel {
+  pointer-events: auto;
+  padding: 12px 16px;
+  border-radius: 18px;
+  background: rgba(12, 18, 48, 0.85);
+  border: 1px solid rgba(148, 163, 255, 0.32);
+  box-shadow: 0 14px 32px rgba(9, 14, 40, 0.45);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+
+.noResponseTitle {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #e2e8ff;
+}
+
+.noResponseText {
+  font-size: 11px;
+  color: var(--text-soft);
+}
+
+.noResponseActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.noResponsePrimary {
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(110, 231, 183, 0.18);
+  border: 1px solid rgba(110, 231, 183, 0.45);
+  color: #b8ffd9;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+}
+
+.noResponseSecondary {
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(244, 114, 182, 0.12);
+  border: 1px solid rgba(244, 114, 182, 0.4);
+  color: #ffb3d6;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
 }
 
 .actionArea button {
@@ -160,6 +236,48 @@
 
   .topBarInner {
     width: min(460px, 100%);
+  }
+}
+
+@media (min-width: 1024px) {
+  .room {
+    padding: 24px 28px 120px;
+  }
+
+  .grid {
+    width: min(1100px, 100%);
+    grid-template-columns: minmax(240px, 1fr) minmax(420px, 2fr) minmax(220px, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    align-items: start;
+    gap: 20px;
+  }
+
+  .leftColumn,
+  .centerColumn,
+  .cameraSlot {
+    width: auto;
+  }
+
+  .leftColumn {
+    --avatar-height: 260px;
+  }
+
+  .cameraSlot {
+    --camera-height: 180px;
+  }
+
+  .topBarInner {
+    width: min(1100px, 100%);
+  }
+}
+
+@media (max-width: 420px), (max-height: 740px) {
+  .leftColumn {
+    --avatar-height: 170px;
+  }
+
+  .cameraSlot {
+    --camera-height: 110px;
   }
 }
 

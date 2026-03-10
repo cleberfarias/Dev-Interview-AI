@@ -114,6 +114,21 @@ export interface FinalReport {
   };
 }
 
+export interface NextQuestionResponse {
+  shouldFinish: boolean;
+  reason?: string;
+  question?: {
+    id: string;
+    section: 'hr' | 'technical' | 'design' | 'behavioral';
+    difficulty: number;
+    prompt: string;
+  };
+  provider_used?: string;
+  model_used?: string;
+  latency_ms?: number;
+  tokens_used?: number;
+}
+
 export enum AppState {
   LANDING = 'LANDING',
   LOGIN = 'LOGIN',

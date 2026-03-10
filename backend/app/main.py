@@ -8,6 +8,7 @@ import urllib.request
 import urllib.error
 from typing import Optional
 from datetime import datetime, timezone
+from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,6 +19,8 @@ from dotenv import load_dotenv
 
 from .firebase_admin import get_firestore_client, get_current_user
 from .ai.router import AIRouter, AIProviderError
+from .mcp_server import get_mcp_app, mcp
+from .mcp_client import get_rubric as mcp_get_rubric, get_recent_interviews as mcp_get_recent_interviews
 from . import tts as tts_module
 from .schemas import (
     InterviewConfig,
@@ -32,6 +35,8 @@ from .schemas import (
     NameExtractRequest,
     EvaluateAudioRequest,
     FinalReportRequest,
+    NextQuestionRequest,
+    NextQuestionResponse,
     SessionFinishRequest,
 )
 
@@ -55,8 +60,12 @@ class StripApiPrefixMiddleware:
                 scope["raw_path"] = new_path.encode("utf-8")
         await self.app(scope, receive, send)
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with mcp.session_manager.run():
+        yield
 
-app = FastAPI(title="Dev Interview AI API", version="1.0.0")
+app = FastAPI(title="Dev Interview AI API", version="1.0.0", lifespan=lifespan)
 app.add_middleware(StripApiPrefixMiddleware)
 logger = logging.getLogger("uvicorn.error")
 
@@ -95,6 +104,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# MCP server (Streamable HTTP transport)
+app.mount("/mcp", get_mcp_app())
+
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -103,6 +115,10 @@ def _env_int(name: str, default: int) -> int:
         return int(os.environ.get(name, default))
     except Exception:
         return int(default)
+
+def _credit_cost(name: str, default: int) -> int:
+    value = _env_int(name, default)
+    return max(0, value)
 
 def _initial_credits() -> int:
     return _env_int("FREE_TRIAL_CREDITS", _env_int("DEFAULT_CREDITS", 3))
@@ -135,6 +151,100 @@ def _plan_question_bounds(duration_min: int) -> tuple[int, int]:
     min_q = max(6, avg - 1)
     max_q = min(14, avg + 1)
     return min_q, max_q
+
+def _mcp_context_enabled() -> bool:
+    raw = (os.environ.get("MCP_CONTEXT_ENABLED") or "").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
+
+def _build_rubric_block(config: InterviewConfig, question: str, auth_token: Optional[str] = None) -> str:
+    if not _mcp_context_enabled():
+        return ""
+    try:
+        rubric = mcp_get_rubric(
+            track=config.track,
+            seniority=config.seniority,
+            stacks=config.stacks,
+            question=question,
+            auth_token=auth_token,
+        )
+    except Exception:
+        logger.exception("Failed to build rubric context")
+        return ""
+
+    if not rubric:
+        return ""
+
+    focus = ", ".join(rubric.get("focus") or [])
+    good = ", ".join(rubric.get("good_signals") or [])
+    bad = ", ".join(rubric.get("red_flags") or [])
+    if not (focus or good or bad):
+        return ""
+
+    return f"""
+Rubrica de avaliacao (use como referencia):
+- Foco: {focus}
+- Bons sinais: {good}
+- Red flags: {bad}
+"""
+
+def _rubric_summary(config: InterviewConfig, auth_token: Optional[str] = None) -> Optional[dict]:
+    try:
+        rubric = mcp_get_rubric(
+            track=config.track,
+            seniority=config.seniority,
+            stacks=config.stacks,
+            question=None,
+            auth_token=auth_token,
+        )
+    except Exception:
+        return None
+    if not rubric:
+        return None
+    return {
+        "focus": rubric.get("focus") or [],
+        "good_signals": rubric.get("good_signals") or [],
+        "red_flags": rubric.get("red_flags") or [],
+    }
+
+def _build_plan_context(user_uid: str, config: InterviewConfig, auth_token: Optional[str] = None) -> str:
+    if not _mcp_context_enabled():
+        return ""
+    if not user_uid:
+        return ""
+    ctx = {}
+    recent = mcp_get_recent_interviews(user_uid, limit=3, auth_token=auth_token)
+    if recent:
+        ctx["recent_interviews"] = recent
+    rubric = _rubric_summary(config, auth_token=auth_token)
+    if rubric:
+        ctx["rubric"] = rubric
+    if not ctx:
+        return ""
+    try:
+        blob = json.dumps(ctx, ensure_ascii=True)
+    except Exception:
+        return ""
+    return f"\nContexto adicional (nao inventar, use apenas se ajudar):\n{blob}\n"
+
+def _build_report_context(user_uid: str, config: InterviewConfig, auth_token: Optional[str] = None) -> str:
+    if not _mcp_context_enabled():
+        return ""
+    if not user_uid:
+        return ""
+    ctx = {}
+    recent = mcp_get_recent_interviews(user_uid, limit=5, auth_token=auth_token)
+    if recent:
+        ctx["recent_interviews"] = recent
+    rubric = _rubric_summary(config, auth_token=auth_token)
+    if rubric:
+        ctx["rubric"] = rubric
+    if not ctx:
+        return ""
+    try:
+        blob = json.dumps(ctx, ensure_ascii=True)
+    except Exception:
+        return ""
+    return f"\nContexto adicional (nao inventar, use apenas se ajudar):\n{blob}\n"
 
 @app.get("/health")
 def health():
@@ -319,7 +429,7 @@ def _openai_transcribe_audio(audio_bytes: bytes, mime_type: str) -> str:
     except Exception:
         return raw.strip()
 
-def _build_plan_prompt_strict(config: InterviewConfig) -> str:
+def _build_plan_prompt_strict(config: InterviewConfig, context: str = "") -> str:
     duration = _clamp_duration_minutes(config)
     min_q, max_q = _plan_question_bounds(duration)
     return f"""
@@ -338,6 +448,7 @@ Formato EXATO:
 }}
 
 Config: {config.model_dump()}
+{context}
 
 Regras:
 - Idioma das perguntas: {config.interviewLanguage}
@@ -397,7 +508,7 @@ def _parse_plan_payload(payload: dict, config: InterviewConfig) -> Optional[Inte
         questions=questions,
     )
 
-def _build_plan_prompt(config: InterviewConfig) -> str:
+def _build_plan_prompt(config: InterviewConfig, context: str = "") -> str:
     duration = _clamp_duration_minutes(config)
     min_q, max_q = _plan_question_bounds(duration)
     return f"""
@@ -405,6 +516,7 @@ Voce e um entrevistador de engenharia de software.
 Gere um plano de entrevista (estruturado) a partir da configuracao:
 
 Config: {config.model_dump()}
+{context}
 
 Regras:
 - Idioma das perguntas: {config.interviewLanguage}
@@ -417,7 +529,7 @@ Retorne somente JSON, sem markdown e sem texto extra.
 """
 
 
-def _build_eval_prompt(config: InterviewConfig, question: str, confirmed_name: str, transcript: Optional[str] = None) -> str:
+def _build_eval_prompt(config: InterviewConfig, question: str, confirmed_name: str, transcript: Optional[str] = None, auth_token: Optional[str] = None) -> str:
     tasks = """
 Tarefas:
 1) Transcreva a resposta do audio.
@@ -440,6 +552,8 @@ Transcricao fornecida (copie exatamente para o campo transcript):
 \"\"\"{transcript}\"\"\"
 """
 
+    rubric_block = _build_rubric_block(config, question, auth_token=auth_token)
+
     return f"""
 Voce e um entrevistador tecnico.
 Pergunta: {question}
@@ -448,6 +562,7 @@ Trilha: {config.track}
 Stacks: {", ".join(config.stacks)}
 Idioma da entrevista: {config.interviewLanguage}
 
+{rubric_block}
 {tasks}
 {transcript_block}
 
@@ -467,6 +582,134 @@ Regras:
 - Se followUpNeeded=false, followUpQuestion deve ser null.
 """
 
+
+def _difficulty_range_from_level(level: Optional[int]) -> Optional[tuple[int, int]]:
+    if not level:
+        return None
+    try:
+        lvl = int(level)
+    except Exception:
+        return None
+    if lvl <= 1:
+        return (1, 2)
+    if lvl == 2:
+        return (3, 4)
+    return (4, 5)
+
+
+def _summarize_history_for_next(history: list, limit: int = 4) -> list:
+    if not isinstance(history, list):
+        return []
+    items = []
+    for item in history[-limit:]:
+        if not isinstance(item, dict):
+            continue
+        evaluation = item.get("evaluation") or item.get("answerEvaluation") or item.get("eval") or {}
+        scores = evaluation.get("scores") if isinstance(evaluation.get("scores"), dict) else evaluation
+        items.append(
+            {
+                "question": item.get("question"),
+                "section": item.get("section"),
+                "difficulty": item.get("difficulty"),
+                "scores": scores if isinstance(scores, dict) else {},
+                "strengths": evaluation.get("strengths", []),
+                "improvements": evaluation.get("improvements", []),
+                "followUpNeeded": evaluation.get("followUpNeeded", False),
+                "followUpQuestion": evaluation.get("followUpQuestion"),
+            }
+        )
+    return items
+
+
+def _build_next_question_prompt(
+    config: InterviewConfig,
+    history: list,
+    remaining_seconds: int,
+    asked_count: int,
+    min_q: int,
+    max_q: int,
+    difficulty_level: Optional[int] = None,
+    context: str = "",
+) -> str:
+    history_summary = _summarize_history_for_next(history)
+    score_summary = _summarize_scores(history)
+    avg_scores = score_summary[0].model_dump() if score_summary else {}
+    diff_range = _difficulty_range_from_level(difficulty_level)
+    diff_hint = f"{diff_range[0]}-{diff_range[1]}" if diff_range else "1-5"
+
+    return f"""
+Voce e um entrevistador de engenharia de software.
+Gere a PROXIMA pergunta com base na configuracao e no historico.
+
+Config: {config.model_dump()}
+Historico (resumo): {history_summary}
+Medias de scores: {avg_scores}
+remainingSeconds: {remaining_seconds}
+askedCount: {asked_count}
+minQuestions: {min_q}
+maxQuestions: {max_q}
+{context}
+
+Retorne SOMENTE JSON valido:
+{{
+  "shouldFinish": false,
+  "reason": null,
+  "question": {{
+    "id": "q{asked_count + 1}",
+    "section": "technical",
+    "difficulty": 3,
+    "prompt": "..."
+  }}
+}}
+
+Regras:
+- Idioma da pergunta: {config.interviewLanguage}
+- Se remainingSeconds <= 60 ou askedCount >= maxQuestions, defina shouldFinish=true e question=null.
+- Nao repita a mesma pergunta ou tema imediatamente.
+- Balanceie secoes (hr, technical, design, behavioral) conforme gaps.
+- difficulty deve ficar no range {diff_hint}.
+- Pergunta deve ser objetiva (1-2 frases).
+"""
+
+
+def _parse_next_question_payload(payload: dict, asked_count: int) -> tuple[Optional[InterviewQuestion], bool, Optional[str]]:
+    if not isinstance(payload, dict):
+        return None, True, "invalid_payload"
+
+    should_finish = bool(payload.get("shouldFinish") or payload.get("finish") or payload.get("done"))
+    reason = payload.get("reason")
+    if should_finish:
+        return None, True, reason
+
+    q = payload.get("question") if isinstance(payload.get("question"), dict) else payload
+    if not isinstance(q, dict):
+        return None, True, "missing_question"
+
+    prompt = q.get("prompt") or q.get("question") or q.get("text")
+    if not prompt:
+        return None, True, "missing_prompt"
+
+    try:
+        difficulty = float(q.get("difficulty") or 3)
+    except Exception:
+        difficulty = 3
+
+    section = str(q.get("section") or "technical").lower()
+    if section not in {"hr", "technical", "design", "behavioral"}:
+        section = "technical"
+
+    qid = str(q.get("id") or f"q{asked_count + 1}")
+
+    return (
+        InterviewQuestion(
+            id=qid,
+            section=section,
+            difficulty=difficulty,
+            prompt=str(prompt),
+        ),
+        False,
+        reason,
+    )
 
 def _normalize_eval_payload(payload: dict, transcript_fallback: Optional[str] = None) -> dict:
     if not isinstance(payload, dict):
@@ -527,12 +770,13 @@ def _normalize_eval_payload(payload: dict, transcript_fallback: Optional[str] = 
     return payload
 
 
-def _build_report_prompt(config: InterviewConfig, history: list) -> str:
+def _build_report_prompt(config: InterviewConfig, history: list, context: str = "") -> str:
     return f"""
 Analise o historico completo da entrevista e gere um relatorio final.
 
 Config: {config.model_dump()}
 Historico: {history}
+{context}
 
 Retorne somente JSON, sem markdown e sem texto extra. Campos:
 - overallScore (0-10)
@@ -654,7 +898,8 @@ def generate_plan(session_id: str, user=Depends(get_current_user)):
         raise HTTPException(status_code=402, detail="Creditos insuficientes")
 
     config = InterviewConfig(**data.get("config"))
-    prompt = _build_plan_prompt(config)
+    plan_context = _build_plan_context(user.get("uid"), config, auth_token=user.get("token"))
+    prompt = _build_plan_prompt(config, plan_context)
 
     try:
         result = ai_router.generate(
@@ -678,7 +923,7 @@ def generate_plan(session_id: str, user=Depends(get_current_user)):
         try:
             retry_result = ai_router.generate(
                 task_name="plan",
-                prompt=_build_plan_prompt_strict(config),
+                prompt=_build_plan_prompt_strict(config, plan_context),
                 max_tokens=900,
                 temperature=0.1,
                 response_mime_type="application/json",
@@ -722,6 +967,10 @@ def generate_plan(session_id: str, user=Depends(get_current_user)):
 
 @app.post("/ai/name-extract")
 def name_extract(payload: NameExtractRequest, user=Depends(get_current_user)):
+    cost = _credit_cost("CREDITS_NAME_EXTRACT", 1)
+    if cost > 0 and _get_user_credits(user["uid"]) < cost:
+        raise HTTPException(status_code=402, detail="Creditos insuficientes")
+
     audio_bytes = _b64_to_bytes(payload.audioBase64)
     prompt = f"Extraia apenas o primeiro nome da pessoa do audio. Responda somente o nome (1 palavra). Idioma: {payload.uiLanguage}"
     try:
@@ -750,6 +999,8 @@ def name_extract(payload: NameExtractRequest, user=Depends(get_current_user)):
             _handle_ai_error(e)
 
     name = (result.output_text or "").strip().split()
+    if cost > 0:
+        _debit_credits(user["uid"], amount=cost)
     return {"name": name[0] if name else "Candidato"}
 
 
@@ -768,11 +1019,79 @@ def api_ai_report(payload: FinalReportRequest, user=Depends(get_current_user)):
     return final_report(payload, user)
 
 
+@app.post("/ai/next-question", response_model=NextQuestionResponse)
+def next_question(payload: NextQuestionRequest, user=Depends(get_current_user)):
+    config = payload.config
+    history = payload.history or []
+    remaining_seconds = int(payload.remainingSeconds or 0)
+    asked_count = len(history)
+
+    duration = _clamp_duration_minutes(config)
+    min_q, max_q = _plan_question_bounds(duration)
+
+    if remaining_seconds <= 60 or asked_count >= max_q:
+        return NextQuestionResponse(shouldFinish=True, reason="time_or_max")
+
+    context = _build_plan_context(user.get("uid"), config, auth_token=user.get("token"))
+    prompt = _build_next_question_prompt(
+        config=config,
+        history=history,
+        remaining_seconds=remaining_seconds,
+        asked_count=asked_count,
+        min_q=min_q,
+        max_q=max_q,
+        difficulty_level=payload.difficultyLevel,
+        context=context,
+    )
+
+    try:
+        result = ai_router.generate(
+            task_name="plan",
+            prompt=prompt,
+            max_tokens=320,
+            temperature=0.4,
+            response_mime_type="application/json",
+        )
+    except AIProviderError as e:
+        _handle_ai_error(e)
+
+    try:
+        data = _safe_json_loads(result.output_text or "{}")
+        question, should_finish, reason = _parse_next_question_payload(data, asked_count)
+        if should_finish and asked_count >= min_q:
+            return NextQuestionResponse(
+                shouldFinish=True,
+                reason=reason,
+                provider_used=result.provider_used,
+                model_used=result.model_used,
+                latency_ms=result.latency_ms,
+                tokens_used=result.tokens_used,
+            )
+        if not question:
+            raise ValueError("Invalid next question payload")
+    except Exception:
+        logger.warning("Invalid next-question payload (provider=%s model=%s)", result.provider_used, result.model_used)
+        raise HTTPException(status_code=503, detail="AI retornou resposta invalida")
+
+    return NextQuestionResponse(
+        shouldFinish=False,
+        reason=None,
+        question=question,
+        provider_used=result.provider_used,
+        model_used=result.model_used,
+        latency_ms=result.latency_ms,
+        tokens_used=result.tokens_used,
+    )
+
+
 @app.post("/ai/tts")
 def api_tts(body: dict, user=Depends(get_current_user)):
     text = body.get("text")
     if not text:
         raise HTTPException(status_code=400, detail="Missing text")
+    cost = _credit_cost("CREDITS_TTS", 1)
+    if cost > 0 and _get_user_credits(user["uid"]) < cost:
+        raise HTTPException(status_code=402, detail="Creditos insuficientes")
     language = body.get("language", "pt-BR")
     voice = body.get("voice")
     try:
@@ -785,6 +1104,8 @@ def api_tts(body: dict, user=Depends(get_current_user)):
             mime = "audio/ogg"
         else:
             mime = "audio/mpeg"
+        if cost > 0:
+            _debit_credits(user["uid"], amount=cost)
         return {"audioBase64": b64, "mimeType": mime}
     except Exception:
         logger.exception("TTS synth failed")
@@ -798,7 +1119,12 @@ def evaluate_audio(payload: EvaluateAudioRequest, user=Depends(get_current_user)
 
     audio_bytes = _b64_to_bytes(payload.audioBase64)
     transcript_fallback = None
-    prompt = _build_eval_prompt(payload.config, payload.question, payload.confirmedName or "o candidato")
+    prompt = _build_eval_prompt(
+        payload.config,
+        payload.question,
+        payload.confirmedName or "o candidato",
+        auth_token=user.get("token"),
+    )
 
     try:
         result = ai_router.generate(
@@ -818,6 +1144,7 @@ def evaluate_audio(payload: EvaluateAudioRequest, user=Depends(get_current_user)
                 payload.question,
                 payload.confirmedName or "o candidato",
                 transcript=transcript_fallback,
+                auth_token=user.get("token"),
             )
             result = ai_router.generate(
                 task_name="evaluate",
@@ -849,7 +1176,8 @@ def final_report(payload: FinalReportRequest, user=Depends(get_current_user)):
     if _get_user_credits(user["uid"]) <= 0:
         raise HTTPException(status_code=402, detail="Creditos insuficientes")
 
-    prompt = _build_report_prompt(payload.config, payload.history)
+    report_context = _build_report_context(user.get("uid"), payload.config, auth_token=user.get("token"))
+    prompt = _build_report_prompt(payload.config, payload.history, report_context)
     summary = _summarize_scores(payload.history)
     try:
         result = ai_router.generate(

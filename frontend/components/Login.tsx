@@ -80,8 +80,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-[#050a1f] via-[#040813] to-[#02050d] px-6 py-10 text-white">
-      <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#0a0f1f]/80 px-7 py-8 shadow-[0_24px_60px_rgba(0,0,0,0.55)] backdrop-blur">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-[#050a1f] via-[#040813] to-[#02050d] px-4 sm:px-6 py-10 text-white">
+      <div className="w-full max-w-sm lg:max-w-lg rounded-3xl border border-white/10 bg-[#0a0f1f]/80 px-7 py-8 lg:px-10 lg:py-10 shadow-[0_24px_60px_rgba(0,0,0,0.55)] backdrop-blur">
         <div className="flex flex-col items-center text-center">
           <div className="mb-4 h-14 w-14 rounded-2xl bg-[#5860ff] flex items-center justify-center shadow-[0_10px_30px_rgba(88,96,255,0.35)]">
             <span className="text-2xl font-extrabold">D</span>

@@ -14,14 +14,15 @@ const Report: React.FC<Props> = ({ config, report }) => {
 
   const summary = report.scoresSummary;
   const radarData = [
-    { subject: 'Comunica????o', A: summary?.communication ?? Math.max(3, report.overallScore + 1), fullMark: 10 },
-    { subject: 'T??cnico', A: summary?.technical ?? Math.max(3, report.overallScore - 0.5), fullMark: 10 },
+    { subject: 'Comunicação', A: summary?.communication ?? Math.max(3, report.overallScore + 1), fullMark: 10 },
+    { subject: 'Técnico', A: summary?.technical ?? Math.max(3, report.overallScore - 0.5), fullMark: 10 },
     { subject: 'Problemas', A: summary?.problemSolving ?? Math.max(3, report.overallScore + 0.8), fullMark: 10 },
     { subject: 'Postura', A: summary?.presence ?? Math.max(3, report.overallScore), fullMark: 10 },
   ];
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-1000 pb-20">
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-1000 pb-20 max-w-5xl mx-auto w-full">
+      <div className="grid gap-6 lg:grid-cols-2">
       {/* Resumo de Score */}
       <div className="bg-slate-900/50 backdrop-blur-xl rounded-[2.5rem] p-8 border border-white/5 shadow-2xl flex flex-col items-center gap-8 text-center">
         <div className="relative w-48 h-48 flex items-center justify-center">
@@ -57,9 +58,10 @@ const Report: React.FC<Props> = ({ config, report }) => {
           </RadarChart>
         </ResponsiveContainer>
       </div>
+      </div>
 
       {/* Feedback Detalhado */}
-      <div className="grid grid-cols-1 gap-6">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <section className="bg-slate-900/50 backdrop-blur-xl rounded-[2.5rem] p-8 border border-white/5 shadow-2xl">
            <h3 className="text-emerald-400 font-black text-[11px] uppercase mb-8 tracking-[0.2em]">{t.strengths}</h3>
            <ul className="space-y-6">

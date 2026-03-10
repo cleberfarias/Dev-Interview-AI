@@ -175,3 +175,20 @@
     font-size: 16px;
   }
 }
+
+@media (min-width: 1024px) {
+  .imageFrame {
+    height: 220px;
+  }
+}
+
+@media (max-width: 420px) {
+  .card {
+    padding: 14px;
+    gap: 12px;
+  }
+
+  .imageFrame {
+    height: 120px;
+  }
+}

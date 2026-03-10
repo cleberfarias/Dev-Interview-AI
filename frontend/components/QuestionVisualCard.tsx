@@ -17,7 +17,10 @@ const QuestionVisualCard: React.FC<QuestionVisualCardProps> = ({
   topic,
   contextLabel,
 }) => {
-  const imageUrl = useMemo(() => getQuestionVisual(topic), [topic]);
+  const imageUrl = useMemo(
+    () => getQuestionVisual(topic, contextLabel, title),
+    [topic, contextLabel, title],
+  );
   const [showImage, setShowImage] = useState(false);
 
   useEffect(() => {

@@ -60,9 +60,22 @@ Frontend: http://localhost:3000
 - POST /sessions/start -> consome 1 credito e retorna { sessionId, plan, credits }
 - POST /ai/name-extract -> extrai nome do audio
 - POST /ai/evaluate-audio -> avalia resposta + transcricao (JSON)
+- POST /ai/next-question -> gera a proxima pergunta (adaptativa)
 - POST /ai/final-report -> gera relatorio final (JSON)
 - POST /sessions/{id}/finish -> salva relatorio e historico
 - POST /credits/dev-add?amount=3 -> DEV ONLY (controlado por ALLOW_DEV_CREDITS=true)
+
+---
+
+## MCP (Model Context Protocol)
+
+- MCP server (Streamable HTTP) em /mcp
+- Tools: ping, get_user_profile, get_recent_interviews, get_rubric
+- Auth via Firebase ID token (Authorization: Bearer <id_token>)
+- Tools com `uid` exigem que o `uid` seja o mesmo do token
+- MCP client interno usa `MCP_SERVER_URL` (ex.: http://127.0.0.1:8000/mcp ou Cloud Run: http://127.0.0.1:8080/mcp)
+- Timeout HTTP: `MCP_HTTP_TIMEOUT` (default 5s)
+- Contexto de rubrica na avaliacao: MCP_CONTEXT_ENABLED=true (soft-fail se MCP indisponivel)
 
 ---
 

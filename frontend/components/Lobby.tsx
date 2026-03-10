@@ -63,6 +63,29 @@ const Lobby: React.FC<Props> = ({ config, userCredits, onStart, onBack }) => {
       const { difficultyLevel, ...restConfig } = config;
       const effectiveConfig = { ...restConfig, duration: clampDuration(config.duration, config.plan) };
       const res = await BackendApi.startSession(effectiveConfig);
+      try {
+        const nextRes = await BackendApi.nextQuestion({
+          config: effectiveConfig,
+          history: [],
+          remainingSeconds: Math.max(0, Math.round(effectiveConfig.duration * 60)),
+          difficultyLevel: selectedLevel,
+        });
+        if (nextRes.question) {
+          const planStub: InterviewPlan = {
+            roleTitleGuess: effectiveConfig.track || 'Entrevista',
+            seniorityGuess: effectiveConfig.seniority,
+            mustHaveSkills: effectiveConfig.stacks || [],
+            blueprint: { hr: 15, technical: 50, design: 20, behavioral: 15 },
+            questions: [nextRes.question],
+          };
+          onStart(planStub, res.sessionId, res.credits, selectedLevel);
+          BackendApi.generatePlan(res.sessionId).catch(() => null);
+          return;
+        }
+      } catch (err) {
+        console.warn('next-question failed, falling back to plan', err);
+      }
+
       const planRes = await BackendApi.generatePlan(res.sessionId);
       onStart(planRes.plan, planRes.sessionId, planRes.credits, selectedLevel);
     } catch (err) {
@@ -74,7 +97,7 @@ const Lobby: React.FC<Props> = ({ config, userCredits, onStart, onBack }) => {
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-12">
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-12 max-w-5xl mx-auto w-full">
       <header className="flex justify-between items-start">
         <div>
           <h2 className="text-4xl font-black tracking-tighter text-white">

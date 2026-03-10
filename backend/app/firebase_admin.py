@@ -83,6 +83,10 @@ def get_current_user(authorization: Optional[str] = Header(default=None)):
     name = decoded.get("name") or decoded.get("firebase", {}).get("sign_in_provider")
     picture = decoded.get("picture")
     # Provide common web sdk field names too
+    token = None
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization.split(" ", 1)[1].strip() or None
+
     return {
         "uid": uid,
         "email": email,
@@ -90,4 +94,5 @@ def get_current_user(authorization: Optional[str] = Header(default=None)):
         "picture": picture,
         "displayName": decoded.get("name"),
         "photoURL": picture,
+        "token": token,
     }

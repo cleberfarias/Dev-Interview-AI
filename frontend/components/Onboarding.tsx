@@ -60,20 +60,23 @@ const Onboarding: React.FC<Props> = ({ onComplete, initialConfig }) => {
 
   return (
     <div className="flex flex-col h-full space-y-8 animate-in fade-in duration-500 pb-safe">
-      {/* Progress Header */}
-      <div className="flex items-center gap-4 px-2">
-        <div className="flex gap-1.5 flex-1">
-          {[0, 1, 2, 3, 4, 5].map(i => (
-            <div 
-              key={i} 
-              className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${step >= i ? 'bg-indigo-500' : 'bg-slate-800'}`} 
-            />
-          ))}
+      <div className="mx-auto w-full max-w-5xl">
+        {/* Progress Header */}
+        <div className="flex items-center gap-4 px-2">
+          <div className="flex gap-1.5 flex-1">
+            {[0, 1, 2, 3, 4, 5].map(i => (
+              <div 
+                key={i} 
+                className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${step >= i ? 'bg-indigo-500' : 'bg-slate-800'}`} 
+              />
+            ))}
+          </div>
+          <span className="text-[10px] font-black text-slate-500 tabular-nums">{step + 1}/6</span>
         </div>
-        <span className="text-[10px] font-black text-slate-500 tabular-nums">{step + 1}/6</span>
       </div>
 
       <div className="flex-1 overflow-y-auto no-scrollbar pb-32">
+        <div className="mx-auto w-full max-w-5xl">
         {step === 0 && (
           <div className="space-y-8 animate-in slide-in-from-right-8 duration-300">
             <header>
@@ -262,10 +265,11 @@ const Onboarding: React.FC<Props> = ({ onComplete, initialConfig }) => {
           </div>
         )}
       </div>
+      </div>
 
       {/* Navigation Footer */}
       <div className="fixed bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-slate-950 via-slate-950/90 to-transparent z-[60]">
-        <div className="max-w-md mx-auto flex gap-3">
+        <div className="max-w-md lg:max-w-5xl mx-auto flex gap-3">
           {step > 0 && (
             <button
               onClick={prevStep}
