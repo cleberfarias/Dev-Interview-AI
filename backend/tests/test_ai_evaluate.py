@@ -75,3 +75,69 @@ def test_evaluate_audio_happy_path(monkeypatch):
         assert data["followUpNeeded"] is False
     finally:
         app.dependency_overrides = {}
+
+
+def test_evaluate_audio_enriches_missing_feedback(monkeypatch):
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "test-user",
+        "email": "test@example.com",
+        "name": "Test User",
+        "picture": None,
+    }
+
+    monkeypatch.setattr("app.main._get_user_credits", lambda uid: 1)
+    monkeypatch.setattr("app.main._debit_credits", lambda uid, amount=1: 0)
+
+    payload = {
+        "transcript": "resposta curta",
+        "scores": {
+            "communication": 6,
+            "technical": 4,
+            "problemSolving": 4,
+            "presence": 6,
+        },
+        "strengths": [],
+        "improvements": [],
+    }
+
+    def fake_generate(*args, **kwargs):
+        return AIResult(
+            output_text=json.dumps(payload),
+            provider_used="test",
+            model_used="test-model",
+            latency_ms=5,
+            tokens_used=10,
+        )
+
+    monkeypatch.setattr("app.main.ai_router.generate", fake_generate)
+
+    try:
+        client = TestClient(app)
+        audio_b64 = base64.b64encode(b"test-audio").decode("utf-8")
+        body = {
+            "config": {
+                "uiLanguage": "pt-BR",
+                "interviewLanguage": "pt-BR",
+                "track": "backend",
+                "seniority": "mid",
+                "stacks": ["python"],
+                "style": "friendly",
+                "duration": 20,
+                "plan": "free",
+                "jobDescription": None,
+            },
+            "question": "Explique o que e uma API.",
+            "audioBase64": audio_b64,
+            "mimeType": "audio/webm",
+            "confirmedName": "Ana",
+        }
+
+        resp = client.post("/ai/evaluate-audio", json=body)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["strengths"]) > 0
+        assert len(data["improvements"]) > 0
+        assert data["followUpNeeded"] is True
+        assert isinstance(data["followUpQuestion"], str)
+    finally:
+        app.dependency_overrides = {}

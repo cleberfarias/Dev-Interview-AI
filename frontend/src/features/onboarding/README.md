@@ -1,0 +1,3 @@
+# onboarding
+
+Feature module scaffold.

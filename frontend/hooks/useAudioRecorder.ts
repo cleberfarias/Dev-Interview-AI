@@ -7,6 +7,11 @@ interface AudioRecorderState {
   stop: () => Promise<Blob>;
 }
 
+interface AudioRecorderOptions {
+  timesliceMs?: number;
+  onChunk?: (chunk: Blob) => void;
+}
+
 const getRecorderOptions = (): MediaRecorderOptions | undefined => {
   if (typeof MediaRecorder === 'undefined') return undefined;
   if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
@@ -18,7 +23,10 @@ const getRecorderOptions = (): MediaRecorderOptions | undefined => {
   return undefined;
 };
 
-export const useAudioRecorder = (stream: MediaStream | null): AudioRecorderState => {
+export const useAudioRecorder = (
+  stream: MediaStream | null,
+  options: AudioRecorderOptions = {},
+): AudioRecorderState => {
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const [isRecording, setIsRecording] = useState(false);
@@ -50,6 +58,7 @@ export const useAudioRecorder = (stream: MediaStream | null): AudioRecorderState
     recorder.ondataavailable = (event) => {
       if (event.data.size > 0) {
         chunksRef.current.push(event.data);
+        options.onChunk?.(event.data);
       }
     };
     recorder.onerror = () => {
@@ -57,10 +66,14 @@ export const useAudioRecorder = (stream: MediaStream | null): AudioRecorderState
       setIsRecording(false);
     };
 
-    recorder.start();
+    if (options.timesliceMs && options.timesliceMs > 0) {
+      recorder.start(options.timesliceMs);
+    } else {
+      recorder.start();
+    }
     recorderRef.current = recorder;
     setIsRecording(true);
-  }, [stream]);
+  }, [options, stream]);
 
   const stop = useCallback(() => {
     return new Promise<Blob>((resolve, reject) => {

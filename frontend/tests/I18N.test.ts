@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { I18N } from '../constants';
+import { I18N } from '../src/shared/constants';
 
 
 describe('I18N', () => {

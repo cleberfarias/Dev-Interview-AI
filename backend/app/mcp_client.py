@@ -12,14 +12,21 @@ import httpx
 try:
     from mcp.client.streamable_http import streamablehttp_client as _streamable_http_client
 except Exception:
-    from mcp.client.streamable_http import streamable_http_client as _streamable_http_client
+    try:
+        from mcp.client.streamable_http import streamable_http_client as _streamable_http_client
+    except Exception:
+        _streamable_http_client = None
 
 try:
     from mcp import ClientSession
 except Exception:
-    from mcp.client.session import ClientSession
+    try:
+        from mcp.client.session import ClientSession
+    except Exception:
+        ClientSession = None
 
 logger = logging.getLogger("uvicorn.error")
+_mcp_sdk_missing_warned = False
 
 
 def _mcp_server_url() -> Optional[str]:
@@ -85,6 +92,13 @@ def _extract_tool_result(result: Any) -> Optional[Any]:
 
 
 async def _call_tool_async(name: str, arguments: Dict[str, Any], auth_token: Optional[str]) -> Optional[Any]:
+    global _mcp_sdk_missing_warned
+    if _streamable_http_client is None or ClientSession is None:
+        if not _mcp_sdk_missing_warned:
+            logger.warning("MCP SDK not installed; MCP calls are disabled")
+            _mcp_sdk_missing_warned = True
+        return None
+
     url = _mcp_server_url()
     if not url:
         logger.info("MCP_SERVER_URL not set; skipping MCP call for %s", name)

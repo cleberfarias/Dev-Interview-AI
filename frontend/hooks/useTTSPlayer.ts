@@ -1,5 +1,5 @@
-﻿import { useCallback, useEffect, useRef, useState } from 'react';
-import { BackendApi } from '../services/backendApi';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { BackendApi } from '../src/shared/services/backendApi';
 
 interface TTSPlayOptions {
   voiceId?: string;

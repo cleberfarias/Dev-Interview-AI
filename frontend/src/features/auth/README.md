@@ -1,0 +1,3 @@
+# auth
+
+Feature module scaffold.

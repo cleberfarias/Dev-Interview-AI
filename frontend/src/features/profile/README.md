@@ -1,0 +1,3 @@
+# profile
+
+Feature module scaffold.

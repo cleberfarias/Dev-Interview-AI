@@ -1,0 +1,3 @@
+# dashboard
+
+Feature module scaffold.

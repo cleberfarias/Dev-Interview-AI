@@ -1,17 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { AppState, InterviewConfig, InterviewPlan, FinalReport, User } from './types';
-import { I18N, clampDuration, INTERVIEW_LIMITS } from './constants';
-import LandingPage from './components/LandingPage';
-import Onboarding from './components/Onboarding';
-import Lobby from './components/Lobby';
-import InterviewRoom from './components/InterviewRoom';
-import Report from './components/Report';
-import Login from './components/Login';
-import Dashboard from './components/Dashboard';
-import UserProfile from './components/UserProfile';
+import React, { Suspense, useEffect, useRef, useState } from 'react';
+import { AppState, CandidateProfile, InterviewConfig, InterviewPlan, FinalReport, User } from './src/shared/types';
+import { I18N, clampDuration, INTERVIEW_LIMITS } from './src/shared/constants';
+import { LandingPage, Login } from './src/features/auth';
 import { auth } from './src/lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { BackendApi } from './services/backendApi';
+import { BackendApi } from './src/shared/services/backendApi';
 
 const SplashScreen: React.FC = () => (
   <div className="fixed inset-0 z-[100] bg-slate-950 flex flex-col items-center justify-center animate-in fade-in duration-500">
@@ -29,6 +22,43 @@ const SplashScreen: React.FC = () => (
   </div>
 );
 
+const RouteLoading: React.FC = () => (
+  <div className="h-full flex items-center justify-center">
+    <div className="w-10 h-10 border-4 border-indigo-500/40 border-t-indigo-300 rounded-full animate-spin" />
+  </div>
+);
+
+const Dashboard = React.lazy(() =>
+  import('./src/features/dashboard').then((module) => ({ default: module.Dashboard })),
+);
+const Lobby = React.lazy(() =>
+  import('./src/features/interview').then((module) => ({ default: module.Lobby })),
+);
+const InterviewRoom = React.lazy(() =>
+  import('./src/features/interview').then((module) => ({ default: module.InterviewRoom })),
+);
+const Onboarding = React.lazy(() =>
+  import('./src/features/onboarding').then((module) => ({ default: module.Onboarding })),
+);
+const UserProfile = React.lazy(() =>
+  import('./src/features/profile').then((module) => ({ default: module.UserProfile })),
+);
+const Report = React.lazy(() =>
+  import('./src/features/report').then((module) => ({ default: module.Report })),
+);
+
+const defaultRoleFromTrack = (track: string): string => {
+  const map: Record<string, string> = {
+    frontend: 'Frontend Engineer',
+    backend: 'Backend Engineer',
+    fullstack: 'Fullstack Engineer',
+    mobile: 'Mobile Engineer',
+    devops: 'DevOps Engineer',
+    data: 'Data Engineer',
+  };
+  return map[track] || 'Software Engineer';
+};
+
 const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [state, setState] = useState<AppState>(AppState.LOGIN);
@@ -36,6 +66,7 @@ const App: React.FC = () => {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [plan, setPlan] = useState<InterviewPlan | null>(null);
   const [report, setReport] = useState<FinalReport | null>(null);
+  const [candidateProfile, setCandidateProfile] = useState<CandidateProfile | null>(null);
   const [globalNotice, setGlobalNotice] = useState<string | null>(null);
   const noticeTimerRef = useRef<number | null>(null);
 
@@ -89,6 +120,7 @@ const App: React.FC = () => {
 
       if (!fbUser) {
         setUser(null);
+        setCandidateProfile(null);
         setState(AppState.LOGIN);
         finishFirstLoad();
         return;
@@ -115,6 +147,10 @@ const App: React.FC = () => {
         const profile = token ? await BackendApi.meWithToken(token) : await BackendApi.me();
         if (!mounted) return;
         setUser(profile);
+
+        const candidate = await BackendApi.getCandidateProfile().catch(() => null);
+        if (!mounted) return;
+        setCandidateProfile(candidate);
       } catch (e) {
         console.error('Auth handler error', e);
         showGlobalNotice('Nao foi possivel carregar seu perfil agora.');
@@ -148,12 +184,14 @@ const App: React.FC = () => {
 
   const handleLogin = (newUser: User) => {
     setUser(newUser);
+    setCandidateProfile(null);
     setState(AppState.DASHBOARD);
   };
 
   const handleLogout = async () => {
     await signOut(auth);
     setUser(null);
+    setCandidateProfile(null);
     setState(AppState.LOGIN);
   };
 
@@ -207,6 +245,42 @@ const App: React.FC = () => {
     setSessionId(null);
     setState(AppState.LOBBY);
     showGlobalNotice('Entrevista interrompida.');
+  };
+
+  const syncCandidateProfileFromOnboarding = async (nextConfig: InterviewConfig) => {
+    try {
+      const existing = await BackendApi.getCandidateProfile().catch(() => null);
+      const payload = {
+        targetRole: existing?.targetRole || defaultRoleFromTrack(nextConfig.track),
+        experienceLevel: existing?.experienceLevel || nextConfig.seniority,
+        primarySkills: existing?.primarySkills?.length ? existing.primarySkills : (nextConfig.stacks || []),
+        weakSkills: existing?.weakSkills || [],
+        resumeSummary: existing?.resumeSummary || null,
+        jobDescription: (nextConfig.jobDescription || '').trim() || existing?.jobDescription || null,
+      };
+
+      if (payload.jobDescription) {
+        try {
+          const analysis = await BackendApi.analyzeJob({
+            jobDescription: payload.jobDescription,
+            resumeTechnologies: payload.primarySkills,
+          });
+          if (!existing?.targetRole && analysis.analysis.roleTitleGuess) {
+            payload.targetRole = analysis.analysis.roleTitleGuess;
+          }
+          if ((!existing?.weakSkills || existing.weakSkills.length === 0) && analysis.gap?.missingSkills?.length) {
+            payload.weakSkills = analysis.gap.missingSkills;
+          }
+        } catch (analysisErr) {
+          console.warn('Onboarding job analysis sync failed', analysisErr);
+        }
+      }
+
+      const saved = await BackendApi.upsertCandidateProfile(payload);
+      setCandidateProfile(saved);
+    } catch (e) {
+      console.error('Failed to sync candidate profile from onboarding', e);
+    }
   };
 
   const t = I18N[config.uiLanguage];
@@ -290,86 +364,91 @@ const App: React.FC = () => {
 
       <main className={disableMainScroll ? 'flex-1 overflow-hidden' : 'flex-1 overflow-y-auto no-scrollbar'}>
         <div className={containerClass}>
-          {state === AppState.LOGIN && <Login onLogin={handleLogin} />}
+          <Suspense fallback={<RouteLoading />}>
+            {state === AppState.LOGIN && <Login onLogin={handleLogin} />}
 
-          {state === AppState.DASHBOARD && user && (
-            <Dashboard
-              user={user}
-              onOpenProfile={() => setState(AppState.PROFILE)}
-              onStartInterview={() => setState(AppState.ONBOARDING)}
-              onDeleteInterview={handleDeleteInterview}
-            />
-          )}
-
-          {state === AppState.PROFILE && user && (
-            <UserProfile
-              user={user}
-              config={config}
-              onBack={() => setState(AppState.DASHBOARD)}
-              onLogout={handleLogout}
-              onAddCredits={addCredits}
-              onDeleteInterview={handleDeleteInterview}
-            />
-          )}
-
-          {state === AppState.ONBOARDING && (
-            <div className="p-4 h-full">
-              <Onboarding
-                onComplete={(c) => {
-                  setConfig(c);
-                  setState(AppState.LOBBY);
-                }}
-                initialConfig={config}
-              />
-            </div>
-          )}
-
-          {state === AppState.LOBBY && (
-            <div className="p-4 h-full overflow-hidden">
-              <Lobby
-                config={config}
-                userCredits={user?.credits || 0}
-                onStart={(p, sid, credits, difficultyLevel) => {
-                  setPlan(p);
-                  setSessionId(sid);
-                  setConfig((prev) => ({
-                    ...prev,
-                    difficultyLevel: difficultyLevel ?? prev.difficultyLevel ?? 3,
-                  }));
-                  if (user) setUser({ ...user, credits });
-                  setState(AppState.INTERVIEWING);
-                }}
-                onBack={() => setState(AppState.ONBOARDING)}
-              />
-            </div>
-          )}
-
-          {state === AppState.INTERVIEWING && plan && user && (
-            <div className="max-w-none h-full">
-              <InterviewRoom
-                config={config}
-                plan={plan}
+            {state === AppState.DASHBOARD && user && (
+              <Dashboard
                 user={user}
-                onFinish={handleInterviewFinish}
-                onBack={handleInterviewBack}
+                candidateProfile={candidateProfile}
+                onOpenProfile={() => setState(AppState.PROFILE)}
+                onStartInterview={() => setState(AppState.ONBOARDING)}
+                onDeleteInterview={handleDeleteInterview}
               />
-            </div>
-          )}
+            )}
 
-          {state === AppState.REPORT && report && (
-            <div className="p-4">
-              <Report
+            {state === AppState.PROFILE && user && (
+              <UserProfile
+                user={user}
                 config={config}
-                report={report}
-                onBack={() => {
-                  setReport(null);
-                  setPlan(null);
-                  setSessionId(null);
-                  setState(AppState.DASHBOARD);
-                }}
+                onBack={() => setState(AppState.DASHBOARD)}
+                onLogout={handleLogout}
+                onAddCredits={addCredits}
+                onDeleteInterview={handleDeleteInterview}
+                onCandidateProfileUpdated={(profile) => setCandidateProfile(profile)}
               />
-            </div>
-          )}
+            )}
+
+            {state === AppState.ONBOARDING && (
+              <div className="p-4 h-full">
+                <Onboarding
+                  onComplete={(c) => {
+                    setConfig(c);
+                    setState(AppState.LOBBY);
+                    void syncCandidateProfileFromOnboarding(c);
+                  }}
+                  initialConfig={config}
+                />
+              </div>
+            )}
+
+            {state === AppState.LOBBY && (
+              <div className="p-4 h-full overflow-hidden">
+                <Lobby
+                  config={config}
+                  userCredits={user?.credits || 0}
+                  onStart={(p, sid, credits, difficultyLevel) => {
+                    setPlan(p);
+                    setSessionId(sid);
+                    setConfig((prev) => ({
+                      ...prev,
+                      difficultyLevel: difficultyLevel ?? prev.difficultyLevel ?? 3,
+                    }));
+                    if (user) setUser({ ...user, credits });
+                    setState(AppState.INTERVIEWING);
+                  }}
+                  onBack={() => setState(AppState.ONBOARDING)}
+                />
+              </div>
+            )}
+
+            {state === AppState.INTERVIEWING && plan && user && (
+              <div className="max-w-none h-full">
+                <InterviewRoom
+                  config={config}
+                  plan={plan}
+                  user={user}
+                  onFinish={handleInterviewFinish}
+                  onBack={handleInterviewBack}
+                />
+              </div>
+            )}
+
+            {state === AppState.REPORT && report && (
+              <div className="p-4">
+                <Report
+                  config={config}
+                  report={report}
+                  onBack={() => {
+                    setReport(null);
+                    setPlan(null);
+                    setSessionId(null);
+                    setState(AppState.DASHBOARD);
+                  }}
+                />
+              </div>
+            )}
+          </Suspense>
         </div>
       </main>
     </div>

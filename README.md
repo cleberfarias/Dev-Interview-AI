@@ -8,7 +8,7 @@ Este projeto foi ajustado para um fluxo real de producao:
 - Frontend (Vite + React) usando Firebase Auth
 - Backend (FastAPI) para chamadas de IA e regras de negocio
 - Banco: Firebase Firestore (usuarios, creditos e historico)
-- Creditos: consumidos no backend ao iniciar uma sessao (/sessions/start)
+- Creditos: consumidos no backend durante a sessao (gerar plano, avaliar respostas, relatorio e TTS)
 - Limites: duracao e perguntas ajustadas por plano (free/pro)
 
 ---
@@ -50,20 +50,26 @@ npm install
 npm run dev
 ```
 
-Frontend: http://localhost:3000
+Frontend: http://localhost:5000
 
 ---
 
 ## 4) Endpoints principais
 
 - GET /me -> retorna perfil (cria automaticamente no primeiro login)
-- POST /sessions/start -> consome 1 credito e retorna { sessionId, plan, credits }
+- POST /sessions/start -> cria sessao e retorna { sessionId, plan, credits }
+- POST /sessions/{id}/plan/generate -> gera plano e consome 1 credito
 - POST /ai/name-extract -> extrai nome do audio
 - POST /ai/evaluate-audio -> avalia resposta + transcricao (JSON)
 - POST /ai/next-question -> gera a proxima pergunta (adaptativa)
 - POST /ai/final-report -> gera relatorio final (JSON)
+- POST /live-coach/process -> processa chunk de audio para coaching em tempo real (STT + classificacao + sugestao)
+- WS /live-coach/ws -> canal de baixa latencia para live coach em streaming (com fallback HTTP no frontend)
 - POST /sessions/{id}/finish -> salva relatorio e historico
-- POST /credits/dev-add?amount=3 -> DEV ONLY (controlado por ALLOW_DEV_CREDITS=true)
+- GET /sessions/{id}/analysis-trace -> retorna snapshot de traces (perfil) capturado ao iniciar a sessao
+- POST /credits/dev-add?amount=3 -> DEV ONLY (habilite apenas em dev com ALLOW_DEV_CREDITS=true)
+- POST /resume/analyze e /jobs/analyze -> retornam trace da origem da analise (heuristic|ai|hybrid)
+- GET /profile/candidate/audit -> historico paginado de traces de analise
 
 ---
 
@@ -123,9 +129,10 @@ npm test
 ## Observacoes importantes
 
 - Nenhuma API Key fica no frontend. Todas as chamadas de IA ficam no backend.
-- O app usa SpeechSynthesis do navegador para a voz do entrevistador (mais barato e simples).
-- Para voz premium, use OpenAI TTS no backend (env TTS_PROVIDER=openai).
+- A voz do entrevistador usa backend TTS em /ai/tts.
+- Defina TTS_PROVIDER=openai para usar OpenAI TTS.
 - Pagamento real de creditos: ideal implementar Stripe/Mercado Pago + webhook substituindo /credits/dev-add.
+- Em producao, mantenha ALLOW_DEV_CREDITS=false.
 
 ---
 
@@ -170,4 +177,4 @@ Dica: voce pode usar FIREBASE_SERVICE_ACCOUNT_PATH localmente e FIREBASE_SERVICE
 
 Se voce nao usar o rewrite /api do Hosting, defina no backend:
 
-CORS_ORIGINS=http://localhost:3000,https://YOUR_PROJECT.web.app,https://YOUR_PROJECT.firebaseapp.com
+CORS_ORIGINS=http://localhost:5000,https://YOUR_PROJECT.web.app,https://YOUR_PROJECT.firebaseapp.com
