@@ -25,6 +25,7 @@ dist
 dist-ssr
 *.local
 .firebase/
+.gcloud/
 
 # Editor directories and files
 .vscode/*
