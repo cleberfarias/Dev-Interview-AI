@@ -7,9 +7,10 @@ import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } fro
 interface Props {
   config: InterviewConfig;
   report: FinalReport;
+  onBack?: () => void;
 }
 
-const Report: React.FC<Props> = ({ config, report }) => {
+const Report: React.FC<Props> = ({ config, report, onBack }) => {
   const t = I18N[config.uiLanguage];
 
   const summary = report.scoresSummary;
@@ -135,7 +136,13 @@ const Report: React.FC<Props> = ({ config, report }) => {
       {/* Botão de Ação Final */}
       <div className="flex justify-center pt-8">
          <button 
-           onClick={() => window.location.reload()}
+           onClick={() => {
+             if (onBack) {
+               onBack();
+               return;
+             }
+             window.location.reload();
+           }}
            className="w-full py-6 bg-white text-slate-900 font-black rounded-[2.5rem] shadow-2xl active:scale-95 transition-all text-sm uppercase tracking-[0.2em] border-b-8 border-slate-300"
          >
            Finalizar e Voltar

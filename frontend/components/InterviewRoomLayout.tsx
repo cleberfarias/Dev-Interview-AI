@@ -64,6 +64,94 @@ const mapSectionToTopic = (section?: string): string => {
   }
 };
 
+const LOCAL_FALLBACK_QUESTIONS: Record<string, Record<string, string[]>> = {
+  'pt-BR': {
+    frontend: [
+      'Como voce estruturaria um componente React para ser reutilizavel sem perder legibilidade?',
+      'Quando usar memoizacao no frontend e quais sinais mostram que ela e necessaria?',
+      'Como voce investigaria uma tela lenta em producao no navegador?',
+      'Qual estrategia usaria para tratar estados de erro e loading em uma pagina complexa?',
+      'Como voce organizaria testes para garantir confianca em um fluxo critico de UI?',
+      'Como evitar regressao de performance em bundles grandes de frontend?',
+    ],
+    backend: [
+      'Como voce desenharia um endpoint resiliente para picos de requisicoes?',
+      'Quando escolheria fila assincrona em vez de processamento sincrono?',
+      'Como faria observabilidade de uma API para reduzir MTTR?',
+      'Qual estrategia usaria para lidar com concorrencia em escrita de dados?',
+      'Como voce decidiria entre cache local, Redis e CDN?',
+      'Como protegeria endpoints criticos contra abuso e replay?',
+    ],
+    default: [
+      'Descreva um desafio tecnico recente e como voce decidiu a solucao.',
+      'Como voce prioriza trade-offs entre prazo, qualidade e manutencao?',
+      'Quais metricas voce acompanha para validar impacto de uma entrega?',
+      'Como voce faria rollout seguro de uma mudanca com risco alto?',
+      'Como voce se prepara para debugar problemas intermitentes em producao?',
+      'Qual foi uma decisao tecnica dificil e o que voce aprendeu?',
+    ],
+  },
+  en: {
+    frontend: [
+      'How would you structure a reusable React component without hurting readability?',
+      'When should you use memoization in frontend and what signals indicate it?',
+      'How would you investigate a slow production screen in the browser?',
+      'How do you handle loading and error states in a complex page?',
+      'How would you design tests for a critical UI flow?',
+      'How do you prevent performance regressions in large frontend bundles?',
+    ],
+    backend: [
+      'How would you design a resilient API endpoint for traffic spikes?',
+      'When would you choose async queues over synchronous processing?',
+      'How would you implement observability to reduce MTTR?',
+      'What strategy would you use for concurrent write operations?',
+      'How do you choose between in-memory cache, Redis and CDN?',
+      'How would you protect critical endpoints from abuse and replay?',
+    ],
+    default: [
+      'Describe a recent technical challenge and how you chose the solution.',
+      'How do you prioritize trade-offs between speed, quality and maintenance?',
+      'Which metrics do you track to validate delivery impact?',
+      'How would you do a safe rollout for a high-risk change?',
+      'How do you prepare to debug intermittent production issues?',
+      'Tell me about a hard technical decision and what you learned.',
+    ],
+  },
+  es: {
+    frontend: [
+      'Como estructurarias un componente React reutilizable sin perder claridad?',
+      'Cuando usarias memoizacion en frontend y que senales lo justifican?',
+      'Como investigarias una pantalla lenta en produccion en el navegador?',
+      'Como manejas estados de carga y error en una pagina compleja?',
+      'Como organizarias pruebas para un flujo critico de UI?',
+      'Como evitas regresiones de rendimiento en bundles grandes?',
+    ],
+    backend: [
+      'Como disenarias un endpoint resiliente para picos de trafico?',
+      'Cuando elegirias colas asincronas sobre procesamiento sincrono?',
+      'Como implementarias observabilidad para reducir MTTR?',
+      'Que estrategia usarias para escrituras concurrentes?',
+      'Como eliges entre cache local, Redis y CDN?',
+      'Como protegerias endpoints criticos contra abuso y replay?',
+    ],
+    default: [
+      'Describe un desafio tecnico reciente y como elegiste la solucion.',
+      'Como priorizas trade-offs entre velocidad, calidad y mantenimiento?',
+      'Que metricas sigues para validar impacto de una entrega?',
+      'Como harias un rollout seguro para un cambio de alto riesgo?',
+      'Como te preparas para depurar fallas intermitentes en produccion?',
+      'Cuentame una decision tecnica dificil y que aprendiste.',
+    ],
+  },
+};
+
+const getLocalFallbackPrompt = (track: string, language: string, index: number): string | null => {
+  const byLanguage = LOCAL_FALLBACK_QUESTIONS[language] || LOCAL_FALLBACK_QUESTIONS['pt-BR'];
+  const list = byLanguage[track] || byLanguage.default;
+  if (!list?.length) return null;
+  return list[index % list.length];
+};
+
 const toUiQuestion = (
   question: { id?: string; prompt: string; section?: string; difficulty?: number },
   index: number,
@@ -279,9 +367,10 @@ interface InterviewRoomLayoutProps {
   config: InterviewConfig;
   plan: InterviewPlan;
   onFinish?: (report: FinalReport) => void;
+  onBack?: () => void;
 }
 
-const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan, onFinish }) => {
+const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan, onFinish, onBack }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [flowState, setFlowState] = useState<InterviewFlowState>('idle');
   const [audioEl, setAudioEl] = useState<HTMLAudioElement | null>(null);
@@ -289,6 +378,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
     Math.max(0, Math.round((config.duration ?? 0) * 60)),
   );
   const [timeLimitReached, setTimeLimitReached] = useState(false);
+  const [runtimeNotice, setRuntimeNotice] = useState<string | null>(null);
   const historyRef = useRef<HistoryItem[]>([]);
   const finishingRef = useRef(false);
   const timerRef = useRef<number | null>(null);
@@ -334,6 +424,10 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
     () => deriveContextLabel(currentQuestion, config.stacks),
     [currentQuestion, config.stacks],
   );
+  const fallbackMaxQuestions = useMemo(() => {
+    const duration = Math.max(10, Number(config.duration || 10));
+    return Math.max(5, Math.min(12, Math.round(duration / 2)));
+  }, [config.duration]);
   const totalSeconds = useMemo(
     () => Math.max(0, Math.round((config.duration ?? 0) * 60)),
     [config.duration],
@@ -360,6 +454,11 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
     const seconds = clamped % 60;
     return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   }, [remainingSeconds]);
+  const isMediaReady = mediaStatus === 'ready';
+
+  const showRuntimeNotice = useCallback((message: string) => {
+    setRuntimeNotice(message);
+  }, []);
 
   const stopTTS = useCallback(() => {
     if (!audioEl) return;
@@ -402,9 +501,10 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
         });
       } catch (error) {
         console.warn('TTS falhou', error);
+        showRuntimeNotice('Audio da pergunta indisponivel no momento.');
       }
     },
-    [audioEl, config.interviewLanguage, stopTTS],
+    [audioEl, config.interviewLanguage, showRuntimeNotice, stopTTS],
   );
 
   const clearNoResponseTimer = useCallback(() => {
@@ -480,8 +580,9 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
       voiceMonitorRef.current = { ctx, analyser, data, rafId: requestAnimationFrame(tick) };
     } catch (error) {
       console.warn('Falha ao iniciar monitor de voz', error);
+      showRuntimeNotice('Nao foi possivel monitorar sua voz. Continue normalmente.');
     }
-  }, [stream, stopVoiceMonitor]);
+  }, [showRuntimeNotice, stream, stopVoiceMonitor]);
 
   const finalizeInterview = useCallback(
     async (history: HistoryItem[]) => {
@@ -496,12 +597,13 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
         onFinish?.(report);
       } catch (error) {
         console.warn('Falha ao gerar report', error);
+        showRuntimeNotice('Falha no servidor ao gerar relatorio. Exibindo versao local.');
         onFinish?.(buildFallbackReport(history, config, plan));
       } finally {
         finishingRef.current = false;
       }
     },
-    [config, onFinish, plan, sanitizedConfig, stopTTS],
+    [config, onFinish, plan, sanitizedConfig, showRuntimeNotice, stopTTS],
   );
 
   const handleFinish = useCallback(async () => {
@@ -568,8 +670,9 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
       }, NO_RESPONSE_MS);
     } catch (error) {
       console.warn(error);
+      showRuntimeNotice('Nao foi possivel iniciar a gravacao. Verifique permissoes de microfone.');
     }
-  }, [clearNoResponseTimer, flowState, handleNoResponse, startRecording, startVoiceMonitor]);
+  }, [clearNoResponseTimer, flowState, handleNoResponse, showRuntimeNotice, startRecording, startVoiceMonitor]);
 
   const stopRecordingFlow = useCallback(
     async (_reason: 'manual' | 'auto') => {
@@ -638,11 +741,40 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
           if (hasPlannedNext) {
             setFlowState('next_question');
           } else {
+            showRuntimeNotice('Conexao instavel. Tentando manter a entrevista ativa.');
+            const shouldFallbackLocally = nextIndex < fallbackMaxQuestions;
+            if (shouldFallbackLocally) {
+              const prompt = getLocalFallbackPrompt(config.track, config.interviewLanguage, nextIndex);
+              if (prompt) {
+                const localQuestion = toUiQuestion(
+                  {
+                    id: `local-q${nextIndex + 1}`,
+                    prompt,
+                    section: currentQuestion.section || 'technical',
+                    difficulty: currentQuestion.sourceDifficulty || 3,
+                  },
+                  nextIndex,
+                  baseBullets,
+                );
+                setQuestions((prev) => {
+                  const next = [...prev];
+                  if (next[nextIndex]) {
+                    next[nextIndex] = localQuestion;
+                  } else {
+                    next.push(localQuestion);
+                  }
+                  return next;
+                });
+                setFlowState('next_question');
+                return;
+              }
+            }
             await finalizeInterview(nextHistory);
           }
         }
       } catch (error) {
         console.warn(error);
+        showRuntimeNotice('Nao foi possivel processar sua resposta. Tente novamente.');
         setFlowState('awaiting_answer');
       } finally {
         stopInProgressRef.current = false;
@@ -651,13 +783,17 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
     [
       baseBullets,
       clearNoResponseTimer,
+      config.interviewLanguage,
+      config.track,
       currentIndex,
       currentQuestion?.id,
       currentQuestion?.section,
       currentQuestion?.sourceDifficulty,
       currentQuestion?.title,
+      fallbackMaxQuestions,
       finalizeInterview,
       flowState,
+      showRuntimeNotice,
       questions,
       remainingSeconds,
       sanitizedConfig,
@@ -738,6 +874,12 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
   }, [flowState, questions.length]);
 
   useEffect(() => {
+    const activeError = mediaError || recorderError;
+    if (!activeError) return;
+    showRuntimeNotice(activeError);
+  }, [mediaError, recorderError, showRuntimeNotice]);
+
+  useEffect(() => {
     if (flowState !== 'awaiting_answer') return;
     if (!isMediaReady) return;
     if (flowState === 'no_response') return;
@@ -748,7 +890,6 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
   const isRecording = flowState === 'recording' || isRecorderActive;
   const isLoading = flowState === 'idle' || !currentQuestion;
   const isAvatarSpeaking = isSpeaking || flowState === 'asking';
-  const isMediaReady = mediaStatus === 'ready';
   const isFinished = flowState === 'finished';
 
   const canStartRecording = flowState === 'awaiting_answer' && isMediaReady;
@@ -788,6 +929,8 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
           <TopBar
             timer={timerLabel}
             stage={stageLabel}
+            backLabel="VOLTAR"
+            onBack={onBack}
             finishLabel="FINALIZAR CONSULTA"
             onFinish={handleFinish}
             showMeta={true}
@@ -834,6 +977,18 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
 
       <div className={styles.actionArea}>
         <div className={styles.actionStack}>
+          {runtimeNotice && (
+            <div className={styles.errorNotice} role="status" aria-live="polite">
+              <p className={styles.errorNoticeText}>{runtimeNotice}</p>
+              <button
+                type="button"
+                className={styles.errorNoticeDismiss}
+                onClick={() => setRuntimeNotice(null)}
+              >
+                Fechar
+              </button>
+            </div>
+          )}
           {timeLimitReached && (
             <div className={styles.timeNotice} role="status">
               {t.timeLimitReached}

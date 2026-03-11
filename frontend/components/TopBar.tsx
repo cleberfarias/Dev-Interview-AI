@@ -6,6 +6,8 @@ interface TopBarProps {
   stage: string;
   finishLabel?: string;
   onFinish?: () => void;
+  backLabel?: string;
+  onBack?: () => void;
   showMeta?: boolean;
 }
 
@@ -13,6 +15,8 @@ const TopBar: React.FC<TopBarProps> = ({
   timer,
   stage,
   finishLabel = 'FINALIZAR CONSULTA',
+  backLabel = 'VOLTAR',
+  onBack,
   onFinish,
   showMeta = true,
 }) => {
@@ -20,6 +24,16 @@ const TopBar: React.FC<TopBarProps> = ({
     <div className={`${styles.topBar} ${showMeta ? '' : styles.metaHidden}`}>
       {showMeta && (
         <div className={styles.leftStack}>
+          {onBack && (
+            <button
+              type="button"
+              className={styles.backButton}
+              aria-label={backLabel}
+              onClick={onBack}
+            >
+              {'<'} {backLabel}
+            </button>
+          )}
           <div className={`${styles.chip} ${styles.timerChip}`} aria-label={`Tempo ${timer}`}>
             <span className={styles.timerDot} aria-hidden="true" />
             <span className={styles.timerText}>{timer}</span>

@@ -150,6 +150,40 @@
   gap: 8px;
 }
 
+.errorNotice {
+  pointer-events: auto;
+  width: min(420px, calc(100vw - 40px));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(127, 29, 29, 0.82);
+  border: 1px solid rgba(248, 113, 113, 0.55);
+  color: #fee2e2;
+  box-shadow: 0 14px 32px rgba(127, 29, 29, 0.35);
+}
+
+.errorNoticeText {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.errorNoticeDismiss {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(254, 202, 202, 0.35);
+  background: rgba(127, 29, 29, 0.3);
+  color: #fee2e2;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
 .timeNotice {
   padding: 8px 14px;
   border-radius: 999px;

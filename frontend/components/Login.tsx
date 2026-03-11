@@ -8,13 +8,12 @@ import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
 } from 'firebase/auth';
-import { BackendApi } from '../services/backendApi';
 
 interface LoginProps {
   onLogin: (user: User) => void;
 }
 
-const Login: React.FC<LoginProps> = ({ onLogin }) => {
+const Login: React.FC<LoginProps> = ({ onLogin: _onLogin }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -31,38 +30,23 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     return () => unsub();
   }, []);
 
-  async function afterAuth() {
-    // try to get id token and call backend with it immediately
-    try {
-      console.debug('afterAuth: auth.currentUser=', auth.currentUser);
-      const token = await (auth.currentUser ? auth.currentUser.getIdToken(/* forceRefresh */ false) : null);
-      console.debug('afterAuth: obtained token length=', token ? token.length : 0);
-      const profile = token ? await BackendApi.meWithToken(token) : await BackendApi.me();
-      console.debug('afterAuth: profile from backend=', profile);
-      onLogin(profile);
-    } catch (e) {
-      console.error('afterAuth error', e);
-      const profile = await BackendApi.me().catch(() => null);
-      console.debug('afterAuth fallback profile=', profile);
-      if (profile) onLogin(profile as any);
-    }
-  }
-
   const handleGoogle = async () => {
+    let success = false;
     try {
       setLoading(true);
       setError(null);
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
-      await afterAuth();
+      success = true;
     } catch (e: any) {
       setError(e?.message || 'Falha no login com Google');
     } finally {
-      setLoading(false);
+      if (!success) setLoading(false);
     }
   };
 
   const handleEmail = async () => {
+    let success = false;
     try {
       setLoading(true);
       setError(null);
@@ -71,11 +55,11 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       } else {
         await createUserWithEmailAndPassword(auth, email, password);
       }
-      await afterAuth();
+      success = true;
     } catch (e: any) {
       setError(e?.message || 'Falha no login');
     } finally {
-      setLoading(false);
+      if (!success) setLoading(false);
     }
   };
 

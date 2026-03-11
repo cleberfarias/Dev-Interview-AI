@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AppState, InterviewConfig, InterviewPlan, FinalReport, User } from './types';
 import { I18N, clampDuration, INTERVIEW_LIMITS } from './constants';
 import LandingPage from './components/LandingPage';
@@ -21,9 +21,9 @@ const SplashScreen: React.FC = () => (
     <div className="mt-8 space-y-2 text-center">
       <h1 className="text-xl font-extrabold tracking-tighter text-white uppercase">Dev Interview</h1>
       <div className="flex gap-1 justify-center">
-        <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse"></div>
-        <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse [animation-delay:0.2s]"></div>
-        <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse [animation-delay:0.4s]"></div>
+        <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse" />
+        <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse [animation-delay:0.2s]" />
+        <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse [animation-delay:0.4s]" />
       </div>
     </div>
   </div>
@@ -31,10 +31,13 @@ const SplashScreen: React.FC = () => (
 
 const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
-  // start the app directly on the login screen (no public landing)
   const [state, setState] = useState<AppState>(AppState.LOGIN);
   const [user, setUser] = useState<User | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [plan, setPlan] = useState<InterviewPlan | null>(null);
+  const [report, setReport] = useState<FinalReport | null>(null);
+  const [globalNotice, setGlobalNotice] = useState<string | null>(null);
+  const noticeTimerRef = useRef<number | null>(null);
 
   const [config, setConfig] = useState<InterviewConfig>({
     uiLanguage: 'pt-BR',
@@ -46,44 +49,101 @@ const App: React.FC = () => {
     duration: clampDuration(INTERVIEW_LIMITS.free, 'free'),
     plan: 'free',
     jobDescription: '',
-    difficultyLevel: 3
+    difficultyLevel: 3,
   });
 
-  const [plan, setPlan] = useState<InterviewPlan | null>(null);
-  const [report, setReport] = useState<FinalReport | null>(null);
+  const showGlobalNotice = (message: string) => {
+    setGlobalNotice(message);
+    if (noticeTimerRef.current) {
+      window.clearTimeout(noticeTimerRef.current);
+    }
+    noticeTimerRef.current = window.setTimeout(() => {
+      setGlobalNotice(null);
+      noticeTimerRef.current = null;
+    }, 5000);
+  };
+
+  const clearGlobalNotice = () => {
+    if (noticeTimerRef.current) {
+      window.clearTimeout(noticeTimerRef.current);
+      noticeTimerRef.current = null;
+    }
+    setGlobalNotice(null);
+  };
 
   useEffect(() => {
+    BackendApi.warmup().catch(() => null);
+
+    let mounted = true;
     let first = true;
+
     const unsub = onAuthStateChanged(auth, async (fbUser) => {
-      console.debug('onAuthStateChanged: fbUser=', fbUser);
-      try {
-        if (fbUser) {
-          // get fresh token and call backend with it to avoid timing issues
-          const token = await fbUser.getIdToken(/* forceRefresh */ false).catch(() => null);
-          console.debug('onAuthStateChanged: token length=', token ? token.length : 0);
-          const profile = token ? await BackendApi.meWithToken(token) : await BackendApi.me();
-          console.debug('onAuthStateChanged: profile=', profile);
-          setUser(profile);
-          if (state === AppState.LANDING || state === AppState.LOGIN) {
-            setState(AppState.DASHBOARD);
-          }
-        } else {
-          setUser(null);
-          setState(AppState.LOGIN);
-        }
-      } catch (e) {
-        console.error('Auth handler error', e);
-        setUser(null);
-        setState(AppState.LOGIN);
-      } finally {
+      const finishFirstLoad = () => {
         if (first) {
           setLoading(false);
           first = false;
         }
+      };
+
+      if (!mounted) return;
+
+      if (!fbUser) {
+        setUser(null);
+        setState(AppState.LOGIN);
+        finishFirstLoad();
+        return;
+      }
+
+      setState(AppState.DASHBOARD);
+      setUser((prev) =>
+        prev && prev.uid === fbUser.uid
+          ? prev
+          : {
+              uid: fbUser.uid,
+              name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Usuario',
+              email: fbUser.email || '',
+              avatar: fbUser.photoURL || undefined,
+              credits: 0,
+              provider: 'firebase',
+              interviews: [],
+            },
+      );
+      finishFirstLoad();
+
+      try {
+        const token = await fbUser.getIdToken(false).catch(() => null);
+        const profile = token ? await BackendApi.meWithToken(token) : await BackendApi.me();
+        if (!mounted) return;
+        setUser(profile);
+      } catch (e) {
+        console.error('Auth handler error', e);
+        showGlobalNotice('Nao foi possivel carregar seu perfil agora.');
       }
     });
-    return () => unsub();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    return () => {
+      mounted = false;
+      unsub();
+      if (noticeTimerRef.current) {
+        window.clearTimeout(noticeTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const onUnhandledRejection = (event: PromiseRejectionEvent) => {
+      const reason: any = event?.reason;
+      const message =
+        reason?.message ||
+        (typeof reason === 'string' ? reason : null) ||
+        'Ocorreu um problema inesperado.';
+      showGlobalNotice(message);
+    };
+
+    window.addEventListener('unhandledrejection', onUnhandledRejection);
+    return () => {
+      window.removeEventListener('unhandledrejection', onUnhandledRejection);
+    };
   }, []);
 
   const handleLogin = (newUser: User) => {
@@ -103,43 +163,50 @@ const App: React.FC = () => {
       const res = await BackendApi.devAddCredits(amount);
       setUser({ ...user, credits: res.credits });
     } catch (e: any) {
-      alert(e?.message || 'Não foi possível adicionar créditos (dev)');
+      showGlobalNotice(e?.message || 'Nao foi possivel adicionar creditos.');
     }
   };
 
-  const handleDeleteInterview = async (sessionId: string) => {
+  const handleDeleteInterview = async (targetSessionId: string) => {
     if (!user) return;
     try {
-      await BackendApi.deleteSession(sessionId);
+      await BackendApi.deleteSession(targetSessionId);
       const profile = await BackendApi.me().catch(() => null);
       if (profile) {
         setUser(profile);
       } else {
-        setUser({ ...user, interviews: user.interviews.filter((item) => item.id !== sessionId) });
+        setUser({ ...user, interviews: user.interviews.filter((item) => item.id !== targetSessionId) });
       }
     } catch (e: any) {
-      alert(e?.message || 'N??o foi poss??vel excluir a entrevista');
+      showGlobalNotice(e?.message || 'Nao foi possivel excluir a entrevista.');
     }
   };
-
 
   const handleInterviewFinish = async (finalReport: FinalReport) => {
     setReport(finalReport);
     setState(AppState.REPORT);
 
-    // Persist in Firestore
     if (!sessionId) return;
     try {
       await BackendApi.finishSession(sessionId, finalReport, {
         uiLanguage: config.uiLanguage,
         interviewLanguage: config.interviewLanguage,
       });
-      // refresh profile (credits + history)
       const profile = await BackendApi.me();
       setUser(profile);
     } catch (e) {
       console.error(e);
+      showGlobalNotice('Falha ao salvar o resultado da entrevista.');
     }
+  };
+
+  const handleInterviewBack = () => {
+    const shouldExit = window.confirm('Deseja sair da entrevista agora? O progresso atual sera perdido.');
+    if (!shouldExit) return;
+    setPlan(null);
+    setSessionId(null);
+    setState(AppState.LOBBY);
+    showGlobalNotice('Entrevista interrompida.');
   };
 
   const t = I18N[config.uiLanguage];
@@ -148,6 +215,22 @@ const App: React.FC = () => {
   if (state === AppState.LANDING) return <LandingPage onGetStarted={() => setState(AppState.LOGIN)} />;
 
   const showHeader = ![AppState.INTERVIEWING, AppState.LOGIN, AppState.PROFILE].includes(state);
+  const disableMainScroll = state === AppState.LOBBY;
+  const canHeaderBack = [AppState.ONBOARDING, AppState.LOBBY, AppState.REPORT].includes(state);
+
+  const handleHeaderBack = () => {
+    if (state === AppState.ONBOARDING) {
+      setState(AppState.DASHBOARD);
+      return;
+    }
+    if (state === AppState.LOBBY) {
+      setState(AppState.ONBOARDING);
+      return;
+    }
+    if (state === AppState.REPORT) {
+      setState(AppState.DASHBOARD);
+    }
+  };
 
   const wideStates = [AppState.DASHBOARD, AppState.INTERVIEWING];
   const mediumStates = [AppState.ONBOARDING, AppState.LOBBY, AppState.PROFILE, AppState.REPORT];
@@ -159,14 +242,39 @@ const App: React.FC = () => {
 
   return (
     <div className="h-full flex flex-col bg-[#020617] overflow-hidden">
+      {globalNotice && (
+        <div className="mx-4 mt-3 rounded-2xl border border-red-500/40 bg-red-500/15 px-4 py-3 text-xs font-semibold text-red-100 shadow-lg z-[90]">
+          <div className="flex items-center justify-between gap-3">
+            <span>{globalNotice}</span>
+            <button
+              type="button"
+              onClick={clearGlobalNotice}
+              className="rounded-lg px-2 py-1 text-[10px] font-black uppercase tracking-wider text-red-100/90 hover:bg-red-500/20"
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
+      )}
+
       {showHeader && (
         <header className="px-6 py-4 flex items-center justify-between shrink-0 native-glass z-50">
           <div className="flex items-center gap-3">
+            {canHeaderBack && (
+              <button
+                type="button"
+                onClick={handleHeaderBack}
+                className="w-8 h-8 rounded-lg bg-slate-800 border border-white/10 text-slate-200 font-black flex items-center justify-center active:scale-95"
+                aria-label="Voltar"
+              >
+                {'<'}
+              </button>
+            )}
             <div className="w-8 h-8 bg-indigo-600 rounded-xl flex items-center justify-center font-black text-white text-sm">D</div>
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-xs font-black text-white uppercase">{t.title}</h1>
-                <span className="text-[7px] text-amber-400 font-black bg-slate-800 px-1.5 py-0.5 rounded-full">🪙 {user?.credits || 0}</span>
+                <span className="text-[7px] text-amber-400 font-black bg-slate-800 px-1.5 py-0.5 rounded-full">{user?.credits || 0}</span>
               </div>
               <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">{user?.name?.split(' ')[0] || ''}</p>
             </div>
@@ -177,12 +285,13 @@ const App: React.FC = () => {
           >
             {user?.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : (user?.name?.charAt(0) || 'U')}
           </button>
-      </header>
+        </header>
       )}
 
-      <main className="flex-1 overflow-y-auto no-scrollbar">
+      <main className={disableMainScroll ? 'flex-1 overflow-hidden' : 'flex-1 overflow-y-auto no-scrollbar'}>
         <div className={containerClass}>
           {state === AppState.LOGIN && <Login onLogin={handleLogin} />}
+
           {state === AppState.DASHBOARD && user && (
             <Dashboard
               user={user}
@@ -191,6 +300,7 @@ const App: React.FC = () => {
               onDeleteInterview={handleDeleteInterview}
             />
           )}
+
           {state === AppState.PROFILE && user && (
             <UserProfile
               user={user}
@@ -201,13 +311,21 @@ const App: React.FC = () => {
               onDeleteInterview={handleDeleteInterview}
             />
           )}
+
           {state === AppState.ONBOARDING && (
             <div className="p-4 h-full">
-              <Onboarding onComplete={(c) => { setConfig(c); setState(AppState.LOBBY); }} initialConfig={config} />
+              <Onboarding
+                onComplete={(c) => {
+                  setConfig(c);
+                  setState(AppState.LOBBY);
+                }}
+                initialConfig={config}
+              />
             </div>
           )}
+
           {state === AppState.LOBBY && (
-            <div className="p-4">
+            <div className="p-4 h-full overflow-hidden">
               <Lobby
                 config={config}
                 userCredits={user?.credits || 0}
@@ -225,14 +343,31 @@ const App: React.FC = () => {
               />
             </div>
           )}
+
           {state === AppState.INTERVIEWING && plan && user && (
             <div className="max-w-none h-full">
-              <InterviewRoom config={config} plan={plan} user={user} onFinish={handleInterviewFinish} />
+              <InterviewRoom
+                config={config}
+                plan={plan}
+                user={user}
+                onFinish={handleInterviewFinish}
+                onBack={handleInterviewBack}
+              />
             </div>
           )}
+
           {state === AppState.REPORT && report && (
             <div className="p-4">
-              <Report config={config} report={report} />
+              <Report
+                config={config}
+                report={report}
+                onBack={() => {
+                  setReport(null);
+                  setPlan(null);
+                  setSessionId(null);
+                  setState(AppState.DASHBOARD);
+                }}
+              />
             </div>
           )}
         </div>

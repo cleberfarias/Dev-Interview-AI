@@ -1,23 +1,66 @@
-﻿import { auth } from "../src/lib/firebase";
-import type { InterviewConfig, InterviewPlan, AnswerEvaluation, FinalReport, User, SessionStartResponse, PlanGenerateResponse, NextQuestionResponse } from "../types";
+import { auth } from "../src/lib/firebase";
+import type {
+  InterviewConfig,
+  InterviewPlan,
+  AnswerEvaluation,
+  FinalReport,
+  User,
+  SessionStartResponse,
+  PlanGenerateResponse,
+  NextQuestionResponse,
+} from "../types";
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || "/api";
+const TOKEN_SKEW_MS = 60_000;
 
-async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+let cachedToken: string | null = null;
+let cachedTokenExpMs = 0;
+
+const decodeJwtExpMs = (token: string): number => {
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return 0;
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
+    const exp = Number(payload?.exp);
+    return Number.isFinite(exp) ? exp * 1000 : 0;
+  } catch {
+    return 0;
+  }
+};
+
+const getValidAuthToken = async (): Promise<string | null> => {
+  if (cachedToken && Date.now() + TOKEN_SKEW_MS < cachedTokenExpMs) {
+    return cachedToken;
+  }
+
+  const user = auth.currentUser;
+  if (!user) {
+    cachedToken = null;
+    cachedTokenExpMs = 0;
+    return null;
+  }
+
+  const token = await user.getIdToken(false);
+  cachedToken = token || null;
+  cachedTokenExpMs = token ? decodeJwtExpMs(token) : 0;
+  return cachedToken;
+};
+
+async function apiFetch<T>(
+  path: string,
+  init: RequestInit = {},
+  options: { auth?: boolean } = {},
+): Promise<T> {
   const headers = new Headers(init.headers || {});
   headers.set("Content-Type", "application/json");
+  const useAuth = options.auth ?? true;
 
-  // Se o caller jÃ¡ passou Authorization, use-o
-  if (!headers.get('Authorization')) {
+  if (useAuth && !headers.get("Authorization")) {
     try {
-      const user = auth.currentUser;
-      if (user) {
-        const token = await user.getIdToken(/* forceRefresh */ false);
-        if (token) headers.set('Authorization', `Bearer ${token}`);
-      }
+      const token = await getValidAuthToken();
+      if (token) headers.set("Authorization", `Bearer ${token}`);
     } catch (e) {
-      console.warn('Failed to get auth token:', e);
-      // continua sem Authorization
+      console.warn("Failed to get auth token:", e);
     }
   }
 
@@ -35,14 +78,19 @@ async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const BackendApi = {
-  health: () => apiFetch<{ ok: boolean; time: string }>("/health"),
+  health: () => apiFetch<{ ok: boolean; time: string }>("/health", {}, { auth: false }),
+  warmup: () => apiFetch<{ ok: boolean; time: string }>("/health", {}, { auth: false }),
 
   me: () => apiFetch<User>("/me"),
 
-  // alternative: call /me providing an explicit token (useful immediately after sign-in)
+  // Alternative: call /me with an explicit token right after sign-in.
   meWithToken: (token: string | null) => {
     const headers = new Headers();
-    if (token) headers.set('Authorization', `Bearer ${token}`);
+    if (token) {
+      headers.set("Authorization", `Bearer ${token}`);
+      cachedToken = token;
+      cachedTokenExpMs = decodeJwtExpMs(token);
+    }
     return apiFetch<User>("/me", { headers });
   },
 
@@ -79,15 +127,20 @@ export const BackendApi = {
       body: JSON.stringify(payload),
     }),
 
-  nextQuestion: (payload: { config: InterviewConfig; history: any[]; remainingSeconds: number; difficultyLevel?: number }) =>
+  nextQuestion: (payload: {
+    config: InterviewConfig;
+    history: any[];
+    remainingSeconds: number;
+    difficultyLevel?: number;
+  }) =>
     apiFetch<NextQuestionResponse>("/ai/next-question", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
 
-  tts: (text: string, language = 'pt-BR', voice?: string) =>
+  tts: (text: string, language = "pt-BR", voice?: string) =>
     apiFetch<{ audioBase64: string; mimeType: string }>("/ai/tts", {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify({ text, language, voice }),
     }),
 
@@ -103,4 +156,3 @@ export const BackendApi = {
   devAddCredits: (amount = 3) =>
     apiFetch<{ credits: number }>(`/credits/dev-add?amount=${amount}`, { method: "POST" }),
 };
-
