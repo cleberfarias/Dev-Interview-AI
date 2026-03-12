@@ -1,52 +1,67 @@
-
 param(
-	[switch]$SingleWindow
+    [switch]$SingleWindow,
+    [int]$BackendPort = 8000,
+    [int]$FrontendPort = 5000
 )
 
-$root = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$root = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Definition }
 $backend = Join-Path $root 'backend'
 $frontend = Join-Path $root 'frontend'
 
-# Detect common virtualenv folder names
-$venvCandidates = @('.venv','venv','env','.env')
-$venvPath = $null
-foreach ($c in $venvCandidates) {
-	$p = Join-Path $root $c
-	if (Test-Path $p) { $venvPath = $p; break }
+function Resolve-PythonPath {
+    param(
+        [string]$RepoRoot,
+        [string]$BackendRoot
+    )
+
+    $candidates = @(
+        (Join-Path $RepoRoot '.venv\Scripts\python.exe'),
+        (Join-Path $RepoRoot 'venv\Scripts\python.exe'),
+        (Join-Path $RepoRoot 'env\Scripts\python.exe'),
+        (Join-Path $BackendRoot '.venv\Scripts\python.exe'),
+        (Join-Path $BackendRoot 'venv\Scripts\python.exe'),
+        (Join-Path $BackendRoot 'env\Scripts\python.exe')
+    )
+
+    foreach ($candidate in $candidates) {
+        if (Test-Path $candidate) {
+            return $candidate
+        }
+    }
+
+    $pythonCmd = Get-Command python -ErrorAction SilentlyContinue
+    if ($pythonCmd) {
+        return $pythonCmd.Source
+    }
+
+    throw "Python was not found. Create a virtualenv or install Python."
 }
 
-function Build-ActivateSnippet($venv) {
-	if (-not $venv) { return '' }
-	return ". '$venv\\Scripts\\Activate.ps1';"
-}
-
-$activateSnippet = Build-ActivateSnippet $venvPath
+$pythonPath = Resolve-PythonPath -RepoRoot $root -BackendRoot $backend
 
 if ($SingleWindow) {
-	Write-Host "Starting backend as a background job and frontend in this window..."
-	$script = {
-		param($backendPath, $activateCmd)
-		Set-Location -Path $backendPath
-		Invoke-Expression $activateCmd
-		uvicorn app.main:app --reload --port 8000
-	}
-	$job = Start-Job -ScriptBlock $script -ArgumentList $backend, $activateSnippet
-	Write-Host "Backend started as Job Id $($job.Id). To stop: Stop-Job -Id $($job.Id)"
+    Write-Host "Starting backend as a background job and frontend in this window..."
+    $job = Start-Job -ScriptBlock {
+        param($backendPath, $pythonExe, $port)
+        Set-Location -Path $backendPath
+        & $pythonExe -m uvicorn app.main:app --reload --port $port
+    } -ArgumentList $backend, $pythonPath, $BackendPort
 
-	Write-Host "Starting frontend in current window..."
-	Set-Location -Path $frontend
-	npm run dev
-	return
+    Write-Host "Backend started as Job Id $($job.Id). To stop: Stop-Job -Id $($job.Id)"
+    Write-Host "Starting frontend in current window..."
+    Set-Location -Path $frontend
+    npm.cmd run dev -- --port $FrontendPort --strictPort
+    return
 }
 
 Write-Host "Starting backend in a new PowerShell window..."
-$backendCmd = "Set-Location -Path '$backend'; $activateSnippet uvicorn app.main:app --reload --port 8000"
-Start-Process powershell -ArgumentList '-NoExit','-Command',$backendCmd
+$backendCmd = "Set-Location -Path '$backend'; & '$pythonPath' -m uvicorn app.main:app --reload --port $BackendPort"
+Start-Process powershell -ArgumentList '-NoExit','-ExecutionPolicy','Bypass','-Command',$backendCmd
 
 Start-Sleep -Seconds 1
 
 Write-Host "Starting frontend in a new PowerShell window..."
-$frontendCmd = "Set-Location -Path '$frontend'; npm run dev"
-Start-Process powershell -ArgumentList '-NoExit','-Command',$frontendCmd
+$frontendCmd = "Set-Location -Path '$frontend'; npm.cmd run dev -- --port $FrontendPort --strictPort"
+Start-Process powershell -ArgumentList '-NoExit','-ExecutionPolicy','Bypass','-Command',$frontendCmd
 
-Write-Host "Started backend and frontend. Check the opened windows for logs." 
+Write-Host "Started backend and frontend. Check the opened windows for logs."
