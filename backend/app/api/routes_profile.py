@@ -3,7 +3,14 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query
 
 from ..firebase_admin import get_current_user
-from ..schemas import CandidateProfile, CandidateProfileAuditPageResponse, CandidateProfileUpsertRequest, UserProfile
+from ..schemas import (
+    CandidateProfile,
+    CandidateProfileAuditPageResponse,
+    CandidateProfileUpsertRequest,
+    JobAnalysisPageResponse,
+    ResumeAnalysisPageResponse,
+    UserProfile,
+)
 from ..services import candidate_profile_service, profile_service
 
 router = APIRouter()
@@ -36,3 +43,21 @@ def get_candidate_profile_audit(
     user=Depends(get_current_user),
 ):
     return candidate_profile_service.list_candidate_profile_audit(user, limit=limit, offset=offset)
+
+
+@router.get("/profile/candidate/resume-analyses", response_model=ResumeAnalysisPageResponse)
+def get_candidate_resume_analyses(
+    limit: int = Query(default=20, ge=1, le=50),
+    offset: int = Query(default=0, ge=0),
+    user=Depends(get_current_user),
+):
+    return candidate_profile_service.list_resume_analyses(user, limit=limit, offset=offset)
+
+
+@router.get("/profile/candidate/job-analyses", response_model=JobAnalysisPageResponse)
+def get_candidate_job_analyses(
+    limit: int = Query(default=20, ge=1, le=50),
+    offset: int = Query(default=0, ge=0),
+    user=Depends(get_current_user),
+):
+    return candidate_profile_service.list_job_analyses(user, limit=limit, offset=offset)

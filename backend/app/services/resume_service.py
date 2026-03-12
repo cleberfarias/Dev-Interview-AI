@@ -10,16 +10,76 @@ from typing import Any
 from fastapi import HTTPException
 
 from ..ai.router import AIProviderError, AIRouter
-from ..repositories import candidate_profile_repository
+from ..repositories import candidate_profile_repository, resume_analysis_repository
 from ..resume import extractor, matcher, parser
 from ..schemas import AnalysisTrace, ResumeAnalyzeRequest, ResumeAnalyzeResponse, ResumeExtraction, ResumeMatchResult
 
 logger = logging.getLogger("uvicorn.error")
 ai_router = AIRouter()
+RESUME_PROMPT_VERSION = "resume_v1"
 
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _confidence_from_source(source: str) -> float:
+    if source == "ai":
+        return 0.9
+    if source == "hybrid":
+        return 0.82
+    return 0.65
+
+
+def _parsing_mode_from_source(source: str) -> str:
+    if source == "ai":
+        return "ai"
+    if source == "hybrid":
+        return "hybrid"
+    return "deterministic"
+
+
+def _prepend_recent_ids(current: Any, new_id: str, max_items: int = 10) -> list[str]:
+    base = [item for item in (current or []) if isinstance(item, str) and item.strip()]
+    out = [new_id]
+    for item in base:
+        if item == new_id:
+            continue
+        out.append(item)
+        if len(out) >= max_items:
+            break
+    return out
+
+
+def _sync_candidate_profile_resume(
+    *,
+    user_id: str,
+    extraction: ResumeExtraction,
+    trace: AnalysisTrace,
+    analysis_id: str | None,
+    match_score: int | None,
+    now_iso: str,
+) -> None:
+    current = candidate_profile_repository.get_profile(user_id) or {}
+    patch: dict[str, Any] = {
+        "userId": user_id,
+        "updatedAt": now_iso,
+        "lastResumeAnalysisTrace": trace.model_dump(),
+    }
+    if extraction.experienceLevel and extraction.experienceLevel != "unknown":
+        patch["experienceLevel"] = extraction.experienceLevel
+    if extraction.technologies:
+        patch["primarySkills"] = extraction.technologies
+    if extraction.resumeSummary:
+        patch["resumeSummary"] = extraction.resumeSummary
+    if match_score is not None:
+        patch["lastMatchScore"] = int(match_score)
+    if analysis_id:
+        patch["lastResumeAnalysisId"] = analysis_id
+        patch["recentResumeAnalysisIds"] = _prepend_recent_ids(current.get("recentResumeAnalysisIds"), analysis_id)
+    if not current.get("createdAt"):
+        patch["createdAt"] = now_iso
+    candidate_profile_repository.upsert_profile(user_id, patch, merge=True)
 
 
 def _b64_to_bytes(value: str) -> bytes:
@@ -216,27 +276,70 @@ def analyze_resume(payload: ResumeAnalyzeRequest, user: dict | None = None) -> R
         trace_source = "heuristic"
     else:
         trace_source = "ai" if _is_same_extraction(extraction_data, ai_extraction) else "hybrid"
+    confidence = _confidence_from_source(trace_source)
     extraction_trace = AnalysisTrace(
         source=trace_source,
         aiProvider=ai_meta.get("provider"),
         aiModel=ai_meta.get("model"),
+        promptVersion=RESUME_PROMPT_VERSION,
+        confidence=confidence,
     )
-
-    if user and user.get("uid"):
-        try:
-            candidate_profile_repository.record_analysis_trace(
-                user_id=user["uid"],
-                kind="resume",
-                trace=extraction_trace.model_dump(),
-                now_iso=_now_iso(),
-            )
-        except Exception:
-            logger.exception("Failed to persist resume analysis trace for uid=%s", user.get("uid"))
 
     match = None
     if payload.jobDescription and payload.jobDescription.strip():
         match_data = matcher.match_resume_to_job(extraction.technologies, payload.jobDescription)
         match = ResumeMatchResult(**match_data)
+
+    if user and user.get("uid"):
+        now_iso = _now_iso()
+        analysis_id: str | None = None
+        try:
+            saved = resume_analysis_repository.create_resume_analysis(
+                {
+                    "userId": user["uid"],
+                    "fileName": payload.fileName,
+                    "aiProvider": extraction_trace.aiProvider,
+                    "aiModel": extraction_trace.aiModel,
+                    "source": extraction_trace.source,
+                    "promptVersion": extraction_trace.promptVersion,
+                    "parsingMode": _parsing_mode_from_source(extraction_trace.source),
+                    "extraction": extraction.model_dump(),
+                    "match": match.model_dump() if match else None,
+                    "confidence": extraction_trace.confidence,
+                    "createdAt": now_iso,
+                }
+            )
+            analysis_id = saved.get("id")
+        except Exception:
+            logger.exception("Failed to persist full resume analysis for uid=%s", user.get("uid"))
+
+        summary = {
+            "experienceLevel": extraction.experienceLevel,
+            "topSkills": extraction.technologies[:5],
+            "matchScore": match.matchScore if match else None,
+        }
+        try:
+            candidate_profile_repository.record_analysis_trace(
+                user_id=user["uid"],
+                kind="resume",
+                trace=extraction_trace.model_dump(),
+                summary=summary,
+                now_iso=now_iso,
+            )
+        except Exception:
+            logger.exception("Failed to persist resume analysis trace for uid=%s", user.get("uid"))
+
+        try:
+            _sync_candidate_profile_resume(
+                user_id=user["uid"],
+                extraction=extraction,
+                trace=extraction_trace,
+                analysis_id=analysis_id,
+                match_score=match.matchScore if match else None,
+                now_iso=now_iso,
+            )
+        except Exception:
+            logger.exception("Failed to sync candidate profile from resume analysis for uid=%s", user.get("uid"))
 
     return ResumeAnalyzeResponse(
         text=text,

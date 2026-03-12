@@ -70,6 +70,8 @@ Frontend: http://localhost:5000
 - POST /credits/dev-add?amount=3 -> DEV ONLY (habilite apenas em dev com ALLOW_DEV_CREDITS=true)
 - POST /resume/analyze e /jobs/analyze -> retornam trace da origem da analise (heuristic|ai|hybrid)
 - GET /profile/candidate/audit -> historico paginado de traces de analise
+- GET /profile/candidate/resume-analyses -> historico paginado de analises completas de curriculo
+- GET /profile/candidate/job-analyses -> historico paginado de analises completas de vaga
 
 ---
 

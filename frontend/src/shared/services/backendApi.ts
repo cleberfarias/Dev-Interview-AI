@@ -11,7 +11,9 @@ import type {
   CandidateProfile,
   CandidateProfileAuditPageResponse,
   CandidateProfileUpsertRequest,
+  JobAnalysisPageResponse,
   ResumeAnalyzeResponse,
+  ResumeAnalysisPageResponse,
   JobAnalyzeResponse,
   LiveCoachProcessResponse,
   SessionAnalysisTraceResponse,
@@ -166,6 +168,18 @@ export const BackendApi = {
     const limit = Math.max(1, Math.min(50, Number(params?.limit ?? 20)));
     const offset = Math.max(0, Number(params?.offset ?? 0));
     return apiFetch<CandidateProfileAuditPageResponse>(`/profile/candidate/audit?limit=${limit}&offset=${offset}`);
+  },
+
+  getCandidateResumeAnalyses: (params?: { limit?: number; offset?: number }) => {
+    const limit = Math.max(1, Math.min(50, Number(params?.limit ?? 20)));
+    const offset = Math.max(0, Number(params?.offset ?? 0));
+    return apiFetch<ResumeAnalysisPageResponse>(`/profile/candidate/resume-analyses?limit=${limit}&offset=${offset}`);
+  },
+
+  getCandidateJobAnalyses: (params?: { limit?: number; offset?: number }) => {
+    const limit = Math.max(1, Math.min(50, Number(params?.limit ?? 20)));
+    const offset = Math.max(0, Number(params?.offset ?? 0));
+    return apiFetch<JobAnalysisPageResponse>(`/profile/candidate/job-analyses?limit=${limit}&offset=${offset}`);
   },
 
   upsertCandidateProfile: (payload: CandidateProfileUpsertRequest) =>

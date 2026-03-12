@@ -163,6 +163,8 @@ export interface AnalysisTrace {
   source: 'heuristic' | 'ai' | 'hybrid';
   aiProvider?: string | null;
   aiModel?: string | null;
+  promptVersion?: string | null;
+  confidence?: number | null;
 }
 
 export interface ProfileAnalysisAuditItem {
@@ -170,11 +172,59 @@ export interface ProfileAnalysisAuditItem {
   source: 'heuristic' | 'ai' | 'hybrid' | string;
   aiProvider?: string | null;
   aiModel?: string | null;
+  summary?: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface ResumeAnalysisRecord {
+  id?: string;
+  userId: string;
+  fileName: string;
+  aiProvider?: string | null;
+  aiModel?: string | null;
+  source: 'heuristic' | 'ai' | 'hybrid' | string;
+  promptVersion?: string | null;
+  parsingMode?: string | null;
+  extraction: ResumeExtraction;
+  match?: ResumeMatchResult | null;
+  confidence?: number | null;
+  createdAt: string;
+}
+
+export interface JobAnalysisRecord {
+  id?: string;
+  userId: string;
+  jobDescription: string;
+  aiProvider?: string | null;
+  aiModel?: string | null;
+  source: 'heuristic' | 'ai' | 'hybrid' | string;
+  promptVersion?: string | null;
+  analysis: JobAnalysisResult;
+  gap?: ResumeMatchResult | null;
+  confidence?: number | null;
   createdAt: string;
 }
 
 export interface CandidateProfileAuditPageResponse {
   items: ProfileAnalysisAuditItem[];
+  total: number;
+  offset: number;
+  limit: number;
+  hasMore: boolean;
+  nextOffset?: number | null;
+}
+
+export interface ResumeAnalysisPageResponse {
+  items: ResumeAnalysisRecord[];
+  total: number;
+  offset: number;
+  limit: number;
+  hasMore: boolean;
+  nextOffset?: number | null;
+}
+
+export interface JobAnalysisPageResponse {
+  items: JobAnalysisRecord[];
   total: number;
   offset: number;
   limit: number;
@@ -220,6 +270,11 @@ export interface CandidateProfile {
   jobDescription?: string | null;
   lastResumeAnalysisTrace?: AnalysisTrace | null;
   lastJobAnalysisTrace?: AnalysisTrace | null;
+  lastResumeAnalysisId?: string | null;
+  lastJobAnalysisId?: string | null;
+  lastMatchScore?: number | null;
+  recentResumeAnalysisIds?: string[];
+  recentJobAnalysisIds?: string[];
   analysisAudit?: ProfileAnalysisAuditItem[];
   createdAt?: string | null;
   updatedAt?: string | null;

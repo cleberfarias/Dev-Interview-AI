@@ -19,9 +19,23 @@ def _auth_user():
 
 def test_resume_analyze_txt_with_match(monkeypatch):
     recorded = {}
+    persisted = {}
+    profile_sync = {}
     monkeypatch.setattr(
         "app.services.resume_service.candidate_profile_repository.record_analysis_trace",
         lambda **kwargs: recorded.update(kwargs),
+    )
+    monkeypatch.setattr(
+        "app.services.resume_service.resume_analysis_repository.create_resume_analysis",
+        lambda data: (persisted.update(data) or {"id": "resume-analysis-1", **data}),
+    )
+    monkeypatch.setattr(
+        "app.services.resume_service.candidate_profile_repository.get_profile",
+        lambda user_id: {"userId": user_id, "createdAt": "2024-01-01T00:00:00+00:00"},
+    )
+    monkeypatch.setattr(
+        "app.services.resume_service.candidate_profile_repository.upsert_profile",
+        lambda user_id, data, merge=True: (profile_sync.update(data) or data),
     )
     app.dependency_overrides[get_current_user] = _auth_user
     try:
@@ -53,6 +67,11 @@ def test_resume_analyze_txt_with_match(monkeypatch):
         assert data["extractionTrace"]["source"] in {"heuristic", "ai", "hybrid"}
         assert recorded.get("user_id") == "resume-user"
         assert recorded.get("kind") == "resume"
+        assert persisted.get("userId") == "resume-user"
+        assert persisted.get("fileName") == "resume.txt"
+        assert persisted.get("match", {}).get("matchScore") is not None
+        assert profile_sync.get("lastResumeAnalysisId") == "resume-analysis-1"
+        assert profile_sync.get("recentResumeAnalysisIds", [])[0] == "resume-analysis-1"
     finally:
         app.dependency_overrides = {}
 
@@ -81,9 +100,23 @@ def test_resume_analyze_rejects_unsupported_extension(monkeypatch):
 def test_resume_analyze_uses_ai_extraction_when_available(monkeypatch):
     app.dependency_overrides[get_current_user] = _auth_user
     recorded = {}
+    persisted = {}
+    profile_sync = {}
     monkeypatch.setattr(
         "app.services.resume_service.candidate_profile_repository.record_analysis_trace",
         lambda **kwargs: recorded.update(kwargs),
+    )
+    monkeypatch.setattr(
+        "app.services.resume_service.resume_analysis_repository.create_resume_analysis",
+        lambda data: (persisted.update(data) or {"id": "resume-analysis-2", **data}),
+    )
+    monkeypatch.setattr(
+        "app.services.resume_service.candidate_profile_repository.get_profile",
+        lambda user_id: {"userId": user_id, "createdAt": "2024-01-01T00:00:00+00:00"},
+    )
+    monkeypatch.setattr(
+        "app.services.resume_service.candidate_profile_repository.upsert_profile",
+        lambda user_id, data, merge=True: (profile_sync.update(data) or data),
     )
     monkeypatch.setattr(
         "app.services.resume_service.ai_router.generate",
@@ -128,5 +161,7 @@ def test_resume_analyze_uses_ai_extraction_when_available(monkeypatch):
         assert data["extractionTrace"]["aiModel"] == "gpt-test"
         assert recorded.get("kind") == "resume"
         assert isinstance(recorded.get("trace"), dict)
+        assert persisted.get("userId") == "resume-user"
+        assert profile_sync.get("lastResumeAnalysisId") == "resume-analysis-2"
     finally:
         app.dependency_overrides = {}

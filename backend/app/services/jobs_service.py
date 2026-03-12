@@ -10,16 +10,71 @@ from fastapi import HTTPException
 
 from ..ai.router import AIProviderError, AIRouter
 from ..jobs import analyzer
-from ..repositories import candidate_profile_repository
+from ..repositories import candidate_profile_repository, job_analysis_repository
 from ..resume import matcher
 from ..schemas import AnalysisTrace, JobAnalyzeRequest, JobAnalyzeResponse, JobAnalysisResult, ResumeMatchResult
 
 logger = logging.getLogger("uvicorn.error")
 ai_router = AIRouter()
+JOB_PROMPT_VERSION = "job_v1"
 
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _confidence_from_source(source: str) -> float:
+    if source == "ai":
+        return 0.9
+    if source == "hybrid":
+        return 0.82
+    return 0.65
+
+
+def _prepend_recent_ids(current: Any, new_id: str, max_items: int = 10) -> list[str]:
+    base = [item for item in (current or []) if isinstance(item, str) and item.strip()]
+    out = [new_id]
+    for item in base:
+        if item == new_id:
+            continue
+        out.append(item)
+        if len(out) >= max_items:
+            break
+    return out
+
+
+def _sync_candidate_profile_job(
+    *,
+    user_id: str,
+    job_description: str,
+    analysis: JobAnalysisResult,
+    trace: AnalysisTrace,
+    analysis_id: str | None,
+    gap_match_score: int | None,
+    weak_skills: list[str],
+    now_iso: str,
+) -> None:
+    current = candidate_profile_repository.get_profile(user_id) or {}
+    patch: dict[str, Any] = {
+        "userId": user_id,
+        "jobDescription": job_description,
+        "updatedAt": now_iso,
+        "lastJobAnalysisTrace": trace.model_dump(),
+    }
+    if analysis.roleTitleGuess:
+        patch["targetRole"] = analysis.roleTitleGuess
+    if analysis.seniorityGuess and analysis.seniorityGuess != "unknown":
+        patch["experienceLevel"] = analysis.seniorityGuess
+    if weak_skills:
+        patch["weakSkills"] = weak_skills
+    if gap_match_score is not None:
+        patch["lastMatchScore"] = int(gap_match_score)
+    if analysis_id:
+        patch["lastJobAnalysisId"] = analysis_id
+        patch["recentJobAnalysisIds"] = _prepend_recent_ids(current.get("recentJobAnalysisIds"), analysis_id)
+    if not current.get("createdAt"):
+        patch["createdAt"] = now_iso
+    candidate_profile_repository.upsert_profile(user_id, patch, merge=True)
 
 
 def _safe_json_loads(text: str) -> dict[str, Any]:
@@ -205,27 +260,71 @@ def analyze_job(payload: JobAnalyzeRequest, user: dict | None = None) -> JobAnal
         trace_source = "heuristic"
     else:
         trace_source = "ai" if _is_same_job_analysis(analysis_data, ai_analysis) else "hybrid"
+    confidence = _confidence_from_source(trace_source)
     analysis_trace = AnalysisTrace(
         source=trace_source,
         aiProvider=ai_meta.get("provider"),
         aiModel=ai_meta.get("model"),
+        promptVersion=JOB_PROMPT_VERSION,
+        confidence=confidence,
     )
-
-    if user and user.get("uid"):
-        try:
-            candidate_profile_repository.record_analysis_trace(
-                user_id=user["uid"],
-                kind="job",
-                trace=analysis_trace.model_dump(),
-                now_iso=_now_iso(),
-            )
-        except Exception:
-            logger.exception("Failed to persist job analysis trace for uid=%s", user.get("uid"))
 
     gap = None
     if payload.resumeTechnologies:
         gap_data = matcher.match_resume_to_job(payload.resumeTechnologies, text)
         gap = ResumeMatchResult(**gap_data)
+
+    if user and user.get("uid"):
+        now_iso = _now_iso()
+        analysis_id: str | None = None
+        try:
+            saved = job_analysis_repository.create_job_analysis(
+                {
+                    "userId": user["uid"],
+                    "jobDescription": text,
+                    "aiProvider": analysis_trace.aiProvider,
+                    "aiModel": analysis_trace.aiModel,
+                    "source": analysis_trace.source,
+                    "promptVersion": analysis_trace.promptVersion,
+                    "analysis": analysis.model_dump(),
+                    "gap": gap.model_dump() if gap else None,
+                    "confidence": analysis_trace.confidence,
+                    "createdAt": now_iso,
+                }
+            )
+            analysis_id = saved.get("id")
+        except Exception:
+            logger.exception("Failed to persist full job analysis for uid=%s", user.get("uid"))
+
+        summary = {
+            "experienceLevel": analysis.seniorityGuess,
+            "topSkills": analysis.requiredSkills[:5],
+            "matchScore": gap.matchScore if gap else None,
+        }
+        try:
+            candidate_profile_repository.record_analysis_trace(
+                user_id=user["uid"],
+                kind="job",
+                trace=analysis_trace.model_dump(),
+                summary=summary,
+                now_iso=now_iso,
+            )
+        except Exception:
+            logger.exception("Failed to persist job analysis trace for uid=%s", user.get("uid"))
+
+        try:
+            _sync_candidate_profile_job(
+                user_id=user["uid"],
+                job_description=text,
+                analysis=analysis,
+                trace=analysis_trace,
+                analysis_id=analysis_id,
+                gap_match_score=gap.matchScore if gap else None,
+                weak_skills=(gap.missingSkills if gap else []),
+                now_iso=now_iso,
+            )
+        except Exception:
+            logger.exception("Failed to sync candidate profile from job analysis for uid=%s", user.get("uid"))
 
     return JobAnalyzeResponse(
         analysis=analysis,

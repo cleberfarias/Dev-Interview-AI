@@ -33,6 +33,8 @@ class AnalysisTrace(BaseModel):
     source: str = "heuristic"
     aiProvider: Optional[str] = None
     aiModel: Optional[str] = None
+    promptVersion: Optional[str] = None
+    confidence: Optional[float] = None
 
 
 class ProfileAnalysisAuditItem(BaseModel):
@@ -40,6 +42,36 @@ class ProfileAnalysisAuditItem(BaseModel):
     source: str = "heuristic"
     aiProvider: Optional[str] = None
     aiModel: Optional[str] = None
+    summary: Optional[dict[str, Any]] = None
+    createdAt: str
+
+
+class ResumeAnalysisRecord(BaseModel):
+    id: Optional[str] = None
+    userId: str
+    fileName: str
+    aiProvider: Optional[str] = None
+    aiModel: Optional[str] = None
+    source: str = "heuristic"
+    promptVersion: Optional[str] = None
+    parsingMode: Optional[str] = None
+    extraction: ResumeExtraction
+    match: Optional[ResumeMatchResult] = None
+    confidence: Optional[float] = None
+    createdAt: str
+
+
+class JobAnalysisRecord(BaseModel):
+    id: Optional[str] = None
+    userId: str
+    jobDescription: str
+    aiProvider: Optional[str] = None
+    aiModel: Optional[str] = None
+    source: str = "heuristic"
+    promptVersion: Optional[str] = None
+    analysis: JobAnalysisResult
+    gap: Optional[ResumeMatchResult] = None
+    confidence: Optional[float] = None
     createdAt: str
 
 
@@ -80,6 +112,11 @@ class CandidateProfile(BaseModel):
     jobDescription: Optional[str] = None
     lastResumeAnalysisTrace: Optional[AnalysisTrace] = None
     lastJobAnalysisTrace: Optional[AnalysisTrace] = None
+    lastResumeAnalysisId: Optional[str] = None
+    lastJobAnalysisId: Optional[str] = None
+    lastMatchScore: Optional[int] = None
+    recentResumeAnalysisIds: List[str] = Field(default_factory=list)
+    recentJobAnalysisIds: List[str] = Field(default_factory=list)
     analysisAudit: List[ProfileAnalysisAuditItem] = Field(default_factory=list)
     createdAt: Optional[str] = None
     updatedAt: Optional[str] = None
@@ -96,6 +133,24 @@ class CandidateProfileUpsertRequest(BaseModel):
 
 class CandidateProfileAuditPageResponse(BaseModel):
     items: List[ProfileAnalysisAuditItem] = Field(default_factory=list)
+    total: int = 0
+    offset: int = 0
+    limit: int = 20
+    hasMore: bool = False
+    nextOffset: Optional[int] = None
+
+
+class ResumeAnalysisPageResponse(BaseModel):
+    items: List[ResumeAnalysisRecord] = Field(default_factory=list)
+    total: int = 0
+    offset: int = 0
+    limit: int = 20
+    hasMore: bool = False
+    nextOffset: Optional[int] = None
+
+
+class JobAnalysisPageResponse(BaseModel):
+    items: List[JobAnalysisRecord] = Field(default_factory=list)
     total: int = 0
     offset: int = 0
     limit: int = 20

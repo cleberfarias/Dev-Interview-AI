@@ -109,3 +109,85 @@ def test_get_candidate_profile_audit_route(monkeypatch):
         assert data["items"][0]["kind"] == "resume"
     finally:
         app.dependency_overrides = {}
+
+
+def test_get_candidate_resume_analyses_route(monkeypatch):
+    app.dependency_overrides[get_current_user] = _auth_user
+    monkeypatch.setattr(
+        "app.api.routes_profile.candidate_profile_service.list_resume_analyses",
+        lambda user, limit, offset: {
+            "items": [
+                {
+                    "id": "resume-analysis-1",
+                    "userId": user["uid"],
+                    "fileName": "resume.pdf",
+                    "source": "ai",
+                    "extraction": {
+                        "technologies": ["python"],
+                        "experienceLevel": "mid",
+                        "projects": [],
+                        "companies": [],
+                        "responsibilities": [],
+                        "resumeSummary": "Resumo",
+                    },
+                    "createdAt": "2026-03-12T00:00:00+00:00",
+                }
+            ],
+            "total": 1,
+            "offset": offset,
+            "limit": limit,
+            "hasMore": False,
+            "nextOffset": None,
+        },
+    )
+
+    try:
+        client = TestClient(app)
+        resp = client.get("/profile/candidate/resume-analyses?limit=10&offset=0")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["items"][0]["id"] == "resume-analysis-1"
+    finally:
+        app.dependency_overrides = {}
+
+
+def test_get_candidate_job_analyses_route(monkeypatch):
+    app.dependency_overrides[get_current_user] = _auth_user
+    monkeypatch.setattr(
+        "app.api.routes_profile.candidate_profile_service.list_job_analyses",
+        lambda user, limit, offset: {
+            "items": [
+                {
+                    "id": "job-analysis-1",
+                    "userId": user["uid"],
+                    "jobDescription": "Backend role",
+                    "source": "hybrid",
+                    "analysis": {
+                        "roleTitleGuess": "Backend Engineer",
+                        "seniorityGuess": "mid",
+                        "requiredSkills": ["python"],
+                        "responsibilities": [],
+                        "softSkills": [],
+                        "interviewFocus": [],
+                    },
+                    "createdAt": "2026-03-12T00:00:00+00:00",
+                }
+            ],
+            "total": 1,
+            "offset": offset,
+            "limit": limit,
+            "hasMore": False,
+            "nextOffset": None,
+        },
+    )
+
+    try:
+        client = TestClient(app)
+        resp = client.get("/profile/candidate/job-analyses?limit=10&offset=0")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["items"][0]["id"] == "job-analysis-1"
+    finally:
+        app.dependency_overrides = {}

@@ -30,6 +30,7 @@ def record_analysis_trace(
     user_id: str,
     kind: str,
     trace: dict[str, Any],
+    summary: dict[str, Any] | None,
     now_iso: str,
     max_items: int = 40,
 ) -> dict[str, Any]:
@@ -41,6 +42,9 @@ def record_analysis_trace(
         "source": str(trace.get("source") or "heuristic"),
         "aiProvider": trace.get("aiProvider"),
         "aiModel": trace.get("aiModel"),
+        "promptVersion": trace.get("promptVersion"),
+        "confidence": trace.get("confidence"),
+        "summary": summary if isinstance(summary, dict) else None,
         "createdAt": now_iso,
     }
 
@@ -64,6 +68,8 @@ def record_analysis_trace(
                 "source": str(trace.get("source") or "heuristic"),
                 "aiProvider": trace.get("aiProvider"),
                 "aiModel": trace.get("aiModel"),
+                "promptVersion": trace.get("promptVersion"),
+                "confidence": trace.get("confidence"),
             },
             "analysisAudit": next_audit,
             "updatedAt": now_iso,
