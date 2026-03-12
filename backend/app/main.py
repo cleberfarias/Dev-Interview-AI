@@ -28,6 +28,7 @@ from .api import (
     routes_credits,
     routes_jobs,
     routes_live_coach,
+    routes_orchestrator,
     routes_profile,
     routes_reports,
     routes_resume,
@@ -118,6 +119,7 @@ app.include_router(routes_credits.router)
 app.include_router(routes_jobs.router)
 app.include_router(routes_resume.router)
 app.include_router(routes_live_coach.router)
+app.include_router(routes_orchestrator.router)
 app.include_router(kiwify_webhook_router)
 
 

@@ -564,7 +564,24 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
       stopVoiceMonitor();
       stopTTS();
       try {
-        const report = await BackendApi.finalReport({ config: sanitizedConfig, history });
+        const finalized = await BackendApi.orchestratorFinalize({ config: sanitizedConfig, history });
+        const weeklyPlan = Array.isArray(finalized.studyPlan?.weeklyPlan)
+          ? finalized.studyPlan.weeklyPlan
+              .map((item, index) => {
+                if (!item || typeof item !== 'object') return null;
+                const day = Number((item as Record<string, unknown>).day ?? index + 1);
+                const task = String((item as Record<string, unknown>).task ?? '').trim();
+                if (!task) return null;
+                return { day, task };
+              })
+              .filter((item): item is { day: number; task: string } => Boolean(item))
+          : [];
+
+        const report =
+          weeklyPlan.length > 0 && (!finalized.report.plan7Days || finalized.report.plan7Days.length === 0)
+            ? { ...finalized.report, plan7Days: weeklyPlan }
+            : finalized.report;
+
         onFinish?.(report);
       } catch (error) {
         console.warn('Falha ao gerar report', error);
@@ -645,8 +662,16 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
     }
   }, [clearNoResponseTimer, flowState, handleNoResponse, showRuntimeNotice, startRecording, startVoiceMonitor]);
 
-  const continueWithEvaluation = useCallback(
-    async (response: AnswerEvaluation) => {
+  const continueWithTurnResult = useCallback(
+    async (turnResult: {
+      evaluation: AnswerEvaluation;
+      nextQuestion: {
+        shouldFinish: boolean;
+        question?: { id?: string; section?: string; difficulty?: number; prompt?: string };
+      };
+      coach?: { tips?: string[] };
+    }) => {
+      const response = turnResult.evaluation;
       const nextHistory = [
         ...historyRef.current,
         {
@@ -667,12 +692,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
       }
 
       try {
-        const nextRes = await BackendApi.nextQuestion({
-          config: sanitizedConfig,
-          history: nextHistory,
-          remainingSeconds,
-          difficultyLevel: selectedLevel,
-        });
+        const nextRes = turnResult.nextQuestion;
 
         if (nextRes.shouldFinish || !nextRes.question) {
           await finalizeInterview(nextHistory);
@@ -741,8 +761,6 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
       finalizeInterview,
       questions,
       remainingSeconds,
-      sanitizedConfig,
-      selectedLevel,
       showRuntimeNotice,
       timeLimitReached,
     ],
@@ -763,13 +781,16 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
           audioBase64: base64Audio,
           mimeType: blob.type || 'audio/webm',
         });
-        const response = await BackendApi.evaluateAudio({
+        const turnResult = await BackendApi.orchestratorTurn({
           config: sanitizedConfig,
+          history: historyRef.current,
           question: currentQuestion.title,
+          remainingSeconds,
+          difficultyLevel: selectedLevel,
           audioBase64: base64Audio,
           mimeType: blob.type || 'audio/webm',
         });
-        await continueWithEvaluation(response);
+        await continueWithTurnResult(turnResult);
       } catch (error) {
         console.warn(error);
         showRuntimeNotice('Nao foi possivel processar sua resposta. Tente novamente.');
@@ -779,16 +800,17 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
       }
     },
     [
-      baseBullets,
       clearNoResponseTimer,
-      config.interviewLanguage,
-      config.track,
-      continueWithEvaluation,
+      continueWithTurnResult,
       flowState,
+      remainingSeconds,
       sanitizedConfig,
+      selectedLevel,
       showRuntimeNotice,
       stopRecording,
       stopVoiceMonitor,
+      requestLiveCoachInsight,
+      currentQuestion.title,
     ],
   );
 
@@ -811,13 +833,16 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
         transcript,
         mimeType: 'text/plain',
       });
-      const response = await BackendApi.evaluateText({
+      const turnResult = await BackendApi.orchestratorTurn({
         config: sanitizedConfig,
+        history: historyRef.current,
         question: currentQuestion.title,
+        remainingSeconds,
+        difficultyLevel: selectedLevel,
         transcript,
       });
       setTextAnswer('');
-      await continueWithEvaluation(response);
+      await continueWithTurnResult(turnResult);
     } catch (error) {
       console.warn(error);
       showRuntimeNotice('Nao foi possivel processar a resposta em texto.');
@@ -825,10 +850,12 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
     }
   }, [
     clearNoResponseTimer,
-    continueWithEvaluation,
+    continueWithTurnResult,
     currentQuestion,
     flowState,
+    remainingSeconds,
     sanitizedConfig,
+    selectedLevel,
     showRuntimeNotice,
     stopVoiceMonitor,
     textAnswer,

@@ -133,7 +133,12 @@ const Lobby: React.FC<Props> = ({ config, userCredits, onStart, onBack }) => {
     try {
       const { difficultyLevel, ...restConfig } = config;
       const effectiveConfig = { ...restConfig, duration: clampDuration(config.duration, config.plan) };
-      const res = await BackendApi.startSession(effectiveConfig);
+      const orchestratedStart = await BackendApi.orchestratorStart({
+        config: effectiveConfig,
+        jobDescription: effectiveConfig.jobDescription,
+        includeContext: true,
+      });
+      const res = orchestratedStart.session;
 
       const nextQuestionPromise = BackendApi.nextQuestion({
         config: effectiveConfig,

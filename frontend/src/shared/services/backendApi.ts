@@ -8,6 +8,10 @@ import type {
   SessionStartResponse,
   PlanGenerateResponse,
   NextQuestionResponse,
+  OrchestratorContextResponse,
+  OrchestratorFinalizeResponse,
+  OrchestratorStartResponse,
+  OrchestratorTurnResponse,
   CandidateProfile,
   CandidateProfileAuditPageResponse,
   CandidateProfileUpsertRequest,
@@ -309,6 +313,49 @@ export const BackendApi = {
     difficultyLevel?: number;
   }) =>
     apiFetch<NextQuestionResponse>("/ai/next-question", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  orchestratorBuildContext: (payload: {
+    config: InterviewConfig;
+    resumeText?: string;
+    jobDescription?: string;
+  }) =>
+    apiFetch<OrchestratorContextResponse>("/orchestrator/interview/context", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  orchestratorStart: (payload: {
+    config: InterviewConfig;
+    resumeText?: string;
+    jobDescription?: string;
+    includeContext?: boolean;
+  }) =>
+    apiFetch<OrchestratorStartResponse>("/orchestrator/interview/start", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  orchestratorTurn: (payload: {
+    config: InterviewConfig;
+    history: any[];
+    question: string;
+    remainingSeconds: number;
+    difficultyLevel?: number;
+    confirmedName?: string;
+    transcript?: string;
+    audioBase64?: string;
+    mimeType?: string;
+  }) =>
+    apiFetch<OrchestratorTurnResponse>("/orchestrator/interview/turn", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  orchestratorFinalize: (payload: { config: InterviewConfig; history: any[] }) =>
+    apiFetch<OrchestratorFinalizeResponse>("/orchestrator/interview/finalize", {
       method: "POST",
       body: JSON.stringify(payload),
     }),

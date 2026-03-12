@@ -142,6 +142,38 @@ export interface NextQuestionResponse {
   tokens_used?: number;
 }
 
+export interface OrchestratorContextResponse {
+  profile: Record<string, unknown>;
+  candidate: Record<string, unknown>;
+  job: Record<string, unknown>;
+  match: Record<string, unknown>;
+}
+
+export interface OrchestratorStartResponse {
+  session: SessionStartResponse;
+  context?: OrchestratorContextResponse | null;
+}
+
+export interface OrchestratorTurnResponse {
+  evaluation: AnswerEvaluation;
+  coach: {
+    tips?: string[];
+    reinforce?: string[];
+    idealAnswerOutline?: string[];
+    [key: string]: unknown;
+  };
+  nextQuestion: NextQuestionResponse;
+}
+
+export interface OrchestratorFinalizeResponse {
+  report: FinalReport;
+  studyPlan: {
+    priorityTopics?: string[];
+    weeklyPlan?: Array<Record<string, unknown>>;
+    [key: string]: unknown;
+  };
+}
+
 export interface ResumeExtraction {
   technologies: string[];
   experienceLevel: string;

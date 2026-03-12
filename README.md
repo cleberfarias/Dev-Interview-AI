@@ -63,6 +63,10 @@ Frontend: http://localhost:5000
 - POST /ai/evaluate-audio -> avalia resposta + transcricao (JSON)
 - POST /ai/next-question -> gera a proxima pergunta (adaptativa)
 - POST /ai/final-report -> gera relatorio final (JSON)
+- POST /orchestrator/interview/context -> gera contexto multiagente (candidate/job/match)
+- POST /orchestrator/interview/start -> inicia sessao + opcionalmente precomputa contexto multiagente
+- POST /orchestrator/interview/turn -> avalia resposta (audio/texto), aplica coach e decide proxima pergunta
+- POST /orchestrator/interview/finalize -> gera relatorio final + plano de estudo consolidado
 - POST /live-coach/process -> processa chunk de audio para coaching em tempo real (STT + classificacao + sugestao)
 - WS /live-coach/ws -> canal de baixa latencia para live coach em streaming (com fallback HTTP no frontend)
 - POST /sessions/{id}/finish -> salva relatorio e historico
