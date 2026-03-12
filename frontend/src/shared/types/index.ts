@@ -152,6 +152,7 @@ export interface OrchestratorContextResponse {
 export interface OrchestratorStartResponse {
   session: SessionStartResponse;
   context?: OrchestratorContextResponse | null;
+  initialNextQuestion?: NextQuestionResponse | null;
 }
 
 export interface OrchestratorTurnResponse {

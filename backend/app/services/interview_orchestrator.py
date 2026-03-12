@@ -47,6 +47,22 @@ def start_session(*, config: InterviewConfig, user: dict) -> dict[str, Any]:
     return response.model_dump()
 
 
+def initial_next_question(
+    *,
+    user: dict,
+    config: InterviewConfig,
+    remaining_seconds: int,
+    difficulty_level: int | None = None,
+) -> dict[str, Any]:
+    return interviewer_agent.run(
+        config=config,
+        history=[],
+        remaining_seconds=max(0, int(remaining_seconds)),
+        difficulty_level=difficulty_level,
+        user=user,
+    )
+
+
 def run_turn(
     *,
     user: dict,

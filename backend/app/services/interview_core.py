@@ -503,6 +503,34 @@ def _build_next_question_prompt(
     )
 
 
+def _build_next_question_prompt_strict(
+    config: InterviewConfig,
+    history: list,
+    remaining_seconds: int,
+    asked_count: int,
+    min_q: int,
+    max_q: int,
+    difficulty_level: Optional[int] = None,
+    context: str = "",
+) -> str:
+    history_summary = _summarize_history_for_next(history)
+    score_summary = _summarize_scores(history)
+    avg_scores = score_summary[0].model_dump() if score_summary else {}
+    diff_range = _difficulty_range_from_level(difficulty_level)
+    diff_hint = f"{diff_range[0]}-{diff_range[1]}" if diff_range else "1-5"
+    return next_question_prompt.build_next_question_prompt_strict(
+        config=config,
+        history_summary=history_summary,
+        average_scores=avg_scores,
+        remaining_seconds=remaining_seconds,
+        asked_count=asked_count,
+        min_questions=min_q,
+        max_questions=max_q,
+        difficulty_hint=diff_hint,
+        context=context,
+    )
+
+
 def _parse_next_question_payload(payload: dict, asked_count: int) -> tuple[Optional[InterviewQuestion], bool, Optional[str]]:
     if not isinstance(payload, dict):
         return None, True, "invalid_payload"
@@ -1002,7 +1030,41 @@ def next_question(payload: NextQuestionRequest, user=Depends(get_current_user)):
             raise ValueError("Invalid next question payload")
     except Exception:
         logger.warning("Invalid next-question payload (provider=%s model=%s)", result.provider_used, result.model_used)
-        raise HTTPException(status_code=503, detail="AI retornou resposta invalida")
+        try:
+            retry_result = ai_router.generate(
+                task_name="plan",
+                prompt=_build_next_question_prompt_strict(
+                    config=config,
+                    history=history,
+                    remaining_seconds=remaining_seconds,
+                    asked_count=asked_count,
+                    min_q=min_q,
+                    max_q=max_q,
+                    difficulty_level=payload.difficultyLevel,
+                    context=context,
+                ),
+                max_tokens=360,
+                temperature=0.2,
+                response_mime_type="application/json",
+            )
+            retry_data = _safe_json_loads(retry_result.output_text or "{}")
+            question, should_finish, reason = _parse_next_question_payload(retry_data, asked_count)
+            if should_finish and asked_count >= min_q:
+                return NextQuestionResponse(
+                    shouldFinish=True,
+                    reason=reason,
+                    provider_used=retry_result.provider_used,
+                    model_used=retry_result.model_used,
+                    latency_ms=retry_result.latency_ms,
+                    tokens_used=retry_result.tokens_used,
+                )
+            if not question:
+                raise ValueError("Invalid next question payload after retry")
+            result = retry_result
+        except AIProviderError as e:
+            _handle_ai_error(e)
+        except Exception:
+            raise HTTPException(status_code=503, detail="AI retornou resposta invalida")
 
     return NextQuestionResponse(
         shouldFinish=False,

@@ -106,3 +106,70 @@ def test_next_question_happy_path(monkeypatch):
         assert data["question"]["prompt"] == "Explique o que e cache."
     finally:
         app.dependency_overrides = {}
+
+
+def test_next_question_retries_on_invalid_payload(monkeypatch):
+    monkeypatch.setenv("MCP_CONTEXT_ENABLED", "false")
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "test-user",
+        "email": "test@example.com",
+        "name": "Test User",
+        "picture": None,
+        "token": "test-token",
+    }
+
+    valid_payload = {
+        "shouldFinish": False,
+        "question": {
+            "id": "q2",
+            "section": "technical",
+            "difficulty": 3,
+            "prompt": "Explique idempotencia em APIs.",
+        },
+    }
+    calls = {"count": 0}
+
+    def _fake_generate(*args, **kwargs):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            return AIResult(
+                output_text="invalid-json-response",
+                provider_used="test",
+                model_used="test-model",
+                latency_ms=5,
+                tokens_used=10,
+            )
+        return AIResult(
+            output_text=json.dumps(valid_payload),
+            provider_used="test",
+            model_used="test-model",
+            latency_ms=6,
+            tokens_used=12,
+        )
+
+    monkeypatch.setattr("app.main.ai_router.generate", _fake_generate)
+
+    try:
+        client = TestClient(app)
+        body = {
+            "config": _config(),
+            "history": [
+                {
+                    "questionId": "q1",
+                    "question": "O que e cache?",
+                    "section": "technical",
+                    "difficulty": 3,
+                    "evaluation": {"scores": {"communication": 7, "technical": 6, "problemSolving": 6, "presence": 7}},
+                }
+            ],
+            "remainingSeconds": 600,
+            "difficultyLevel": 2,
+        }
+        resp = client.post("/ai/next-question", json=body)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["shouldFinish"] is False
+        assert data["question"]["prompt"] == "Explique idempotencia em APIs."
+        assert calls["count"] == 2
+    finally:
+        app.dependency_overrides = {}

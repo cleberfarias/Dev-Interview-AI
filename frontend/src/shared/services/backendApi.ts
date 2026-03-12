@@ -332,6 +332,7 @@ export const BackendApi = {
     resumeText?: string;
     jobDescription?: string;
     includeContext?: boolean;
+    difficultyLevel?: number;
   }) =>
     apiFetch<OrchestratorStartResponse>("/orchestrator/interview/start", {
       method: "POST",

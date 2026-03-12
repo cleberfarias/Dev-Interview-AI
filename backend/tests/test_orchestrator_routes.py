@@ -71,6 +71,15 @@ def test_orchestrator_start_route(monkeypatch):
                 "job": {"requiredSkills": ["python"]},
                 "match": {"matchScore": 85},
             },
+            "initialNextQuestion": {
+                "shouldFinish": False,
+                "question": {
+                    "id": "q1",
+                    "section": "technical",
+                    "difficulty": 3,
+                    "prompt": "Explique observabilidade.",
+                },
+            },
         },
     )
 
@@ -78,12 +87,13 @@ def test_orchestrator_start_route(monkeypatch):
         client = TestClient(app)
         resp = client.post(
             "/orchestrator/interview/start",
-            json={"config": _config_payload(), "includeContext": True},
+            json={"config": _config_payload(), "includeContext": True, "difficultyLevel": 2},
         )
         assert resp.status_code == 200
         data = resp.json()
         assert data["session"]["sessionId"] == "sess-1"
         assert data["context"]["candidate"]["skills"] == ["python"]
+        assert data["initialNextQuestion"]["question"]["id"] == "q1"
     finally:
         app.dependency_overrides = {}
 

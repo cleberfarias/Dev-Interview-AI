@@ -47,3 +47,34 @@ Regras:
 - difficulty deve ficar no range {difficulty_hint}.
 - Pergunta deve ser objetiva (1-2 frases).
 """
+
+
+def build_next_question_prompt_strict(
+    config: InterviewConfig,
+    history_summary: list,
+    average_scores: dict,
+    remaining_seconds: int,
+    asked_count: int,
+    min_questions: int,
+    max_questions: int,
+    difficulty_hint: str,
+    context: str = "",
+) -> str:
+    base = build_next_question_prompt(
+        config=config,
+        history_summary=history_summary,
+        average_scores=average_scores,
+        remaining_seconds=remaining_seconds,
+        asked_count=asked_count,
+        min_questions=min_questions,
+        max_questions=max_questions,
+        difficulty_hint=difficulty_hint,
+        context=context,
+    )
+    return (
+        f"{base}\n"
+        "MODO ESTRITO:\n"
+        "- Retorne exatamente um objeto JSON raiz.\n"
+        "- Sem markdown, sem comentarios, sem texto fora do JSON.\n"
+        "- Campo question deve ser objeto ou null.\n"
+    )

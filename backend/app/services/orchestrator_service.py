@@ -45,7 +45,22 @@ def start(payload: OrchestratorStartRequest, user: dict) -> OrchestratorStartRes
         except Exception:
             logger.exception("Failed to precompute orchestrator context uid=%s", user.get("uid"))
 
-    return OrchestratorStartResponse(session=session_data, context=context)
+    initial_next_question = None
+    try:
+        initial_next_question = interview_orchestrator.initial_next_question(
+            user=user,
+            config=payload.config,
+            remaining_seconds=max(0, int((payload.config.duration or 0) * 60)),
+            difficulty_level=payload.difficultyLevel,
+        )
+    except Exception:
+        logger.exception("Failed to precompute initial next-question uid=%s", user.get("uid"))
+
+    return OrchestratorStartResponse(
+        session=session_data,
+        context=context,
+        initialNextQuestion=initial_next_question,
+    )
 
 
 def run_turn(payload: OrchestratorTurnRequest, user: dict) -> OrchestratorTurnResponse:

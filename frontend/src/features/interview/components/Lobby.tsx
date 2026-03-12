@@ -11,7 +11,6 @@ interface Props {
   onBack: () => void;
 }
 
-const START_QUESTION_TIMEOUT_MS = 1800;
 const PLAN_GENERATE_TIMEOUT_MS = 8000;
 
 const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number): Promise<T | null> => {
@@ -137,23 +136,12 @@ const Lobby: React.FC<Props> = ({ config, userCredits, onStart, onBack }) => {
         config: effectiveConfig,
         jobDescription: effectiveConfig.jobDescription,
         includeContext: true,
+        difficultyLevel: selectedLevel,
       });
       const res = orchestratedStart.session;
 
-      const nextQuestionPromise = BackendApi.nextQuestion({
-        config: effectiveConfig,
-        history: [],
-        remainingSeconds: Math.max(0, Math.round(effectiveConfig.duration * 60)),
-        difficultyLevel: selectedLevel,
-      }).catch(() => null);
-
-      const timeoutPromise = new Promise<null>((resolve) => {
-        window.setTimeout(() => resolve(null), START_QUESTION_TIMEOUT_MS);
-      });
-
-      const nextRes = await Promise.race([nextQuestionPromise, timeoutPromise]);
-
-      if (nextRes?.question) {
+      const nextRes = orchestratedStart.initialNextQuestion;
+      if (nextRes?.question && !nextRes.shouldFinish) {
         const planStub: InterviewPlan = {
           roleTitleGuess: effectiveConfig.track || 'Entrevista',
           seniorityGuess: effectiveConfig.seniority,

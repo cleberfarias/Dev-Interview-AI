@@ -64,7 +64,7 @@ Frontend: http://localhost:5000
 - POST /ai/next-question -> gera a proxima pergunta (adaptativa)
 - POST /ai/final-report -> gera relatorio final (JSON)
 - POST /orchestrator/interview/context -> gera contexto multiagente (candidate/job/match)
-- POST /orchestrator/interview/start -> inicia sessao + opcionalmente precomputa contexto multiagente
+- POST /orchestrator/interview/start -> inicia sessao + opcionalmente precomputa contexto multiagente + primeira pergunta adaptativa
 - POST /orchestrator/interview/turn -> avalia resposta (audio/texto), aplica coach e decide proxima pergunta
 - POST /orchestrator/interview/finalize -> gera relatorio final + plano de estudo consolidado
 - POST /live-coach/process -> processa chunk de audio para coaching em tempo real (STT + classificacao + sugestao)

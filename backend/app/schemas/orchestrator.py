@@ -26,11 +26,13 @@ class OrchestratorStartRequest(BaseModel):
     resumeText: Optional[str] = None
     jobDescription: Optional[str] = None
     includeContext: bool = True
+    difficultyLevel: Optional[int] = None
 
 
 class OrchestratorStartResponse(BaseModel):
     session: SessionStartResponse
     context: Optional[OrchestratorContextResponse] = None
+    initialNextQuestion: Optional[NextQuestionResponse] = None
 
 
 class OrchestratorTurnRequest(BaseModel):
