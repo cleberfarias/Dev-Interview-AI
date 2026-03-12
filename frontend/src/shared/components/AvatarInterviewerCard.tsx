@@ -1,7 +1,5 @@
-﻿import React, { Suspense, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import styles from './AvatarInterviewerCard.module.css';
-
-const VrmAvatar = React.lazy(() => import('../../components/VrmAvatar/VrmAvatar'));
 
 interface AvatarInterviewerCardProps {
   isSpeaking?: boolean;
@@ -18,14 +16,12 @@ const AvatarInterviewerCard: React.FC<AvatarInterviewerCardProps> = ({
   label = 'ENTREVISTADOR',
   showHeader = true,
 }) => {
-  const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
-  const vrmUrl = avatarGender === 'male' ? '/vrm/interviewer_male.vrm' : '/vrm/interviewer_female.vrm';
+  const avatarSrc = avatarGender === 'male' ? '/img/avatar_masc.png' : '/img/avatar-femin.png';
 
   useEffect(() => {
-    setIsLoaded(false);
     setHasError(false);
-  }, [vrmUrl]);
+  }, [avatarSrc]);
 
   const placeholderText = 'ENTREVISTADOR';
 
@@ -38,16 +34,17 @@ const AvatarInterviewerCard: React.FC<AvatarInterviewerCardProps> = ({
         </div>
       )}
       <div className={styles.avatarFrame} aria-label="Avatar do entrevistador">
-        {!isLoaded && <div className={styles.avatarPlaceholder}>{placeholderText}</div>}
-        <Suspense fallback={null}>
-          <VrmAvatar
-            vrmUrl={vrmUrl}
-            mouthOpen={mouthOpen}
-            className={styles.avatarCanvas}
-            onLoaded={() => setIsLoaded(true)}
+        {!hasError ? (
+          <img
+            src={avatarSrc}
+            alt={label}
+            className={styles.avatarImage}
+            style={{ transform: `scale(${1 + Math.min(0.04, mouthOpen * 0.06)})` }}
             onError={() => setHasError(true)}
           />
-        </Suspense>
+        ) : (
+          <div className={styles.avatarPlaceholder}>{placeholderText}</div>
+        )}
         {isSpeaking && (
           <div className={styles.wave} aria-hidden="true">
             <span className={styles.waveBar} />

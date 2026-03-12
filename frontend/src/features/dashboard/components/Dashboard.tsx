@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { BackendApi } from '../../../shared/services/backendApi';
 import type { CandidateProfile, InterviewHistoryItem, SessionAnalysisTraceResponse, User } from '../../../shared/types';
+import styles from './Dashboard.module.css';
 
 interface DashboardProps {
   user: User;
@@ -21,7 +22,9 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [traceLoadingSessionId, setTraceLoadingSessionId] = useState<string | null>(null);
   const [traceErrorBySessionId, setTraceErrorBySessionId] = useState<Record<string, string>>({});
   const [traceBySessionId, setTraceBySessionId] = useState<Record<string, SessionAnalysisTraceResponse | null>>({});
+
   const interviews = (user.interviews || []) as InterviewHistoryItem[];
+  const firstName = user.name ? user.name.split(' ')[0] : 'Candidato';
   const lastInterview = interviews[0];
   const profilePrimarySkills = (candidateProfile?.primarySkills || []).slice(0, 4);
   const profileWeakSkills = (candidateProfile?.weakSkills || []).slice(0, 3);
@@ -30,6 +33,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   const hasJobDescription = Boolean((candidateProfile?.jobDescription || '').trim());
   const shortResumeSummary =
     resumeSummary.length > 180 ? `${resumeSummary.slice(0, 180).trimEnd()}...` : resumeSummary;
+
   const hasProfileSignal = Boolean(
     candidateProfile?.targetRole ||
       candidateProfile?.experienceLevel ||
@@ -38,10 +42,15 @@ const Dashboard: React.FC<DashboardProps> = ({
       profilePrimarySkills.length > 0 ||
       profileWeakSkills.length > 0,
   );
+
   const avgScore =
     interviews.length > 0
       ? Math.round((interviews.reduce((sum, item) => sum + (item.score || 0), 0) / interviews.length) * 10) / 10
       : null;
+
+  const trendScores = interviews.slice(0, 5).map((item) => Number(item.score) || 0).reverse();
+  const chartMax = Math.max(100, ...trendScores);
+
   const formatDate = (value?: string) => {
     if (!value) return '';
     const parsed = new Date(value);
@@ -95,224 +104,209 @@ const Dashboard: React.FC<DashboardProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-[#05070f] text-white">
-      <div className="relative overflow-hidden px-4 sm:px-6 pt-10 pb-6">
-        <div className="absolute -top-32 right-0 h-64 w-64 rounded-full bg-[#2a3bff]/30 blur-3xl" />
-        <div className="absolute -bottom-24 left-6 h-48 w-48 rounded-full bg-[#00d2ff]/20 blur-3xl" />
+    <div className={styles.page}>
+      <div className={styles.overlay} aria-hidden="true" />
 
-        <div className="relative mx-auto max-w-5xl">
-          <p className="text-xs uppercase tracking-[0.45em] text-[#6d7bc6]">Dashboard</p>
-          <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <h1 className="text-3xl font-extrabold tracking-tight">
-                Ola, {user.name ? user.name.split(' ')[0] : 'Candidato'}
-              </h1>
-              <p className="mt-2 text-sm text-[#98a7e0]">
-                Sua central para entrevistas, relatorios e progresso.
-              </p>
+      <div className={styles.shell}>
+        <header className={styles.topBar}>
+          <div className={styles.brandRow}>
+            <div className={styles.logoBadge}>
+              <img src="/img/logo.png" alt="Dev Interview AI" className="w-full h-full object-contain rounded-xl" />
             </div>
-            <div className="flex flex-wrap gap-3">
-              <button
-                onClick={onOpenProfile}
-                className="rounded-full border border-white/15 px-5 py-2 text-xs uppercase tracking-[0.3em] text-white/80 transition hover:border-white/40"
-              >
-                Perfil
-              </button>
-              <button
-                onClick={onStartInterview}
-                className="rounded-full bg-white px-6 py-2 text-xs font-semibold uppercase tracking-[0.32em] text-[#05070f] transition hover:opacity-90"
-              >
-                Nova entrevista
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="mx-auto grid max-w-5xl gap-6 px-4 sm:px-6 pb-12 md:grid-cols-[1.4fr_1fr]">
-        <div className="rounded-3xl border border-white/10 bg-[#0b1120] p-6 shadow-[0_25px_50px_rgba(0,0,0,0.45)]">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-[0.3em] text-[#94a5f5]">Resumo</h2>
-            <span className="text-xs text-white/40">Ultimos 30 dias</span>
+            <h1 className={styles.brandTitle}>
+              Dev Interview <strong>AI</strong>
+            </h1>
           </div>
 
-          <div className="mt-6 grid gap-4 sm:grid-cols-2">
-            <div className="rounded-2xl bg-[#0f172a] p-4">
-              <p className="text-xs uppercase tracking-[0.28em] text-[#6d7bc6]">Creditos</p>
-              <p className="mt-2 text-3xl font-bold">{user.credits ?? 0}</p>
-              <p className="mt-2 text-xs text-white/50">Use para desbloquear entrevistas premium.</p>
-            </div>
-            <div className="rounded-2xl bg-[#0f172a] p-4">
-              <p className="text-xs uppercase tracking-[0.28em] text-[#6d7bc6]">Media</p>
-              <p className="mt-2 text-3xl font-bold">{avgScore ?? '--'}</p>
-              <p className="mt-2 text-xs text-white/50">Pontuacao media das ultimas sessoes.</p>
-            </div>
-            <div className="rounded-2xl bg-[#0f172a] p-4 sm:col-span-2">
-              <p className="text-xs uppercase tracking-[0.28em] text-[#6d7bc6]">Ultima entrevista</p>
-              <p className="mt-2 text-lg font-semibold">
-                {lastInterview ? lastInterview.role : 'Sem registros ainda'}
-              </p>
-              <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-white/50">
-                <span className="break-words">
-                  {lastInterview ? formatDate(lastInterview.date) : 'Comece uma nova entrevista'}
-                </span>
-                {lastInterview && <span>Pontuacao {lastInterview.score}</span>}
+          <button type="button" onClick={onOpenProfile} className={styles.profileButton}>
+            {user.avatar ? <img src={user.avatar} alt="Avatar" /> : <span>{firstName.charAt(0)}</span>}
+            <span>{firstName}</span>
+          </button>
+        </header>
+
+        <section className={styles.hero}>
+          <h2>Bem-vindo de volta, {firstName}!</h2>
+          <p>Prepare sua proxima entrevista tecnica com IA.</p>
+        </section>
+
+        <section className={styles.quickGrid}>
+          <button type="button" onClick={onOpenProfile} className={styles.quickCard}>
+            <span className={styles.quickIcon}>CV</span>
+            <h3>Analisar curriculo</h3>
+            <p>Otimize seu perfil tecnico para entrevistas.</p>
+            <span className={styles.quickAction}>Abrir perfil</span>
+          </button>
+
+          <button type="button" onClick={onOpenProfile} className={styles.quickCard}>
+            <span className={styles.quickIcon}>JD</span>
+            <h3>Analisar vaga</h3>
+            <p>Conecte seu perfil com os requisitos da vaga.</p>
+            <span className={styles.quickAction}>Editar vaga</span>
+          </button>
+
+          <button type="button" onClick={onStartInterview} className={styles.quickCard}>
+            <span className={styles.quickIcon}>AI</span>
+            <h3>Iniciar entrevista</h3>
+            <p>Pratique com perguntas personalizadas.</p>
+            <span className={styles.quickAction}>Comecar</span>
+          </button>
+        </section>
+
+        <section className={styles.panelGrid}>
+          <article className={styles.mainPanel}>
+            <h3 className={styles.panelTitle}>Visao geral</h3>
+
+            <div className={styles.metrics}>
+              <div className={styles.metricCard}>
+                <span className={styles.metricLabel}>Creditos</span>
+                <strong>{user.credits ?? 0}</strong>
+              </div>
+              <div className={styles.metricCard}>
+                <span className={styles.metricLabel}>Media</span>
+                <strong>{avgScore ?? '--'}</strong>
+              </div>
+              <div className={styles.metricCard}>
+                <span className={styles.metricLabel}>Ultima nota</span>
+                <strong>{lastInterview?.score ?? '--'}</strong>
               </div>
             </div>
-          </div>
-        </div>
 
-        <div className="space-y-6">
-          <div className="rounded-3xl border border-white/10 bg-[#0b1120] p-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold uppercase tracking-[0.3em] text-[#94a5f5]">Perfil Alvo</h2>
-              <button
-                type="button"
-                onClick={onOpenProfile}
-                className="rounded-full border border-white/15 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-white/80 transition hover:border-white/40"
-              >
-                Editar
-              </button>
-            </div>
-
-            {!hasProfileSignal && (
-              <div className="mt-4 rounded-2xl border border-dashed border-white/10 p-4 text-xs text-white/50">
-                Complete seu perfil para receber entrevistas mais alinhadas ao seu objetivo.
+            <div className={styles.chartCard}>
+              <div className={styles.chartHeader}>
+                <span>Evolucao de desempenho</span>
+                <span>{interviews.length} entrevista(s)</span>
               </div>
-            )}
 
-            {hasProfileSignal && (
-              <div className="mt-4 space-y-3 text-xs">
-                <div className="rounded-2xl bg-[#0f172a] p-4">
-                  <p className="text-[10px] uppercase tracking-[0.25em] text-[#6d7bc6]">Cargo e nivel</p>
-                  <p className="mt-2 text-sm font-semibold text-white">
-                    {candidateProfile?.targetRole || 'Nao definido'}
-                    <span className="text-white/50"> - {candidateProfile?.experienceLevel || 'Nao definido'}</span>
-                  </p>
-                </div>
-                <div className="rounded-2xl bg-[#0f172a] p-4">
-                  <p className="text-[10px] uppercase tracking-[0.25em] text-[#6d7bc6]">Skills principais</p>
-                  <p className="mt-2 text-sm text-white/85">{profilePrimarySkills.join(', ') || 'Nao definido'}</p>
-                </div>
-                <div className="rounded-2xl bg-[#0f172a] p-4">
-                  <p className="text-[10px] uppercase tracking-[0.25em] text-[#6d7bc6]">Gaps atuais</p>
-                  <p className="mt-2 text-sm text-white/85">{profileWeakSkills.join(', ') || 'Nenhum gap mapeado'}</p>
-                </div>
-                <div className="rounded-2xl bg-[#0f172a] p-4">
-                  <p className="text-[10px] uppercase tracking-[0.25em] text-[#6d7bc6]">Preparacao</p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <span
-                      className={`rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em] ${
-                        hasResumeSummary
-                          ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                          : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
-                      }`}
-                    >
-                      Curriculo {hasResumeSummary ? 'ok' : 'pendente'}
-                    </span>
-                    <span
-                      className={`rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em] ${
-                        hasJobDescription
-                          ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                          : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
-                      }`}
-                    >
-                      Vaga {hasJobDescription ? 'ok' : 'pendente'}
-                    </span>
-                  </div>
-                  <p className="mt-3 text-sm text-white/80">
-                    {hasResumeSummary ? shortResumeSummary : 'Adicione um resumo do curriculo no perfil para personalizar melhor as perguntas.'}
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
+              {trendScores.length === 0 && (
+                <p className={styles.emptyText}>Ainda nao ha notas para montar o grafico.</p>
+              )}
 
-          <div className="rounded-3xl border border-white/10 bg-[#0b1120] p-6">
-            <h2 className="text-sm font-semibold uppercase tracking-[0.3em] text-[#94a5f5]">Historico</h2>
-            <div className="mt-5 space-y-4">
-              {interviews.length === 0 && (
-                <div className="rounded-2xl border border-dashed border-white/10 p-4 text-sm text-white/50">
-                  Nenhuma entrevista registrada. Clique em "Nova entrevista" para comecar.
+              {trendScores.length > 0 && (
+                <div className={styles.chartBars}>
+                  {trendScores.map((score, index) => {
+                    const height = Math.max(8, Math.round((score / chartMax) * 100));
+                    return (
+                      <div key={`${score}-${index}`} className={styles.barGroup}>
+                        <div className={styles.barTrack}>
+                          <span className={styles.barValue} style={{ height: `${height}%` }} />
+                        </div>
+                        <span className={styles.barLabel}>{score}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
-              {interviews.slice(0, 4).map((item) => (
-                <div
-                  key={item.id}
-                  className="flex flex-col gap-3 rounded-2xl bg-[#0f172a] p-4 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold truncate">{item.role}</p>
-                    <p className="text-xs text-white/50 break-words">{formatDate(item.date)}</p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-full bg-white/10 px-3 py-1 text-xs uppercase tracking-[0.28em] text-white/70">
-                      {item.score}
-                    </span>
-                    <button
-                      onClick={() => {
-                        void handleToggleTrace(item.id);
-                      }}
-                      className="rounded-full border border-indigo-500/40 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-indigo-200 hover:border-indigo-400/70"
-                    >
-                      {expandedTraceSessionId === item.id ? 'Ocultar trace' : 'Ver trace'}
-                    </button>
-                    <button
-                      onClick={() => onDeleteInterview(item.id)}
-                      className="rounded-full border border-red-500/40 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-red-300 hover:border-red-400/70"
-                    >
-                      Excluir
-                    </button>
-                  </div>
-
-                  {expandedTraceSessionId === item.id && (
-                    <div className="sm:col-span-2 w-full rounded-xl border border-white/10 bg-[#0b1120] p-3 space-y-2">
-                      {traceLoadingSessionId === item.id && (
-                        <p className="text-[10px] text-slate-400">Carregando trace da sessao...</p>
-                      )}
-
-                      {!traceLoadingSessionId && traceErrorBySessionId[item.id] && (
-                        <p className="text-[10px] text-red-300">{traceErrorBySessionId[item.id]}</p>
-                      )}
-
-                      {!traceLoadingSessionId && !traceErrorBySessionId[item.id] && (() => {
-                        const trace = traceBySessionId[item.id];
-                        if (!trace || !trace.hasTrace || !trace.analysisTraceSnapshot) {
-                          return <p className="text-[10px] text-slate-400">Sessao sem snapshot de trace.</p>;
-                        }
-
-                        const snapshot = trace.analysisTraceSnapshot as any;
-                        const resumeTrace = snapshot?.lastResumeAnalysisTrace;
-                        const jobTrace = snapshot?.lastJobAnalysisTrace;
-                        const capturedAt = formatTraceTimestamp(snapshot?.capturedAt);
-
-                        return (
-                          <div className="space-y-2">
-                            <p className="text-[10px] text-slate-300">
-                              <span className="font-black text-slate-200">Capturado em:</span> {capturedAt}
-                            </p>
-                            {resumeTrace && (
-                              <p className="text-[10px] text-slate-300">
-                                <span className="font-black text-slate-200">Resume:</span> {sourceLabel(resumeTrace.source)}{' '}
-                                {resumeTrace.aiProvider ? `(${resumeTrace.aiProvider}${resumeTrace.aiModel ? ` / ${resumeTrace.aiModel}` : ''})` : ''}
-                              </p>
-                            )}
-                            {jobTrace && (
-                              <p className="text-[10px] text-slate-300">
-                                <span className="font-black text-slate-200">Job:</span> {sourceLabel(jobTrace.source)}{' '}
-                                {jobTrace.aiProvider ? `(${jobTrace.aiProvider}${jobTrace.aiModel ? ` / ${jobTrace.aiModel}` : ''})` : ''}
-                              </p>
-                            )}
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  )}
-                </div>
-              ))}
             </div>
-          </div>
-        </div>
+
+            <div className={styles.profileSignals}>
+              <h4>Sinais de preparacao</h4>
+              <div className={styles.signalRow}>
+                <span className={`${styles.signalChip} ${hasResumeSummary ? styles.signalOk : styles.signalWarn}`}>
+                  Curriculo {hasResumeSummary ? 'ok' : 'pendente'}
+                </span>
+                <span className={`${styles.signalChip} ${hasJobDescription ? styles.signalOk : styles.signalWarn}`}>
+                  Vaga {hasJobDescription ? 'ok' : 'pendente'}
+                </span>
+              </div>
+
+              {hasProfileSignal ? (
+                <div className={styles.profileTexts}>
+                  <p>
+                    <strong>Objetivo:</strong> {candidateProfile?.targetRole || 'Nao definido'}
+                    {' - '}
+                    {candidateProfile?.experienceLevel || 'Nao definido'}
+                  </p>
+                  <p>
+                    <strong>Skills:</strong> {profilePrimarySkills.join(', ') || 'Nao definido'}
+                  </p>
+                  <p>
+                    <strong>Gaps:</strong> {profileWeakSkills.join(', ') || 'Nenhum gap mapeado'}
+                  </p>
+                  <p>{hasResumeSummary ? shortResumeSummary : 'Adicione um resumo de curriculo no perfil.'}</p>
+                </div>
+              ) : (
+                <p className={styles.emptyText}>
+                  Complete seu perfil para gerar entrevistas mais alinhadas.
+                </p>
+              )}
+            </div>
+          </article>
+
+          <aside className={styles.sidePanel}>
+            <h3 className={styles.panelTitle}>Atividade recente</h3>
+
+            {interviews.length === 0 && (
+              <p className={styles.emptyText}>Nenhuma entrevista registrada. Clique em iniciar entrevista.</p>
+            )}
+
+            {interviews.slice(0, 5).map((item) => (
+              <div key={item.id} className={styles.activityItem}>
+                <div className={styles.activityTop}>
+                  <div>
+                    <p className={styles.activityRole}>{item.role}</p>
+                    <p className={styles.activityDate}>{formatDate(item.date)}</p>
+                  </div>
+                  <span className={styles.scoreBadge}>{item.score}</span>
+                </div>
+
+                <div className={styles.activityActions}>
+                  <button type="button" onClick={() => void handleToggleTrace(item.id)}>
+                    {expandedTraceSessionId === item.id ? 'Ocultar trace' : 'Ver trace'}
+                  </button>
+                  <button type="button" onClick={() => onDeleteInterview(item.id)}>
+                    Excluir
+                  </button>
+                </div>
+
+                {expandedTraceSessionId === item.id && (
+                  <div className={styles.traceBox}>
+                    {traceLoadingSessionId === item.id && <p>Carregando trace da sessao...</p>}
+
+                    {!traceLoadingSessionId && traceErrorBySessionId[item.id] && (
+                      <p className={styles.traceError}>{traceErrorBySessionId[item.id]}</p>
+                    )}
+
+                    {!traceLoadingSessionId && !traceErrorBySessionId[item.id] && (() => {
+                      const trace = traceBySessionId[item.id];
+                      if (!trace || !trace.hasTrace || !trace.analysisTraceSnapshot) {
+                        return <p>Sessao sem snapshot de trace.</p>;
+                      }
+
+                      const snapshot = trace.analysisTraceSnapshot as any;
+                      const resumeTrace = snapshot?.lastResumeAnalysisTrace;
+                      const jobTrace = snapshot?.lastJobAnalysisTrace;
+                      const capturedAt = formatTraceTimestamp(snapshot?.capturedAt);
+
+                      return (
+                        <div className={styles.traceData}>
+                          <p>
+                            <strong>Capturado em:</strong> {capturedAt}
+                          </p>
+                          {resumeTrace && (
+                            <p>
+                              <strong>Resume:</strong> {sourceLabel(resumeTrace.source)}{' '}
+                              {resumeTrace.aiProvider
+                                ? `(${resumeTrace.aiProvider}${resumeTrace.aiModel ? ` / ${resumeTrace.aiModel}` : ''})`
+                                : ''}
+                            </p>
+                          )}
+                          {jobTrace && (
+                            <p>
+                              <strong>Job:</strong> {sourceLabel(jobTrace.source)}{' '}
+                              {jobTrace.aiProvider
+                                ? `(${jobTrace.aiProvider}${jobTrace.aiModel ? ` / ${jobTrace.aiModel}` : ''})`
+                                : ''}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+              </div>
+            ))}
+          </aside>
+        </section>
       </div>
     </div>
   );

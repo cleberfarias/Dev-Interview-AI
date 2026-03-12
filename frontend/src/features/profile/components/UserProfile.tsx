@@ -1,9 +1,9 @@
-
 import React, { useState } from 'react';
 import { BackendApi } from '../../../shared/services/backendApi';
 import type { CandidateProfile, InterviewConfig, SessionAnalysisTraceResponse, User } from '../../../shared/types';
 import CandidateProfilePanel from './CandidateProfilePanel';
 import { LiveCoachPreviewCard } from '../../live-coach';
+import styles from './UserProfile.module.css';
 
 interface Props {
   user: User;
@@ -20,7 +20,7 @@ const UserProfile: React.FC<Props> = ({
   config,
   onBack,
   onLogout,
-  onAddCredits,
+  onAddCredits: _onAddCredits,
   onDeleteInterview,
   onCandidateProfileUpdated,
 }) => {
@@ -29,21 +29,25 @@ const UserProfile: React.FC<Props> = ({
   const [traceLoadingSessionId, setTraceLoadingSessionId] = useState<string | null>(null);
   const [traceErrorBySessionId, setTraceErrorBySessionId] = useState<Record<string, string>>({});
   const [traceBySessionId, setTraceBySessionId] = useState<Record<string, SessionAnalysisTraceResponse | null>>({});
+
   const checkoutLinks = {
     pack3: 'https://pay.kiwify.com.br/pe3fE5y',
     pack10: 'https://pay.kiwify.com.br/FztuPgO',
     pack100: 'https://pay.kiwify.com.br/MPMmAmL',
   };
 
-  const averageScore = user.interviews.length > 0 
-    ? (user.interviews.reduce((acc, curr) => acc + curr.score, 0) / user.interviews.length).toFixed(1)
-    : '0';
+  const averageScore =
+    user.interviews.length > 0
+      ? (user.interviews.reduce((acc, curr) => acc + curr.score, 0) / user.interviews.length).toFixed(1)
+      : '0';
 
   const stats = [
-    { label: 'Sessões', value: user.interviews.length, icon: '🎤' },
-    { label: 'Créditos', value: user.credits, icon: '🪙' },
-    { label: 'Média AI', value: averageScore, icon: '⭐' },
+    { label: 'Sessoes', value: user.interviews.length },
+    { label: 'Creditos', value: user.credits },
+    { label: 'Media AI', value: averageScore },
   ];
+
+  const firstName = user.name ? user.name.split(' ')[0] : 'Candidato';
 
   const formatDate = (value?: string) => {
     if (!value) return '';
@@ -72,7 +76,7 @@ const UserProfile: React.FC<Props> = ({
     return 'Heuristica';
   };
 
-  const handleRecharge = async (amount: number, label: string) => {
+  const handleRecharge = async (amount: number) => {
     try {
       setBuying(true);
       const url =
@@ -115,207 +119,181 @@ const UserProfile: React.FC<Props> = ({
     }
   };
 
-
   return (
-    <div className="flex flex-col h-full bg-slate-950 animate-in slide-in-from-right duration-500">
-      <header className="px-6 py-12 flex flex-col items-center text-center gap-4 max-w-5xl mx-auto w-full">
-        <div className="relative">
-          <div className="w-24 h-24 rounded-[2.5rem] bg-indigo-600 flex items-center justify-center text-4xl font-black text-white shadow-2xl shadow-indigo-600/40 overflow-hidden border-4 border-white/5">
-            {user.avatar ? (
-              <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover" />
-            ) : user.name.charAt(0)}
-          </div>
-          <div className={`absolute -bottom-2 -right-2 w-8 h-8 rounded-xl border-4 border-slate-950 flex items-center justify-center text-[10px] font-black ${user.provider === 'google' ? 'bg-white text-slate-900' : 'bg-slate-800 text-white'}`}>
-            {user.provider === 'google' ? 'G' : '🐙'}
-          </div>
-        </div>
-        <div>
-          <h2 className="text-2xl font-black text-white uppercase tracking-tighter">{user.name}</h2>
-          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">{user.email}</p>
-        </div>
-      </header>
+    <div className={styles.page}>
+      <div className={styles.overlay} aria-hidden="true" />
 
-      <div className="flex-1 px-6 space-y-8 overflow-y-auto no-scrollbar pb-32 max-w-5xl mx-auto w-full">
-        {/* Stats Grid */}
-        <div className="grid grid-cols-3 gap-3">
-          {stats.map(s => (
-            <div key={s.label} className="native-glass p-4 rounded-3xl flex flex-col items-center gap-1 border-white/5">
-              <span className="text-lg">{s.icon}</span>
-              <span className="text-lg font-black text-white">{s.value}</span>
-              <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest text-center">{s.label}</span>
+      <div className={styles.shell}>
+        <header className={styles.topBar}>
+          <div className={styles.brandRow}>
+            <div className={styles.logoBadge}>
+              <img src="/img/logo.png" alt="Dev Interview AI" className="w-full h-full object-contain rounded-xl" />
             </div>
-          ))}
-        </div>
-
-        <CandidateProfilePanel
-          initialJobDescription={config.jobDescription || ''}
-          onProfileUpdated={onCandidateProfileUpdated}
-        />
-
-        <LiveCoachPreviewCard />
-
-        {/* Recharge Section */}
-        <div className="space-y-4">
-           <h3 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest px-1">Recarregar Créditos</h3>
-           
-           {/* Plano Destaque */}
-           <button 
-             onClick={() => handleRecharge(100, "Pack 100")}
-             disabled={buying}
-             className="w-full p-6 bg-gradient-to-br from-amber-500 to-orange-600 rounded-[2rem] flex items-center justify-between active:scale-[0.98] transition-all disabled:opacity-50 shadow-xl shadow-orange-600/20 group relative overflow-hidden"
-           >
-              <div className="absolute top-0 right-0 p-2 bg-white/20 rounded-bl-xl text-[8px] font-black text-white uppercase">Melhor Valor</div>
-              <div className="text-left">
-                <h4 className="text-sm font-black text-white uppercase">Pack 100 Creditos</h4>
-                <p className="text-[10px] font-bold text-amber-100 uppercase opacity-80">Até 1000 entrevistas / mês</p>
-              </div>
-              <div className="text-right">
-                <span className="text-lg font-black text-white block">R$ 100,00</span>
-                <span className="text-[8px] font-black text-amber-200 uppercase">Comprar</span>
-              </div>
-           </button>
-
-           <div className="grid grid-cols-2 gap-3">
-              <button 
-                onClick={() => handleRecharge(3, "Pack 3")}
-                disabled={buying}
-                className="p-5 bg-slate-900 border border-white/5 rounded-3xl flex flex-col items-center gap-1 active:scale-95 transition-all disabled:opacity-50"
-              >
-                <span className="text-xs font-black text-white">3 Créditos</span>
-                <span className="text-[10px] font-bold text-indigo-400">R$ 20,00</span>
-              </button>
-              <button 
-                onClick={() => handleRecharge(10, "Pack 10")}
-                disabled={buying}
-                className="p-5 bg-indigo-600 border border-indigo-400 rounded-3xl flex flex-col items-center gap-1 active:scale-95 transition-all disabled:opacity-50 shadow-lg shadow-indigo-600/20"
-              >
-                <span className="text-xs font-black text-white">10 Créditos</span>
-                <span className="text-[10px] font-bold text-indigo-200">R$ 40,00</span>
-              </button>
-           </div>
-
-           <div className="native-glass p-4 rounded-2xl border border-white/5">
-             <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">Metodos de pagamento</p>
-             <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-bold uppercase text-slate-300">
-               <span className="px-3 py-1 rounded-full bg-slate-900/70 border border-white/10">Cartao</span>
-               <span className="px-3 py-1 rounded-full bg-slate-900/70 border border-white/10">Pix</span>
-               <span className="px-3 py-1 rounded-full bg-slate-900/70 border border-white/10">Boleto</span>
-             </div>
-             <p className="mt-2 text-[9px] text-slate-500">Pagamentos processados via checkout da Kiwify.</p>
-           </div>
-        </div>
-
-        {/* History Section */}
-        <div className="space-y-4">
-          <div className="flex justify-between items-center px-1">
-            <h3 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Histórico de Sessões</h3>
+            <h1 className={styles.brandTitle}>
+              Dev Interview <strong>AI</strong>
+            </h1>
           </div>
-          
-          {user.interviews.length > 0 ? (
-            user.interviews.map(item => (
-              <div key={item.id} className="native-glass p-5 rounded-3xl flex flex-col gap-4 border border-white/5 animate-in fade-in slide-in-from-bottom-2 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-4 min-w-0">
-                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center text-xs font-black ${item.score >= 8 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>
-                    {item.score}
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-white uppercase">{item.role}</p>
-                    <p className="text-[9px] font-medium text-slate-500 uppercase">{formatDate(item.date)} • {item.style}</p>
-                  </div>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="px-3 py-1 bg-slate-800 rounded-lg text-[8px] font-black text-slate-400 uppercase">
-                    {item.track}
-                  </div>
-                  <button
-                    onClick={() => {
-                      void handleToggleTrace(item.id);
-                    }}
-                    className="px-3 py-1 rounded-lg text-[8px] font-black uppercase text-indigo-200 border border-indigo-500/30 hover:border-indigo-400/60"
-                  >
-                    {expandedTraceSessionId === item.id ? 'Ocultar trace' : 'Ver trace'}
-                  </button>
-                  <button
-                    onClick={() => handleDelete(item.id)}
-                    className="px-3 py-1 rounded-lg text-[8px] font-black uppercase text-red-300 border border-red-500/30 hover:border-red-400/60"
-                  >
-                    Excluir
-                  </button>
-                </div>
-                {expandedTraceSessionId === item.id && (
-                  <div className="w-full rounded-xl border border-white/10 bg-slate-900/70 p-3 space-y-2">
-                    {traceLoadingSessionId === item.id && (
-                      <p className="text-[10px] text-slate-400">Carregando trace da sessao...</p>
-                    )}
-                    {!traceLoadingSessionId && traceErrorBySessionId[item.id] && (
-                      <p className="text-[10px] text-red-300">{traceErrorBySessionId[item.id]}</p>
-                    )}
-                    {!traceLoadingSessionId && !traceErrorBySessionId[item.id] && (() => {
-                      const trace = traceBySessionId[item.id];
-                      if (!trace || !trace.hasTrace || !trace.analysisTraceSnapshot) {
-                        return <p className="text-[10px] text-slate-400">Sessao sem snapshot de trace.</p>;
-                      }
-                      const snapshot = trace.analysisTraceSnapshot as any;
-                      const resumeTrace = snapshot?.lastResumeAnalysisTrace;
-                      const jobTrace = snapshot?.lastJobAnalysisTrace;
-                      return (
-                        <div className="space-y-1">
-                          <p className="text-[10px] text-slate-300">
-                            <span className="font-black text-slate-200">Capturado em:</span>{' '}
-                            {formatTraceTimestamp(snapshot?.capturedAt)}
-                          </p>
-                          {resumeTrace && (
-                            <p className="text-[10px] text-slate-300">
-                              <span className="font-black text-slate-200">Resume:</span> {sourceLabel(resumeTrace.source)}{' '}
-                              {resumeTrace.aiProvider ? `(${resumeTrace.aiProvider}${resumeTrace.aiModel ? ` / ${resumeTrace.aiModel}` : ''})` : ''}
-                            </p>
-                          )}
-                          {jobTrace && (
-                            <p className="text-[10px] text-slate-300">
-                              <span className="font-black text-slate-200">Job:</span> {sourceLabel(jobTrace.source)}{' '}
-                              {jobTrace.aiProvider ? `(${jobTrace.aiProvider}${jobTrace.aiModel ? ` / ${jobTrace.aiModel}` : ''})` : ''}
-                            </p>
-                          )}
-                        </div>
-                      );
-                    })()}
-                  </div>
-                )}
-              </div>
-            ))
-          ) : (
-            <div className="py-12 text-center native-glass rounded-3xl border border-dashed border-white/10">
-               <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Nenhuma entrevista realizada</p>
-               <p className="text-[8px] font-bold text-slate-500 uppercase mt-1">Sua primeira entrevista é grátis!</p>
-            </div>
-          )}
-        </div>
 
-        {/* Settings Links */}
-        <div className="space-y-2 pt-4">
-           <button className="w-full p-5 bg-slate-900/50 rounded-2xl text-left flex items-center justify-between group">
-              <span className="text-xs font-bold text-slate-300">Configurações de Áudio/Vídeo</span>
-              <span className="text-slate-600">⚙️</span>
-           </button>
-           <button 
-            className="w-full p-5 bg-slate-900/50 rounded-2xl text-left flex items-center justify-between active:bg-red-500/10" 
-            onClick={onLogout}
-          >
-              <span className="text-xs font-bold text-red-400">Sair da Conta</span>
-              <span>🚪</span>
-           </button>
-        </div>
-      </div>
-
-      <div className="fixed bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-slate-950 via-slate-950 to-transparent">
-        <div className="max-w-md lg:max-w-5xl mx-auto">
-          <button 
-            onClick={onBack}
-            className="w-full py-6 bg-white text-slate-950 rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-2xl active:scale-95 transition-all"
-          >
-            Voltar ao Início
+          <button type="button" onClick={onBack} className={styles.backTopButton}>
+            Voltar
           </button>
-        </div>
+        </header>
+
+        <section className={styles.heroCard}>
+          <div className={styles.heroUser}>
+            <div className={styles.avatarWrap}>
+              {user.avatar ? <img src={user.avatar} alt="Avatar" /> : <span>{firstName.charAt(0)}</span>}
+            </div>
+            <div>
+              <h2>{user.name}</h2>
+              <p>{user.email}</p>
+            </div>
+          </div>
+
+          <div className={styles.statsGrid}>
+            {stats.map((item) => (
+              <div key={item.label} className={styles.statCard}>
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className={styles.contentGrid}>
+          <div className={styles.leftColumn}>
+            <div className={styles.neonBlock}>
+              <CandidateProfilePanel
+                initialJobDescription={config.jobDescription || ''}
+                onProfileUpdated={onCandidateProfileUpdated}
+              />
+            </div>
+
+            <div className={styles.neonBlock}>
+              <LiveCoachPreviewCard />
+            </div>
+          </div>
+
+          <div className={styles.rightColumn}>
+            <article className={styles.panel}>
+              <h3>Recarregar creditos</h3>
+              <button
+                type="button"
+                onClick={() => handleRecharge(100)}
+                disabled={buying}
+                className={styles.packPrimary}
+              >
+                <div>
+                  <strong>Pack 100 Creditos</strong>
+                  <span>Ate 1000 entrevistas por mes</span>
+                </div>
+                <em>R$ 100,00</em>
+              </button>
+
+              <div className={styles.packGrid}>
+                <button type="button" onClick={() => handleRecharge(3)} disabled={buying} className={styles.packSecondary}>
+                  <strong>3 creditos</strong>
+                  <span>R$ 20,00</span>
+                </button>
+                <button type="button" onClick={() => handleRecharge(10)} disabled={buying} className={styles.packSecondary}>
+                  <strong>10 creditos</strong>
+                  <span>R$ 40,00</span>
+                </button>
+              </div>
+
+              <p className={styles.note}>Pagamento via checkout seguro da Kiwify (cartao, pix e boleto).</p>
+            </article>
+
+            <article className={styles.panel}>
+              <h3>Historico de sessoes</h3>
+
+              {user.interviews.length === 0 && (
+                <p className={styles.emptyText}>Nenhuma entrevista realizada ainda.</p>
+              )}
+
+              {user.interviews.map((item) => (
+                <div key={item.id} className={styles.historyItem}>
+                  <div className={styles.historyTop}>
+                    <div>
+                      <p className={styles.historyRole}>{item.role}</p>
+                      <p className={styles.historyMeta}>
+                        {formatDate(item.date)} | {item.track} | {item.style}
+                      </p>
+                    </div>
+                    <span className={styles.scoreBadge}>{item.score}</span>
+                  </div>
+
+                  <div className={styles.historyActions}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void handleToggleTrace(item.id);
+                      }}
+                    >
+                      {expandedTraceSessionId === item.id ? 'Ocultar trace' : 'Ver trace'}
+                    </button>
+                    <button type="button" onClick={() => handleDelete(item.id)}>
+                      Excluir
+                    </button>
+                  </div>
+
+                  {expandedTraceSessionId === item.id && (
+                    <div className={styles.traceBox}>
+                      {traceLoadingSessionId === item.id && <p>Carregando trace da sessao...</p>}
+
+                      {!traceLoadingSessionId && traceErrorBySessionId[item.id] && (
+                        <p className={styles.traceError}>{traceErrorBySessionId[item.id]}</p>
+                      )}
+
+                      {!traceLoadingSessionId && !traceErrorBySessionId[item.id] && (() => {
+                        const trace = traceBySessionId[item.id];
+                        if (!trace || !trace.hasTrace || !trace.analysisTraceSnapshot) {
+                          return <p>Sessao sem snapshot de trace.</p>;
+                        }
+                        const snapshot = trace.analysisTraceSnapshot as any;
+                        const resumeTrace = snapshot?.lastResumeAnalysisTrace;
+                        const jobTrace = snapshot?.lastJobAnalysisTrace;
+                        return (
+                          <div className={styles.traceData}>
+                            <p>
+                              <strong>Capturado em:</strong> {formatTraceTimestamp(snapshot?.capturedAt)}
+                            </p>
+                            {resumeTrace && (
+                              <p>
+                                <strong>Resume:</strong> {sourceLabel(resumeTrace.source)}{' '}
+                                {resumeTrace.aiProvider
+                                  ? `(${resumeTrace.aiProvider}${resumeTrace.aiModel ? ` / ${resumeTrace.aiModel}` : ''})`
+                                  : ''}
+                              </p>
+                            )}
+                            {jobTrace && (
+                              <p>
+                                <strong>Job:</strong> {sourceLabel(jobTrace.source)}{' '}
+                                {jobTrace.aiProvider
+                                  ? `(${jobTrace.aiProvider}${jobTrace.aiModel ? ` / ${jobTrace.aiModel}` : ''})`
+                                  : ''}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </article>
+
+            <article className={styles.panel}>
+              <h3>Configuracoes</h3>
+              <button type="button" className={styles.settingButton}>
+                Configuracoes de audio e video
+              </button>
+              <button type="button" onClick={onLogout} className={styles.logoutButton}>
+                Sair da conta
+              </button>
+            </article>
+          </div>
+        </section>
       </div>
     </div>
   );

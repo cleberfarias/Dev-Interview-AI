@@ -1,0 +1,418 @@
+@import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@400;600;700;800&family=Orbitron:wght@600;700;800&display=swap');
+
+.page {
+  position: relative;
+  min-height: 100dvh;
+  padding: 22px 18px;
+  overflow: hidden;
+  color: #eef4ff;
+  background:
+    linear-gradient(155deg, rgba(3, 10, 34, 0.82), rgba(4, 15, 50, 0.76) 50%, rgba(22, 20, 68, 0.84)),
+    url('/img/fundo.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  font-family: 'Exo 2', sans-serif;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(88, 156, 255, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(88, 156, 255, 0.12) 1px, transparent 1px);
+  background-size: 48px 48px;
+  opacity: 0.14;
+}
+
+.shell {
+  position: relative;
+  z-index: 1;
+  width: min(840px, 100%);
+  margin: 0 auto;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.brandRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(119, 212, 255, 0.28);
+  background: rgba(10, 24, 68, 0.48);
+  box-shadow:
+    inset 0 0 0 1px rgba(91, 227, 255, 0.2),
+    0 14px 35px rgba(3, 10, 38, 0.55);
+}
+
+.logoBadge {
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: transparent;
+  box-shadow: none;
+}
+
+.brandTitle {
+  margin: 0;
+  font-family: 'Orbitron', sans-serif;
+  font-size: clamp(1.55rem, 2.1vw, 2.35rem);
+  letter-spacing: 0.01em;
+}
+
+.brandTitle strong {
+  color: #6be7ff;
+}
+
+.heroTitle {
+  margin: 16px 0 6px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: clamp(1.45rem, 2vw, 2.05rem);
+  color: #dff5ff;
+}
+
+.heroSubtitle {
+  margin: 0;
+  font-size: 1.04rem;
+  color: #b6d9ff;
+}
+
+.card {
+  padding: 24px 24px 20px;
+  border-radius: 30px;
+  border: 1px solid rgba(121, 199, 255, 0.58);
+  background:
+    linear-gradient(180deg, rgba(10, 25, 76, 0.88), rgba(6, 16, 54, 0.78));
+  box-shadow:
+    inset 0 0 0 1px rgba(121, 221, 255, 0.2),
+    0 25px 62px rgba(3, 9, 35, 0.72),
+    0 0 30px rgba(81, 212, 255, 0.2);
+  backdrop-filter: blur(12px);
+}
+
+.progressRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.progressDots {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.progressDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(130, 164, 212, 0.5);
+  box-shadow: inset 0 0 0 1px rgba(176, 210, 255, 0.25);
+}
+
+.progressDotActive {
+  background: linear-gradient(135deg, #62e7ff, #7bb2ff);
+  box-shadow: 0 0 12px rgba(102, 221, 255, 0.7);
+}
+
+.progressText {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #b4d4ff;
+}
+
+.content {
+  margin-top: 14px;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-family: 'Orbitron', sans-serif;
+  font-size: clamp(1.18rem, 1.8vw, 1.58rem);
+}
+
+.sectionHint {
+  margin: 8px 0 16px;
+  color: #aed2ff;
+  font-size: 0.95rem;
+}
+
+.stackBlock {
+  display: grid;
+  gap: 14px;
+}
+
+.fieldBlock {
+  display: grid;
+  gap: 8px;
+}
+
+.fieldLabel {
+  font-size: 0.76rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: #8fd2ff;
+}
+
+.choiceGrid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.choiceButton {
+  min-height: 54px;
+  border-radius: 14px;
+  border: 1px solid rgba(106, 202, 255, 0.34);
+  background: rgba(8, 26, 75, 0.68);
+  color: #e8f4ff;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.choiceButtonActive {
+  border-color: rgba(111, 239, 255, 0.75);
+  box-shadow:
+    inset 0 0 0 1px rgba(191, 245, 255, 0.35),
+    0 0 14px rgba(86, 216, 255, 0.45);
+}
+
+.choiceButtonIdle {
+  opacity: 0.85;
+}
+
+.choiceButton:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 14px rgba(84, 196, 255, 0.38);
+}
+
+.choiceMeta {
+  color: #88d4ff;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.planCard {
+  text-align: left;
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(107, 198, 255, 0.35);
+  background: rgba(8, 24, 70, 0.7);
+  color: #edf7ff;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.planCard:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 18px rgba(89, 203, 255, 0.34);
+}
+
+.planCardActive {
+  border-color: rgba(112, 239, 255, 0.78);
+  box-shadow:
+    inset 0 0 0 1px rgba(196, 246, 255, 0.28),
+    0 0 20px rgba(96, 217, 255, 0.42);
+}
+
+.planTitle {
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.planDescription {
+  color: #a7ccff;
+  font-size: 0.86rem;
+}
+
+.loadingChip {
+  width: fit-content;
+  margin-top: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #dff7ff;
+  border: 1px solid rgba(121, 231, 255, 0.6);
+  background: rgba(27, 84, 112, 0.42);
+}
+
+.stackInfo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #a8cdff;
+  font-size: 0.85rem;
+}
+
+.stackList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.stackChip {
+  border: 1px solid rgba(101, 187, 244, 0.4);
+  border-radius: 999px;
+  padding: 10px 14px;
+  font-size: 0.83rem;
+  font-weight: 700;
+  color: #d5eaff;
+  background: rgba(8, 25, 72, 0.68);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+
+.stackChip:hover {
+  transform: translateY(-1px);
+}
+
+.stackChipActive {
+  border-color: rgba(111, 238, 255, 0.76);
+  color: #071936;
+  background: linear-gradient(110deg, rgba(96, 233, 255, 0.98), rgba(135, 188, 255, 0.95));
+  box-shadow: 0 0 16px rgba(91, 212, 255, 0.45);
+}
+
+.styleGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.styleCard {
+  min-height: 118px;
+  border-radius: 16px;
+  border: 1px solid rgba(108, 202, 255, 0.35);
+  background: rgba(8, 25, 71, 0.7);
+  padding: 12px;
+  text-align: left;
+  color: #deefff;
+  display: grid;
+  align-content: space-between;
+  gap: 8px;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.styleCard:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 16px rgba(90, 202, 255, 0.34);
+}
+
+.styleCardActive {
+  border-color: rgba(113, 239, 255, 0.74);
+  box-shadow:
+    inset 0 0 0 1px rgba(199, 246, 255, 0.28),
+    0 0 20px rgba(95, 213, 255, 0.45);
+}
+
+.styleName {
+  font-size: 0.98rem;
+  font-weight: 800;
+}
+
+.styleDescription {
+  font-size: 0.8rem;
+  color: #9dc7fa;
+  line-height: 1.35;
+}
+
+.footer {
+  margin-top: 18px;
+  display: flex;
+  gap: 10px;
+}
+
+.backButton,
+.nextButton {
+  border-radius: 14px;
+  border: 1px solid rgba(116, 193, 248, 0.54);
+  height: 52px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.94rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.backButton {
+  width: 140px;
+  background: rgba(8, 31, 86, 0.7);
+  color: #d3e9ff;
+}
+
+.nextButton {
+  flex: 1;
+  color: #eef8ff;
+  background:
+    linear-gradient(100deg, rgba(60, 223, 255, 0.96), rgba(68, 138, 255, 0.9) 48%, rgba(179, 92, 255, 0.92));
+  box-shadow:
+    inset 0 0 0 1px rgba(220, 247, 255, 0.45),
+    0 0 18px rgba(85, 208, 255, 0.7);
+}
+
+.backButton:hover,
+.nextButton:hover {
+  transform: translateY(-1px);
+}
+
+@media (max-width: 860px) {
+  .choiceGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .styleGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding: 14px;
+    background:
+      linear-gradient(165deg, rgba(3, 8, 30, 0.86), rgba(5, 14, 44, 0.8) 52%, rgba(20, 18, 62, 0.86)),
+      url('/img/fundo_mob.png');
+    background-size: cover;
+    background-position: center top;
+    background-repeat: no-repeat;
+  }
+
+  .card {
+    padding: 18px 14px 14px;
+    border-radius: 22px;
+  }
+
+  .heroTitle {
+    font-size: 1.25rem;
+  }
+
+  .heroSubtitle {
+    font-size: 0.9rem;
+  }
+
+  .choiceGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .footer {
+    flex-direction: column;
+  }
+
+  .backButton {
+    width: 100%;
+  }
+}

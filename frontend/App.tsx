@@ -8,8 +8,8 @@ import { BackendApi } from './src/shared/services/backendApi';
 
 const SplashScreen: React.FC = () => (
   <div className="fixed inset-0 z-[100] bg-slate-950 flex flex-col items-center justify-center animate-in fade-in duration-500">
-    <div className="w-24 h-24 bg-indigo-600 rounded-[2rem] flex items-center justify-center shadow-2xl shadow-indigo-500/40 animate-float">
-      <span className="text-white text-5xl font-black">D</span>
+    <div className="w-24 h-24 rounded-[2rem] flex items-center justify-center overflow-hidden animate-float">
+      <img src="/img/logo.png" alt="Dev Interview AI" className="w-full h-full object-contain rounded-xl" />
     </div>
     <div className="mt-8 space-y-2 text-center">
       <h1 className="text-xl font-extrabold tracking-tighter text-white uppercase">Dev Interview</h1>
@@ -288,7 +288,7 @@ const App: React.FC = () => {
   if (loading) return <SplashScreen />;
   if (state === AppState.LANDING) return <LandingPage onGetStarted={() => setState(AppState.LOGIN)} />;
 
-  const showHeader = ![AppState.INTERVIEWING, AppState.LOGIN, AppState.PROFILE].includes(state);
+  const showHeader = ![AppState.INTERVIEWING, AppState.LOGIN, AppState.PROFILE, AppState.REPORT].includes(state);
   const disableMainScroll = state === AppState.LOBBY;
   const canHeaderBack = [AppState.ONBOARDING, AppState.LOBBY, AppState.REPORT].includes(state);
 
@@ -306,13 +306,20 @@ const App: React.FC = () => {
     }
   };
 
-  const wideStates = [AppState.DASHBOARD, AppState.INTERVIEWING];
-  const mediumStates = [AppState.ONBOARDING, AppState.LOBBY, AppState.PROFILE, AppState.REPORT];
-  const containerClass = wideStates.includes(state)
-    ? 'w-full h-full'
-    : mediumStates.includes(state)
-      ? 'w-full h-full max-w-5xl mx-auto'
-      : 'max-w-md mx-auto h-full';
+  const wideStates = [
+    AppState.DASHBOARD,
+    AppState.INTERVIEWING,
+    AppState.ONBOARDING,
+    AppState.PROFILE,
+    AppState.LOBBY,
+    AppState.REPORT,
+  ];
+  const containerClass =
+    state === AppState.LOGIN
+      ? 'w-full h-full'
+      : wideStates.includes(state)
+        ? 'w-full h-full'
+        : 'max-w-md mx-auto h-full';
 
   return (
     <div className="h-full flex flex-col bg-[#020617] overflow-hidden">
@@ -344,7 +351,9 @@ const App: React.FC = () => {
                 {'<'}
               </button>
             )}
-            <div className="w-8 h-8 bg-indigo-600 rounded-xl flex items-center justify-center font-black text-white text-sm">D</div>
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center overflow-hidden">
+              <img src="/img/logo.png" alt="Dev Interview AI" className="w-full h-full object-contain rounded-md" />
+            </div>
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-xs font-black text-white uppercase">{t.title}</h1>
@@ -390,7 +399,7 @@ const App: React.FC = () => {
             )}
 
             {state === AppState.ONBOARDING && (
-              <div className="p-4 h-full">
+              <div className="h-full">
                 <Onboarding
                   onComplete={(c) => {
                     setConfig(c);
@@ -403,10 +412,12 @@ const App: React.FC = () => {
             )}
 
             {state === AppState.LOBBY && (
-              <div className="p-4 h-full overflow-hidden">
+              <div className="h-full overflow-hidden">
                 <Lobby
                   config={config}
                   userCredits={user?.credits || 0}
+                  candidateProfile={candidateProfile}
+                  onOpenProfile={() => setState(AppState.PROFILE)}
                   onStart={(p, sid, credits, difficultyLevel) => {
                     setPlan(p);
                     setSessionId(sid);
@@ -435,7 +446,7 @@ const App: React.FC = () => {
             )}
 
             {state === AppState.REPORT && report && (
-              <div className="p-4">
+              <div className="h-full">
                 <Report
                   config={config}
                   report={report}

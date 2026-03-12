@@ -50,42 +50,8 @@
   line-height: 1.35;
 }
 
-.imageFrame {
-  position: relative;
-  height: clamp(140px, 22vh, 200px);
-  border-radius: 18px;
-  border: 1px solid rgba(120, 150, 255, 0.45);
-  box-shadow: 0 0 35px rgba(94, 231, 255, 0.2);
-  background: linear-gradient(135deg, rgba(143, 91, 255, 0.18), rgba(94, 231, 255, 0.12));
-  overflow: hidden;
-}
-
-.image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  opacity: 0;
-  transform: scale(1.02);
-  transition: opacity 0.4s ease, transform 0.4s ease;
-}
-
-.imageVisible {
-  opacity: 1;
-  transform: scale(1);
-}
-
-.imageSkeleton {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.04));
-  background-size: 200% 100%;
-  animation: shimmer 1.2s ease-in-out infinite;
-}
-
 .contextTag {
-  position: absolute;
-  left: 12px;
-  bottom: 12px;
+  align-self: center;
   padding: 6px 10px;
   border-radius: 999px;
   background: rgba(8, 12, 32, 0.75);
@@ -126,7 +92,6 @@
   flex-shrink: 0;
 }
 
-.skeletonBlock,
 .skeletonLine {
   background: linear-gradient(90deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.04));
   background-size: 200% 100%;
@@ -142,11 +107,6 @@
   width: 72%;
   height: 18px;
   margin: 0 auto;
-}
-
-.skeletonImage {
-  height: clamp(140px, 22vh, 200px);
-  border-radius: 18px;
 }
 
 .skeletonGroup {
@@ -176,19 +136,9 @@
   }
 }
 
-@media (min-width: 1024px) {
-  .imageFrame {
-    height: 220px;
-  }
-}
-
 @media (max-width: 420px) {
   .card {
     padding: 14px;
     gap: 12px;
-  }
-
-  .imageFrame {
-    height: 120px;
   }
 }

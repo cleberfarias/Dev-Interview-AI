@@ -5,10 +5,19 @@ No build atual, o app Android abre a URL hospedada em Firebase:
 
 `https://dev-interview-ai.web.app`
 
-## Pré-requisitos
+## Pre-requisitos
 
 - JDK 21 (recomendado Temurin 21)
 - Android SDK instalado (`C:\Users\<seu_usuario>\AppData\Local\Android\Sdk`)
+
+## Assets visuais (versao atual)
+
+- Logo oficial usada no app e favicon:
+  - `frontend/public/img/logo.png`
+- Avatar feminino ativo no fluxo de entrevista (temporario):
+  - `frontend/public/img/avatar-femin.png`
+- Avatar masculino ja disponivel para ativacao futura:
+  - `frontend/public/img/avatar_masc.png`
 
 ## 1) Build web + sync no Android
 
@@ -67,3 +76,14 @@ sdk.dir=C:/Users/<seu_usuario>/AppData/Local/Android/Sdk
 Arquivo final para upload no Google Play Console:
 
 `frontend/android/app/build/outputs/bundle/release/app-release.aab`
+
+## 4) Publicacao na Play Store (resumo)
+
+1. Entrar no Google Play Console.
+2. Selecionar o app e abrir `Producao` (ou trilha de teste).
+3. Criar nova versao e enviar o arquivo:
+   - `frontend/android/app/build/outputs/bundle/release/app-release.aab`
+4. Revisar `Store listing`:
+   - Nome, descricao curta, descricao completa
+   - Icone 512x512 e screenshots
+5. Enviar para revisao/publicacao.

@@ -1,0 +1,623 @@
+@import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@400;600;700;800&family=Orbitron:wght@600;700;800&display=swap');
+
+.page {
+  position: relative;
+  min-height: 100dvh;
+  padding: 20px 18px 30px;
+  overflow: hidden;
+  color: #eef5ff;
+  background:
+    linear-gradient(155deg, rgba(3, 10, 34, 0.82), rgba(4, 15, 50, 0.76) 50%, rgba(22, 20, 68, 0.84)),
+    url('/img/fundo.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  font-family: 'Exo 2', sans-serif;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(88, 156, 255, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(88, 156, 255, 0.12) 1px, transparent 1px);
+  background-size: 48px 48px;
+  opacity: 0.12;
+}
+
+.shell {
+  position: relative;
+  z-index: 1;
+  width: min(1300px, 100%);
+  margin: 0 auto;
+  display: grid;
+  gap: 16px;
+}
+
+.topBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.brandRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(119, 212, 255, 0.3);
+  background: rgba(10, 24, 68, 0.46);
+  box-shadow:
+    inset 0 0 0 1px rgba(91, 227, 255, 0.18),
+    0 14px 35px rgba(3, 10, 38, 0.55);
+}
+
+.logoBadge {
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: transparent;
+  box-shadow: none;
+}
+
+.brandTitle {
+  margin: 0;
+  font-family: 'Orbitron', sans-serif;
+  font-size: clamp(1.3rem, 2.2vw, 2.2rem);
+  letter-spacing: 0.01em;
+}
+
+.brandTitle strong {
+  color: #6be7ff;
+}
+
+.profileChip {
+  height: 52px;
+  border-radius: 999px;
+  border: 1px solid rgba(117, 205, 255, 0.36);
+  background: rgba(8, 24, 68, 0.56);
+  color: #e8f5ff;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px 0 8px;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.profileDot {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.92rem;
+  border: 1px solid rgba(158, 224, 255, 0.34);
+  background: rgba(111, 196, 255, 0.22);
+}
+
+.heroTitle {
+  text-align: center;
+  margin-top: 4px;
+}
+
+.heroTitle h2 {
+  margin: 0;
+  font-family: 'Orbitron', sans-serif;
+  font-size: clamp(1.56rem, 2.8vw, 2.7rem);
+  color: #7feeff;
+}
+
+.heroTitle p {
+  margin: 8px 0 0;
+  color: #b2d7ff;
+  font-size: 1.05rem;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(280px, 0.75fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.mainCard {
+  border: 1px solid rgba(118, 198, 255, 0.56);
+  border-radius: 24px;
+  padding: 16px;
+  background:
+    linear-gradient(180deg, rgba(10, 25, 76, 0.88), rgba(6, 16, 54, 0.76));
+  box-shadow:
+    inset 0 0 0 1px rgba(121, 221, 255, 0.14),
+    0 16px 36px rgba(3, 9, 35, 0.58);
+}
+
+.scoreHeader {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 240px;
+  gap: 16px;
+  align-items: center;
+}
+
+.scoreIntro h3 {
+  margin: 6px 0 0;
+  font-family: 'Orbitron', sans-serif;
+  font-size: clamp(1.35rem, 2.1vw, 2.25rem);
+}
+
+.kicker {
+  margin: 0;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #8ed3ff;
+}
+
+.scoreText {
+  margin: 10px 0 0;
+  color: #cee5ff;
+  font-size: 1rem;
+  line-height: 1.44;
+}
+
+.scoreVisual {
+  display: grid;
+  justify-items: center;
+}
+
+.scoreRing {
+  width: 202px;
+  height: 202px;
+  border-radius: 999px;
+  padding: 12px;
+  box-shadow:
+    0 0 24px rgba(76, 221, 255, 0.45),
+    inset 0 0 0 1px rgba(134, 225, 255, 0.44);
+}
+
+.scoreCore {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  display: grid;
+  place-content: center;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(35, 121, 185, 0.35), rgba(7, 19, 63, 0.92) 70%);
+  border: 1px solid rgba(117, 206, 255, 0.42);
+}
+
+.scoreCore strong {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 3.1rem;
+  letter-spacing: 0.01em;
+}
+
+.scoreCore span {
+  text-align: center;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #a9d2ff;
+}
+
+.actionRow {
+  margin-top: 10px;
+  display: flex;
+  justify-content: center;
+}
+
+.studyButton {
+  width: min(420px, 100%);
+  height: 48px;
+  border-radius: 12px;
+  border: 1px solid rgba(117, 232, 255, 0.7);
+  background:
+    linear-gradient(100deg, rgba(60, 223, 255, 0.94), rgba(68, 138, 255, 0.9) 50%, rgba(179, 92, 255, 0.9));
+  color: #f2f9ff;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.96rem;
+  font-weight: 700;
+  box-shadow:
+    inset 0 0 0 1px rgba(232, 248, 255, 0.45),
+    0 0 16px rgba(84, 206, 255, 0.6);
+}
+
+.breakdownGrid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.metricCard {
+  border-radius: 16px;
+  border: 1px solid rgba(106, 193, 248, 0.35);
+  padding: 12px;
+  background: rgba(7, 27, 78, 0.58);
+  display: grid;
+  gap: 4px;
+}
+
+.metricCard strong {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.66rem;
+}
+
+.metricCard span {
+  font-size: 0.84rem;
+  color: #a6d0ff;
+}
+
+.insightGrid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.insightPanel {
+  border-radius: 16px;
+  border: 1px solid rgba(108, 193, 246, 0.46);
+  padding: 12px;
+  background: rgba(7, 24, 72, 0.58);
+}
+
+.insightTitle {
+  margin: 0 0 10px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.93rem;
+  color: #d8efff;
+}
+
+.insightList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.insightList li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+
+.insightList p {
+  margin: 0;
+  color: #d2e8ff;
+  font-size: 0.86rem;
+  line-height: 1.42;
+}
+
+.bulletOk,
+.bulletWarn {
+  min-width: 34px;
+  height: 24px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.bulletOk {
+  border: 1px solid rgba(97, 235, 188, 0.5);
+  color: #92ffd7;
+  background: rgba(25, 99, 83, 0.4);
+}
+
+.bulletWarn {
+  border: 1px solid rgba(246, 148, 120, 0.56);
+  color: #ffd8c9;
+  background: rgba(122, 60, 34, 0.4);
+}
+
+.sideColumn {
+  display: grid;
+  gap: 10px;
+}
+
+.sideCard {
+  border: 1px solid rgba(118, 198, 255, 0.56);
+  border-radius: 22px;
+  padding: 14px;
+  background:
+    linear-gradient(180deg, rgba(10, 25, 76, 0.88), rgba(6, 16, 54, 0.76));
+  box-shadow:
+    inset 0 0 0 1px rgba(121, 221, 255, 0.14),
+    0 14px 34px rgba(3, 9, 35, 0.56);
+}
+
+.sideTitle {
+  margin: 0;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.02rem;
+}
+
+.sideScores {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.scoreLine {
+  border-top: 1px solid rgba(111, 195, 245, 0.28);
+  padding-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.84rem;
+  color: #b9dbff;
+}
+
+.scoreLine strong {
+  color: #80edff;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.02rem;
+}
+
+.tipsList {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+  color: #d2e8ff;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+.radarWrap {
+  margin-top: 10px;
+  height: 220px;
+  border-radius: 14px;
+  border: 1px solid rgba(109, 193, 248, 0.38);
+  background: rgba(7, 25, 72, 0.58);
+  padding: 10px;
+}
+
+.tagRow {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tagOk {
+  border: 1px solid rgba(97, 235, 188, 0.45);
+  color: #8cffd6;
+  background: rgba(25, 99, 83, 0.34);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.tagWarn {
+  border: 1px solid rgba(246, 148, 120, 0.56);
+  color: #ffd8c9;
+  background: rgba(122, 60, 34, 0.4);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.retryButton {
+  width: 100%;
+  height: 52px;
+  border-radius: 14px;
+  border: 1px solid rgba(248, 150, 255, 0.5);
+  background:
+    linear-gradient(95deg, rgba(56, 201, 241, 0.88), rgba(87, 108, 244, 0.9) 50%, rgba(188, 91, 245, 0.88));
+  color: #f7fbff;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.96rem;
+  font-weight: 700;
+  box-shadow:
+    inset 0 0 0 1px rgba(236, 248, 255, 0.4),
+    0 0 16px rgba(193, 117, 255, 0.4);
+}
+
+.planCard {
+  border: 1px solid rgba(118, 198, 255, 0.56);
+  border-radius: 24px;
+  padding: 16px;
+  background:
+    linear-gradient(180deg, rgba(10, 25, 76, 0.88), rgba(6, 16, 54, 0.76));
+  box-shadow:
+    inset 0 0 0 1px rgba(121, 221, 255, 0.14),
+    0 16px 36px rgba(3, 9, 35, 0.58);
+}
+
+.planHeader h3 {
+  margin: 0;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.06rem;
+}
+
+.planHeader p {
+  margin: 8px 0 0;
+  color: #b4d9ff;
+  font-size: 0.9rem;
+}
+
+.planList {
+  margin-top: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.planItem {
+  border: 1px solid rgba(106, 193, 248, 0.35);
+  border-radius: 14px;
+  padding: 10px;
+  background: rgba(7, 27, 78, 0.58);
+  display: grid;
+  gap: 6px;
+}
+
+.dayBadge {
+  width: fit-content;
+  border-radius: 999px;
+  border: 1px solid rgba(109, 224, 255, 0.58);
+  color: #b8f4ff;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.72rem;
+  padding: 4px 10px;
+}
+
+.planItem p {
+  margin: 0;
+  color: #d2e8ff;
+  line-height: 1.42;
+  font-size: 0.88rem;
+}
+
+.matchCard {
+  border: 1px solid rgba(118, 198, 255, 0.56);
+  border-radius: 24px;
+  padding: 16px;
+  background:
+    linear-gradient(180deg, rgba(10, 25, 76, 0.88), rgba(6, 16, 54, 0.76));
+  box-shadow:
+    inset 0 0 0 1px rgba(121, 221, 255, 0.14),
+    0 16px 36px rgba(3, 9, 35, 0.58);
+}
+
+.matchCard h3 {
+  margin: 0;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.02rem;
+}
+
+.matchGrid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.matchBlock {
+  border: 1px solid rgba(109, 193, 248, 0.38);
+  border-radius: 14px;
+  padding: 10px;
+  background: rgba(7, 25, 72, 0.58);
+}
+
+.blockLabel {
+  margin: 0;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #96ccff;
+  font-weight: 800;
+}
+
+.chipsRow {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chipPositive,
+.chipNegative {
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.chipPositive {
+  border: 1px solid rgba(97, 235, 188, 0.45);
+  color: #8cffd6;
+  background: rgba(25, 99, 83, 0.34);
+}
+
+.chipNegative {
+  border: 1px solid rgba(246, 148, 120, 0.56);
+  color: #ffd8c9;
+  background: rgba(122, 60, 34, 0.4);
+}
+
+.emptyText {
+  color: #9fc5f0;
+  font-size: 0.84rem;
+}
+
+@media (max-width: 1100px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .scoreHeader {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .breakdownGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .insightGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .matchGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding: 12px;
+    background:
+      linear-gradient(165deg, rgba(3, 8, 30, 0.86), rgba(5, 14, 44, 0.8) 52%, rgba(20, 18, 62, 0.86)),
+      url('/img/fundo_mob.png');
+    background-size: cover;
+    background-position: center top;
+    background-repeat: no-repeat;
+  }
+
+  .brandTitle {
+    font-size: 1.16rem;
+  }
+
+  .profileChip {
+    height: 44px;
+    padding-right: 10px;
+    font-size: 0.86rem;
+  }
+
+  .profileDot {
+    width: 28px;
+    height: 28px;
+    font-size: 0.76rem;
+  }
+
+  .heroTitle p {
+    font-size: 0.92rem;
+  }
+
+  .scoreRing {
+    width: 170px;
+    height: 170px;
+  }
+
+  .scoreCore strong {
+    font-size: 2.5rem;
+  }
+}

@@ -999,6 +999,37 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
           ? 'PARAR GRAVACAO'
           : 'COMECAR RESPOSTA';
 
+  const latestEvaluation = historyRef.current[historyRef.current.length - 1]?.evaluation;
+  const responseQuality =
+    latestEvaluation?.criteriaScores?.technicalPrecision ??
+    latestEvaluation?.scores?.technical ??
+    null;
+  const confidenceScore =
+    latestEvaluation?.criteriaScores?.communication ??
+    latestEvaluation?.scores?.communication ??
+    null;
+
+  const responseQualityLabel =
+    typeof responseQuality === 'number' ? responseQuality.toFixed(1) : '--';
+  const confidenceLabel =
+    typeof confidenceScore === 'number' ? confidenceScore.toFixed(1) : '--';
+
+  const sideStatusText =
+    flowState === 'evaluating'
+      ? 'IA analisando sua resposta...'
+      : flowState === 'next_question'
+        ? 'Proxima pergunta em instantes.'
+        : flowState === 'awaiting_answer' || flowState === 'recording'
+          ? 'Responda quando estiver pronto.'
+          : flowState === 'asking'
+            ? 'Escute a pergunta e prepare sua resposta.'
+            : isFinished
+              ? 'Entrevista encerrada.'
+              : 'Preparando entrevista...';
+
+  const topStacks = (config.stacks || []).slice(0, 3);
+  const roleSummary = `${plan.roleTitleGuess || config.track || 'Entrevista'} | Nivel: ${config.seniority} | Stack: ${topStacks.length ? topStacks.join(', ') : 'Nao informado'}`;
+
   const handlePrimaryAction = async () => {
     if (!currentQuestion) return;
     if (flowState === 'evaluating' || isFinished) return;
@@ -1024,6 +1055,18 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
 
   return (
     <div className={styles.room} aria-label="Tela de entrevista">
+      <header className={styles.brandHeader}>
+        <div className={styles.brandRow}>
+          <div className={styles.brandLogo}>
+            <img src="/img/logo.png" alt="Dev Interview AI" className="w-full h-full object-contain rounded-xl" />
+          </div>
+          <h1 className={styles.brandTitle}>
+            Dev Interview <strong>AI</strong>
+          </h1>
+        </div>
+        <p className={styles.brandSubtitle}>{roleSummary}</p>
+      </header>
+
       <div className={styles.topBarArea}>
         <div className={styles.topBarInner}>
           <TopBar
@@ -1046,7 +1089,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
             <AvatarInterviewerCard
               isSpeaking={isAvatarSpeaking}
               mouthOpen={mouthOpen}
-              avatarGender="male"
+              avatarGender="female"
               showHeader={false}
             />
           </div>
@@ -1062,15 +1105,76 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
               contextLabel={contextLabel}
             />
           </div>
-          <div className={styles.cameraSlot}>
-            <UserCameraCard
-              label="Voce"
-              isReady={isMediaReady}
-              stream={stream}
-              isRecording={isRecording}
-              error={mediaError || recorderError}
-              compact
-            />
+
+          <div className={styles.rightColumn}>
+            <div className={styles.cameraSlot}>
+              <UserCameraCard
+                label="Voce"
+                isReady={isMediaReady}
+                stream={stream}
+                isRecording={isRecording}
+                error={mediaError || recorderError}
+                compact
+              />
+            </div>
+
+            <div className={styles.sideStatusCard}>
+              <div className={styles.sideCardTitle}>Coaching e feedback</div>
+              <div className={styles.scoreLine}>
+                <span>Qualidade da resposta</span>
+                <strong>{responseQualityLabel}</strong>
+              </div>
+              <div className={styles.scoreLine}>
+                <span>Confianca ao falar</span>
+                <strong>{confidenceLabel}</strong>
+              </div>
+              <p className={styles.nextHint}>{sideStatusText}</p>
+            </div>
+
+            {!isFinished && (liveCoachLoading || liveCoachInsight || liveCoachError) && (
+              <div className={styles.liveCoachCard}>
+                <div className={styles.liveCoachHeader}>
+                  <span className={styles.liveCoachTitle}>Live Coach</span>
+                  {liveCoachInsight?.questionType && (
+                    <span className={styles.liveCoachBadge}>{liveCoachInsight.questionType}</span>
+                  )}
+                </div>
+
+                {liveCoachLoading && <p className={styles.liveCoachText}>Analisando contexto da pergunta...</p>}
+                {!liveCoachLoading && liveCoachError && <p className={styles.liveCoachError}>{liveCoachError}</p>}
+                {!liveCoachLoading && !liveCoachError && liveCoachInsight?.suggestion && (
+                  <p className={styles.liveCoachText}>{liveCoachInsight.suggestion}</p>
+                )}
+                {!liveCoachLoading && !liveCoachError && !!liveCoachInsight?.keyPoints?.length && (
+                  <ul className={styles.liveCoachList}>
+                    {liveCoachInsight.keyPoints.slice(0, 3).map((point, idx) => (
+                      <li key={`${idx}-${point}`}>{point}</li>
+                    ))}
+                  </ul>
+                )}
+                {liveCoachFeed.length > 0 && (
+                  <div className={styles.liveCoachFeed}>
+                    <p className={styles.liveCoachFeedTitle}>Ultimos insights</p>
+                    <ul className={styles.liveCoachFeedList}>
+                      {liveCoachFeed.slice(0, 3).map((item) => (
+                        <li key={item.id} className={styles.liveCoachFeedItem}>
+                          <div className={styles.liveCoachFeedMeta}>
+                            <span>{item.questionType || 'general'}</span>
+                            <span>
+                              {new Date(item.createdAt).toLocaleTimeString([], {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </span>
+                          </div>
+                          <p className={styles.liveCoachFeedText}>{item.suggestion}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -1095,50 +1199,6 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
               >
                 Texto
               </button>
-            </div>
-          )}
-          {!isFinished && (liveCoachLoading || liveCoachInsight || liveCoachError) && (
-            <div className={styles.liveCoachCard}>
-              <div className={styles.liveCoachHeader}>
-                <span className={styles.liveCoachTitle}>Live Coach</span>
-                {liveCoachInsight?.questionType && (
-                  <span className={styles.liveCoachBadge}>{liveCoachInsight.questionType}</span>
-                )}
-              </div>
-
-              {liveCoachLoading && <p className={styles.liveCoachText}>Analisando contexto da pergunta...</p>}
-              {!liveCoachLoading && liveCoachError && <p className={styles.liveCoachError}>{liveCoachError}</p>}
-              {!liveCoachLoading && !liveCoachError && liveCoachInsight?.suggestion && (
-                <p className={styles.liveCoachText}>{liveCoachInsight.suggestion}</p>
-              )}
-              {!liveCoachLoading && !liveCoachError && !!liveCoachInsight?.keyPoints?.length && (
-                <ul className={styles.liveCoachList}>
-                  {liveCoachInsight.keyPoints.slice(0, 3).map((point, idx) => (
-                    <li key={`${idx}-${point}`}>{point}</li>
-                  ))}
-                </ul>
-              )}
-              {liveCoachFeed.length > 0 && (
-                <div className={styles.liveCoachFeed}>
-                  <p className={styles.liveCoachFeedTitle}>Ultimos insights</p>
-                  <ul className={styles.liveCoachFeedList}>
-                    {liveCoachFeed.slice(0, 3).map((item) => (
-                      <li key={item.id} className={styles.liveCoachFeedItem}>
-                        <div className={styles.liveCoachFeedMeta}>
-                          <span>{item.questionType || 'general'}</span>
-                          <span>
-                            {new Date(item.createdAt).toLocaleTimeString([], {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </span>
-                        </div>
-                        <p className={styles.liveCoachFeedText}>{item.suggestion}</p>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
             </div>
           )}
           {isTextMode && (flowState === 'awaiting_answer' || flowState === 'evaluating') && (

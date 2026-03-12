@@ -1,8 +1,8 @@
-
 import React from 'react';
-import type { FinalReport, InterviewConfig } from '../../../shared/types';
+import { PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer } from 'recharts';
 import { I18N } from '../../../shared/constants';
-import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } from 'recharts';
+import type { FinalReport, InterviewConfig } from '../../../shared/types';
+import styles from './Report.module.css';
 
 interface Props {
   config: InterviewConfig;
@@ -10,8 +10,29 @@ interface Props {
   onBack?: () => void;
 }
 
+const scoreLabel = (score: number): string => {
+  if (score >= 8.5) return 'Excelente trabalho!';
+  if (score >= 7) return 'Boa evolucao!';
+  if (score >= 5.5) return 'Bom com potencial de melhora';
+  return 'Continue praticando';
+};
+
+const scoreText = (score: number): string => {
+  if (score >= 8.5) return 'Sua performance foi forte e consistente em toda a entrevista.';
+  if (score >= 7) return 'Voce demonstrou boa base tecnica e comunicacao clara.';
+  if (score >= 5.5) return 'Ha sinais positivos, com pontos claros para evoluir rapido.';
+  return 'Foque nos pontos de melhoria e pratique respostas estruturadas.';
+};
+
+const formatScore = (value: number): string => {
+  const safe = Number.isFinite(value) ? Math.min(10, Math.max(0, value)) : 0;
+  return safe.toFixed(1);
+};
+
 const Report: React.FC<Props> = ({ config, report, onBack }) => {
   const t = I18N[config.uiLanguage];
+  const overallScore = Number.isFinite(report.overallScore) ? Math.min(10, Math.max(0, report.overallScore)) : 0;
+  const overallPercent = Math.round((overallScore / 10) * 100);
 
   const summary = report.scoresSummary;
   const criteria = report.criteriaSummary;
@@ -24,138 +45,251 @@ const Report: React.FC<Props> = ({ config, report, onBack }) => {
         { subject: 'Comunicacao', A: criteria.communication, fullMark: 10 },
       ]
     : [
-        { subject: 'Comunicacao', A: summary?.communication ?? Math.max(3, report.overallScore + 1), fullMark: 10 },
-        { subject: 'Tecnico', A: summary?.technical ?? Math.max(3, report.overallScore - 0.5), fullMark: 10 },
-        { subject: 'Problemas', A: summary?.problemSolving ?? Math.max(3, report.overallScore + 0.8), fullMark: 10 },
-        { subject: 'Postura', A: summary?.presence ?? Math.max(3, report.overallScore), fullMark: 10 },
+        { subject: 'Comunicacao', A: summary?.communication ?? Math.max(3, overallScore + 1), fullMark: 10 },
+        { subject: 'Tecnico', A: summary?.technical ?? Math.max(3, overallScore - 0.5), fullMark: 10 },
+        { subject: 'Problemas', A: summary?.problemSolving ?? Math.max(3, overallScore + 0.8), fullMark: 10 },
+        { subject: 'Postura', A: summary?.presence ?? Math.max(3, overallScore), fullMark: 10 },
       ];
 
+  const technicalScore = summary?.technical ?? Math.max(3, overallScore - 0.5);
+  const problemScore = summary?.problemSolving ?? Math.max(3, overallScore + 0.2);
+  const communicationScore = summary?.communication ?? Math.max(3, overallScore + 0.4);
+
+  const technicalFeedback = report.feedback?.technical || [];
+  const communicationFeedback = report.feedback?.communication || [];
+  const postureFeedback = report.feedback?.posture || [];
+
+  const strengths = technicalFeedback.slice(0, 3);
+  const improvements = communicationFeedback.slice(0, 3);
+  const coachingTips = [...technicalFeedback, ...communicationFeedback, ...postureFeedback].slice(0, 4);
+  const planSteps = (report.plan7Days || []).slice(0, 7);
+
+  const coveredSkills = report.jobMatch?.covered || [];
+  const gapSkills = report.jobMatch?.gaps || [];
+  const highlightSkills = coveredSkills.length > 0 ? coveredSkills.slice(0, 4) : (config.stacks || []).slice(0, 4);
+
+  const handleBack = () => {
+    if (onBack) {
+      onBack();
+      return;
+    }
+    window.location.reload();
+  };
+
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-1000 pb-20 max-w-5xl mx-auto w-full">
-      <div className="grid gap-6 lg:grid-cols-2">
-      {/* Resumo de Score */}
-      <div className="bg-slate-900/50 backdrop-blur-xl rounded-[2.5rem] p-8 border border-white/5 shadow-2xl flex flex-col items-center gap-8 text-center">
-        <div className="relative w-48 h-48 flex items-center justify-center">
-           <svg className="w-full h-full -rotate-90">
-              <circle cx="96" cy="96" r="84" fill="none" stroke="currentColor" strokeWidth="16" className="text-slate-800" />
-              <circle cx="96" cy="96" r="84" fill="none" stroke="currentColor" strokeWidth="16" strokeDasharray="527" strokeDashoffset={527 - (report.overallScore / 10) * 527} strokeLinecap="round" className="text-indigo-500 drop-shadow-[0_0_8px_rgba(99,102,241,0.5)]" />
-           </svg>
-           <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-5xl font-black text-white tracking-tighter">{report.overallScore}</span>
-              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-1">Score Geral</span>
-           </div>
-        </div>
-        
-        <div className="space-y-3">
-          <h2 className="text-2xl font-black text-white uppercase tracking-tight">{t.overall}</h2>
-          <div className="flex gap-2 flex-wrap justify-center">
-             <span className="px-4 py-2 bg-indigo-500 text-white rounded-xl text-[10px] font-black uppercase shadow-lg shadow-indigo-600/20">{report.levelEstimate}</span>
-             <span className="px-4 py-2 bg-slate-800 text-slate-400 rounded-xl text-[10px] font-black uppercase border border-white/5">{config.track}</span>
+    <div className={styles.page}>
+      <div className={styles.overlay} aria-hidden="true" />
+
+      <div className={styles.shell}>
+        <header className={styles.topBar}>
+          <div className={styles.brandRow}>
+            <div className={styles.logoBadge}>
+              <img src="/img/logo.png" alt="Dev Interview AI" className="w-full h-full object-contain rounded-xl" />
+            </div>
+            <h1 className={styles.brandTitle}>
+              Dev Interview <strong>AI</strong>
+            </h1>
           </div>
-        </div>
-      </div>
 
-      {/* Radar de Competências */}
-      <div className="bg-slate-900/50 backdrop-blur-xl rounded-[2.5rem] p-6 border border-white/5 shadow-2xl h-80">
-        <div className="mb-4 text-center">
-           <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Equilíbrio de Skills</span>
-        </div>
-        <ResponsiveContainer width="100%" height="100%">
-          <RadarChart cx="50%" cy="50%" outerRadius="75%" data={radarData}>
-            <PolarGrid stroke="#1e293b" />
-            <PolarAngleAxis dataKey="subject" tick={{ fill: '#64748b', fontSize: 10, fontWeight: 800 }} />
-            <Radar name="Performance" dataKey="A" stroke="#6366f1" fill="#6366f1" fillOpacity={0.4} />
-          </RadarChart>
-        </ResponsiveContainer>
-      </div>
-      </div>
+          <div className={styles.profileChip}>
+            <span className={styles.profileDot}>R</span>
+            <span>Relatorio</span>
+          </div>
+        </header>
 
-      {/* Feedback Detalhado */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <section className="bg-slate-900/50 backdrop-blur-xl rounded-[2.5rem] p-8 border border-white/5 shadow-2xl">
-           <h3 className="text-emerald-400 font-black text-[11px] uppercase mb-8 tracking-[0.2em]">{t.strengths}</h3>
-           <ul className="space-y-6">
-              {report.feedback.technical.slice(0, 3).map((item, i) => (
-                <li key={i} className="flex gap-5">
-                  <div className="w-8 h-8 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/20 text-xs">✓</div>
-                  <p className="text-slate-300 text-xs font-medium leading-relaxed">{item}</p>
-                </li>
-              ))}
-           </ul>
+        <section className={styles.heroTitle}>
+          <h2>Relatorio da Entrevista</h2>
+          <p>Confira sua performance, feedbacks e proximos passos.</p>
         </section>
 
-        <section className="bg-slate-900/50 backdrop-blur-xl rounded-[2.5rem] p-8 border border-white/5 shadow-2xl">
-           <h3 className="text-orange-400 font-black text-[11px] uppercase mb-8 tracking-[0.2em]">{t.improvements}</h3>
-           <ul className="space-y-6">
-              {report.feedback.communication.slice(0, 3).map((item, i) => (
-                <li key={i} className="flex gap-5">
-                  <div className="w-8 h-8 rounded-2xl bg-orange-500/20 text-orange-400 flex items-center justify-center shrink-0 border border-orange-500/20 text-xs font-black">!</div>
-                  <p className="text-slate-300 text-xs font-medium leading-relaxed">{item}</p>
-                </li>
-              ))}
-           </ul>
-        </section>
-      </div>
-
-      {/* Plano de 7 Dias */}
-      <div className="bg-indigo-600 rounded-[3rem] p-8 shadow-2xl shadow-indigo-600/20">
-         <div className="mb-8">
-           <h3 className="text-white font-black text-[11px] uppercase tracking-[0.2em] opacity-80">{t.trainingPlan}</h3>
-           <p className="text-indigo-100 text-sm font-bold">Roteiro para o Próximo Nível</p>
-         </div>
-         <div className="space-y-8">
-            {report.plan7Days.map((step) => (
-              <div key={step.day} className="flex gap-6 items-start">
-                 <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center font-black text-indigo-600 shrink-0 shadow-lg">
-                    {step.day}
-                 </div>
-                 <div>
-                    <h4 className="text-white font-black text-xs uppercase tracking-tighter mb-1">Dia {step.day}</h4>
-                    <p className="text-indigo-100/80 text-xs font-medium leading-relaxed">{step.task}</p>
-                 </div>
+        <div className={styles.layout}>
+          <section className={styles.mainCard}>
+            <div className={styles.scoreHeader}>
+              <div className={styles.scoreIntro}>
+                <p className={styles.kicker}>{t.overall}</p>
+                <h3>{scoreLabel(overallScore)}</h3>
+                <p className={styles.scoreText}>{scoreText(overallScore)}</p>
               </div>
+
+              <div className={styles.scoreVisual}>
+                <div
+                  className={styles.scoreRing}
+                  style={{
+                    background: `conic-gradient(#64eeff ${overallPercent}%, rgba(93, 112, 222, 0.28) ${overallPercent}% 100%)`,
+                  }}
+                >
+                  <div className={styles.scoreCore}>
+                    <strong>{formatScore(overallScore)}</strong>
+                    <span>de 10</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className={styles.actionRow}>
+              <button
+                type="button"
+                className={styles.studyButton}
+                onClick={() => {
+                  const target = document.getElementById('study-plan');
+                  if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }
+                }}
+              >
+                Ver plano de estudo
+              </button>
+            </div>
+
+            <div className={styles.breakdownGrid}>
+              <article className={styles.metricCard}>
+                <strong>{formatScore(technicalScore)}</strong>
+                <span>Tecnico</span>
+              </article>
+              <article className={styles.metricCard}>
+                <strong>{formatScore(problemScore)}</strong>
+                <span>Resolucao de problemas</span>
+              </article>
+              <article className={styles.metricCard}>
+                <strong>{formatScore(communicationScore)}</strong>
+                <span>Comunicacao</span>
+              </article>
+            </div>
+
+            <div className={styles.insightGrid}>
+              <article className={styles.insightPanel}>
+                <h4 className={styles.insightTitle}>{t.strengths}</h4>
+                <ul className={styles.insightList}>
+                  {strengths.length === 0 && <li className={styles.emptyText}>Sem pontos registrados.</li>}
+                  {strengths.map((item, index) => (
+                    <li key={`strength-${index}`}>
+                      <span className={styles.bulletOk}>OK</span>
+                      <p>{item}</p>
+                    </li>
+                  ))}
+                </ul>
+              </article>
+
+              <article className={styles.insightPanel}>
+                <h4 className={styles.insightTitle}>{t.improvements}</h4>
+                <ul className={styles.insightList}>
+                  {improvements.length === 0 && <li className={styles.emptyText}>Sem pontos registrados.</li>}
+                  {improvements.map((item, index) => (
+                    <li key={`improvement-${index}`}>
+                      <span className={styles.bulletWarn}>UP</span>
+                      <p>{item}</p>
+                    </li>
+                  ))}
+                </ul>
+              </article>
+            </div>
+          </section>
+
+          <aside className={styles.sideColumn}>
+            <section className={styles.sideCard}>
+              <h3 className={styles.sideTitle}>Coaching e feedback</h3>
+              <div className={styles.sideScores}>
+                <div className={styles.scoreLine}>
+                  <span>Qualidade da resposta</span>
+                  <strong>{formatScore(technicalScore)}</strong>
+                </div>
+                <div className={styles.scoreLine}>
+                  <span>Confianca ao falar</span>
+                  <strong>{formatScore(communicationScore)}</strong>
+                </div>
+              </div>
+
+              <ul className={styles.tipsList}>
+                {coachingTips.length === 0 && <li>Nenhuma dica adicional neste momento.</li>}
+                {coachingTips.map((tip, index) => (
+                  <li key={`tip-${index}`}>{tip}</li>
+                ))}
+              </ul>
+            </section>
+
+            <section className={styles.sideCard}>
+              <h3 className={styles.sideTitle}>Analise de skills</h3>
+              <div className={styles.radarWrap}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="72%">
+                    <PolarGrid stroke="rgba(124, 171, 255, 0.35)" />
+                    <PolarAngleAxis dataKey="subject" tick={{ fill: '#9fd6ff', fontSize: 10, fontWeight: 700 }} />
+                    <Radar
+                      name="Performance"
+                      dataKey="A"
+                      stroke="#62f0ff"
+                      fill="#7f68ff"
+                      fillOpacity={0.42}
+                    />
+                  </RadarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className={styles.tagRow}>
+                {highlightSkills.map((skill) => (
+                  <span key={`highlight-${skill}`} className={styles.tagOk}>
+                    {skill}
+                  </span>
+                ))}
+                {highlightSkills.length === 0 && <span className={styles.emptyText}>Sem stack destacada.</span>}
+              </div>
+            </section>
+
+            <button type="button" className={styles.retryButton} onClick={handleBack}>
+              Praticar novamente
+            </button>
+          </aside>
+        </div>
+
+        <section id="study-plan" className={styles.planCard}>
+          <div className={styles.planHeader}>
+            <h3>{t.trainingPlan}</h3>
+            <p>Roteiro objetivo para evoluir no proximo ciclo.</p>
+          </div>
+
+          <div className={styles.planList}>
+            {planSteps.length === 0 && (
+              <div className={styles.emptyText}>Nao foi gerado um plano de estudo nesta entrevista.</div>
+            )}
+            {planSteps.map((step) => (
+              <article key={step.day} className={styles.planItem}>
+                <span className={styles.dayBadge}>Dia {step.day}</span>
+                <p>{step.task}</p>
+              </article>
             ))}
-         </div>
-      </div>
-
-      {config.jobDescription && (
-        <section className="bg-slate-900/50 backdrop-blur-xl rounded-[2.5rem] p-8 border border-white/5 shadow-2xl">
-           <h3 className="text-indigo-400 font-black text-[11px] uppercase mb-10 tracking-[0.2em]">{t.jobMatch}</h3>
-           <div className="space-y-10">
-              <div className="space-y-4">
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t.covered}</p>
-                <div className="flex flex-wrap gap-2">
-                   {report.jobMatch.covered.map(skill => (
-                     <span key={skill} className="px-4 py-2 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-xl text-[10px] font-black uppercase">{skill}</span>
-                   ))}
-                </div>
-              </div>
-              <div className="space-y-4">
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t.gaps}</p>
-                <div className="flex flex-wrap gap-2">
-                   {report.jobMatch.gaps.map(skill => (
-                     <span key={skill} className="px-4 py-2 bg-red-500/10 text-red-400 border border-red-500/20 rounded-xl text-[10px] font-black uppercase">{skill}</span>
-                   ))}
-                </div>
-              </div>
-           </div>
+          </div>
         </section>
-      )}
 
-      {/* Botão de Ação Final */}
-      <div className="flex justify-center pt-8">
-         <button 
-           onClick={() => {
-             if (onBack) {
-               onBack();
-               return;
-             }
-             window.location.reload();
-           }}
-           className="w-full py-6 bg-white text-slate-900 font-black rounded-[2.5rem] shadow-2xl active:scale-95 transition-all text-sm uppercase tracking-[0.2em] border-b-8 border-slate-300"
-         >
-           Finalizar e Voltar
-         </button>
+        {config.jobDescription && (
+          <section className={styles.matchCard}>
+            <h3>{t.jobMatch}</h3>
+
+            <div className={styles.matchGrid}>
+              <div className={styles.matchBlock}>
+                <p className={styles.blockLabel}>{t.covered}</p>
+                <div className={styles.chipsRow}>
+                  {coveredSkills.length === 0 && <span className={styles.emptyText}>Nenhuma habilidade coberta.</span>}
+                  {coveredSkills.map((skill) => (
+                    <span key={`covered-${skill}`} className={styles.chipPositive}>
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className={styles.matchBlock}>
+                <p className={styles.blockLabel}>{t.gaps}</p>
+                <div className={styles.chipsRow}>
+                  {gapSkills.length === 0 && <span className={styles.emptyText}>Nenhum gap detectado.</span>}
+                  {gapSkills.map((skill) => (
+                    <span key={`gap-${skill}`} className={styles.chipNegative}>
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
       </div>
     </div>
   );

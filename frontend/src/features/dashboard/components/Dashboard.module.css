@@ -1,0 +1,503 @@
+@import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@400;600;700;800&family=Orbitron:wght@600;700;800&display=swap');
+
+.page {
+  position: relative;
+  min-height: 100dvh;
+  padding: 20px 18px 28px;
+  overflow: hidden;
+  color: #eef4ff;
+  background:
+    linear-gradient(155deg, rgba(3, 10, 34, 0.82), rgba(4, 15, 50, 0.76) 50%, rgba(22, 20, 68, 0.84)),
+    url('/img/fundo.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  font-family: 'Exo 2', sans-serif;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(88, 156, 255, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(88, 156, 255, 0.12) 1px, transparent 1px);
+  background-size: 48px 48px;
+  opacity: 0.12;
+}
+
+.shell {
+  position: relative;
+  z-index: 1;
+  width: min(1160px, 100%);
+  margin: 0 auto;
+}
+
+.topBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.brandRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(119, 212, 255, 0.28);
+  background: rgba(10, 24, 68, 0.48);
+  box-shadow:
+    inset 0 0 0 1px rgba(91, 227, 255, 0.2),
+    0 14px 35px rgba(3, 10, 38, 0.55);
+}
+
+.logoBadge {
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: transparent;
+  box-shadow: none;
+}
+
+.brandTitle {
+  margin: 0;
+  font-family: 'Orbitron', sans-serif;
+  font-size: clamp(1.36rem, 2.2vw, 2.24rem);
+  letter-spacing: 0.01em;
+}
+
+.brandTitle strong {
+  color: #6be7ff;
+}
+
+.profileButton {
+  border: 1px solid rgba(117, 205, 255, 0.36);
+  border-radius: 999px;
+  background: rgba(8, 24, 68, 0.56);
+  color: #e8f5ff;
+  height: 52px;
+  padding: 0 16px 0 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.04rem;
+  font-weight: 700;
+}
+
+.profileButton img,
+.profileButton span:first-child {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  object-fit: cover;
+  background: rgba(111, 196, 255, 0.22);
+  border: 1px solid rgba(158, 224, 255, 0.34);
+}
+
+.hero {
+  text-align: center;
+  margin: 20px 0 16px;
+}
+
+.hero h2 {
+  margin: 0;
+  font-family: 'Orbitron', sans-serif;
+  font-size: clamp(1.58rem, 2.8vw, 2.9rem);
+  color: #74ebff;
+}
+
+.hero p {
+  margin: 8px 0 0;
+  color: #b0d5ff;
+  font-size: 1.1rem;
+}
+
+.quickGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.quickCard {
+  border: 1px solid rgba(118, 198, 255, 0.56);
+  border-radius: 22px;
+  padding: 16px;
+  text-align: left;
+  background:
+    linear-gradient(180deg, rgba(10, 25, 76, 0.88), rgba(6, 16, 54, 0.76));
+  color: #edf8ff;
+  box-shadow:
+    inset 0 0 0 1px rgba(121, 221, 255, 0.14),
+    0 16px 36px rgba(3, 9, 35, 0.58);
+  display: grid;
+  gap: 8px;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.quickCard:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 0 0 1px rgba(160, 238, 255, 0.25),
+    0 0 26px rgba(81, 213, 255, 0.36);
+}
+
+.quickIcon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #daf8ff;
+  background: rgba(36, 86, 153, 0.5);
+  border: 1px solid rgba(113, 222, 255, 0.4);
+}
+
+.quickCard h3 {
+  margin: 4px 0 0;
+  font-size: 1.7rem;
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 700;
+}
+
+.quickCard p {
+  margin: 0;
+  color: #a6cbfa;
+  font-size: 1rem;
+}
+
+.quickAction {
+  margin-top: 4px;
+  height: 44px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(117, 232, 255, 0.7);
+  background:
+    linear-gradient(100deg, rgba(60, 223, 255, 0.94), rgba(68, 138, 255, 0.9) 50%, rgba(179, 92, 255, 0.9));
+  color: #f2f9ff;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.98rem;
+  font-weight: 700;
+}
+
+.panelGrid {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: 1.25fr 1fr;
+  gap: 14px;
+}
+
+.mainPanel,
+.sidePanel {
+  border: 1px solid rgba(118, 198, 255, 0.56);
+  border-radius: 24px;
+  padding: 16px;
+  background:
+    linear-gradient(180deg, rgba(10, 25, 76, 0.88), rgba(6, 16, 54, 0.76));
+  box-shadow:
+    inset 0 0 0 1px rgba(121, 221, 255, 0.14),
+    0 14px 34px rgba(3, 9, 35, 0.56);
+}
+
+.panelTitle {
+  margin: 0;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.metrics {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.metricCard {
+  border-radius: 12px;
+  border: 1px solid rgba(106, 193, 248, 0.35);
+  padding: 10px;
+  background: rgba(7, 27, 78, 0.58);
+  display: grid;
+  gap: 4px;
+}
+
+.metricLabel {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #8ecdfd;
+  font-weight: 800;
+}
+
+.metricCard strong {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.32rem;
+}
+
+.chartCard {
+  margin-top: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(109, 193, 248, 0.38);
+  padding: 12px;
+  background: rgba(7, 25, 72, 0.58);
+}
+
+.chartHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.82rem;
+  color: #9ecbfb;
+}
+
+.chartBars {
+  margin-top: 12px;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 134px;
+}
+
+.barGroup {
+  flex: 1;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+}
+
+.barTrack {
+  width: 100%;
+  height: 108px;
+  border-radius: 10px;
+  border: 1px solid rgba(104, 180, 237, 0.25);
+  background: rgba(5, 18, 52, 0.5);
+  display: flex;
+  align-items: flex-end;
+  padding: 4px;
+}
+
+.barValue {
+  width: 100%;
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(114, 238, 255, 0.95), rgba(84, 167, 255, 0.92) 52%, rgba(168, 94, 255, 0.9));
+  box-shadow: 0 0 10px rgba(100, 217, 255, 0.45);
+}
+
+.barLabel {
+  font-size: 0.74rem;
+  color: #8cc6f8;
+}
+
+.profileSignals {
+  margin-top: 12px;
+}
+
+.profileSignals h4 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #b7dcff;
+}
+
+.signalRow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.signalChip {
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.signalOk {
+  border: 1px solid rgba(97, 235, 188, 0.45);
+  color: #8cffd6;
+  background: rgba(25, 99, 83, 0.34);
+}
+
+.signalWarn {
+  border: 1px solid rgba(253, 193, 107, 0.44);
+  color: #ffe2b7;
+  background: rgba(118, 77, 22, 0.35);
+}
+
+.profileTexts {
+  margin-top: 10px;
+  display: grid;
+  gap: 7px;
+  font-size: 0.85rem;
+  color: #d1e6ff;
+}
+
+.profileTexts p {
+  margin: 0;
+}
+
+.emptyText {
+  margin: 10px 0 0;
+  font-size: 0.84rem;
+  color: #9fc5f0;
+}
+
+.sidePanel {
+  display: grid;
+  align-content: flex-start;
+  gap: 10px;
+}
+
+.activityItem {
+  border: 1px solid rgba(100, 185, 240, 0.34);
+  border-radius: 14px;
+  padding: 10px;
+  background: rgba(7, 25, 72, 0.58);
+}
+
+.activityTop {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.activityRole {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.activityDate {
+  margin: 2px 0 0;
+  font-size: 0.75rem;
+  color: #8dbef3;
+}
+
+.scoreBadge {
+  height: 28px;
+  min-width: 34px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(111, 229, 255, 0.52);
+  background: rgba(18, 63, 114, 0.54);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.activityActions {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.activityActions button {
+  border: 1px solid rgba(108, 193, 246, 0.5);
+  background: rgba(8, 29, 84, 0.66);
+  color: #d6ebff;
+  border-radius: 999px;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.traceBox {
+  margin-top: 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(115, 201, 248, 0.33);
+  background: rgba(6, 23, 67, 0.6);
+  padding: 8px;
+  font-size: 0.74rem;
+  color: #c9e2fb;
+}
+
+.traceBox p {
+  margin: 0;
+}
+
+.traceError {
+  color: #ffb8d0;
+}
+
+.traceData {
+  display: grid;
+  gap: 5px;
+}
+
+.traceData strong {
+  color: #e8f7ff;
+}
+
+@media (max-width: 1024px) {
+  .quickGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .panelGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding: 12px;
+    background:
+      linear-gradient(165deg, rgba(3, 8, 30, 0.86), rgba(5, 14, 44, 0.8) 52%, rgba(20, 18, 62, 0.86)),
+      url('/img/fundo_mob.png');
+    background-size: cover;
+    background-position: center top;
+    background-repeat: no-repeat;
+  }
+
+  .brandTitle {
+    font-size: 1.2rem;
+  }
+
+  .profileButton {
+    height: 44px;
+    padding-right: 10px;
+    font-size: 0.92rem;
+  }
+
+  .profileButton img,
+  .profileButton span:first-child {
+    width: 30px;
+    height: 30px;
+  }
+
+  .hero {
+    margin: 14px 0 12px;
+  }
+
+  .hero p {
+    font-size: 0.92rem;
+  }
+
+  .quickCard h3 {
+    font-size: 1.2rem;
+  }
+
+  .metrics {
+    grid-template-columns: 1fr;
+  }
+}

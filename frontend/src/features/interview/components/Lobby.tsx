@@ -1,17 +1,30 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { InterviewConfig, InterviewPlan } from '../../../shared/types';
+import type { CandidateProfile, InterviewConfig, InterviewPlan } from '../../../shared/types';
 import type { DifficultyLevel } from '../../../shared/types/interview';
+import type { Track } from '../../../shared/types';
 import { clampDuration } from '../../../shared/constants';
 import { BackendApi } from '../../../shared/services/backendApi';
+import styles from './Lobby.module.css';
 
 interface Props {
   config: InterviewConfig;
   userCredits: number;
+  candidateProfile?: CandidateProfile | null;
+  onOpenProfile?: () => void;
   onStart: (plan: InterviewPlan, sessionId: string, credits: number, difficultyLevel?: DifficultyLevel) => void;
   onBack: () => void;
 }
 
 const PLAN_GENERATE_TIMEOUT_MS = 8000;
+
+const TRACK_LABELS: Record<Track, string> = {
+  frontend: 'Frontend',
+  backend: 'Backend',
+  fullstack: 'Fullstack',
+  mobile: 'Mobile',
+  devops: 'DevOps',
+  data: 'Data',
+};
 
 const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number): Promise<T | null> => {
   return Promise.race([
@@ -53,17 +66,46 @@ const buildStarterPlan = (config: InterviewConfig, level: DifficultyLevel): Inte
   ],
 });
 
-const Lobby: React.FC<Props> = ({ config, userCredits, onStart, onBack }) => {
+const normalizeText = (value?: string | null): string => (value || '').trim();
+
+const getMissingProfileFields = (profile?: CandidateProfile | null): string[] => {
+  if (!profile) {
+    return ['cargo alvo', 'nivel de experiencia', 'skills principais', 'resumo do curriculo'];
+  }
+
+  const missing: string[] = [];
+  if (!normalizeText(profile.targetRole)) missing.push('cargo alvo');
+  if (!normalizeText(profile.experienceLevel)) missing.push('nivel de experiencia');
+  if ((profile.primarySkills || []).length === 0) missing.push('skills principais');
+  if (!normalizeText(profile.resumeSummary)) missing.push('resumo do curriculo');
+  return missing;
+};
+
+const hasJobProfileAnalysis = (profile?: CandidateProfile | null): boolean => {
+  if (!profile) return false;
+  if (profile.lastJobAnalysisId) return true;
+  if ((profile.recentJobAnalysisIds || []).length > 0) return true;
+  if (profile.lastJobAnalysisTrace?.source) return true;
+  if ((profile.analysisAudit || []).some((item) => item.kind === 'job')) return true;
+  return false;
+};
+
+const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenProfile, onStart, onBack }) => {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [loading, setLoading] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [showNoJobModal, setShowNoJobModal] = useState(false);
   const [selectedLevel, setSelectedLevel] = useState<DifficultyLevel>(config.difficultyLevel ?? 3);
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioIntervalRef = useRef<number | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const hasCredits = userCredits > 0;
+  const profileMissingFields = getMissingProfileFields(candidateProfile);
+  const profileCompleteFromCache = candidateProfile ? profileMissingFields.length === 0 : false;
+  const hasJobAnalysisFromCache = hasJobProfileAnalysis(candidateProfile);
+  const startBlockedByProfile = Boolean(candidateProfile && !profileCompleteFromCache);
 
   useEffect(() => {
     let cancelled = false;
@@ -124,8 +166,7 @@ const Lobby: React.FC<Props> = ({ config, userCredits, onStart, onBack }) => {
     };
   }, []);
 
-  const handleEnter = async () => {
-    if (!hasCredits) return;
+  const startInterviewSession = async () => {
     setLoading(true);
     setError(null);
 
@@ -175,110 +216,214 @@ const Lobby: React.FC<Props> = ({ config, userCredits, onStart, onBack }) => {
     }
   };
 
+  const handleEnter = async () => {
+    if (!hasCredits || loading) return;
+    setError(null);
+
+    const resolvedProfile =
+      candidateProfile ||
+      (await BackendApi.getCandidateProfile().catch(() => null));
+
+    const missingProfileFields = getMissingProfileFields(resolvedProfile);
+    if (missingProfileFields.length > 0) {
+      setError(
+        `Antes de iniciar a entrevista, complete o perfil do candidato. Faltando: ${missingProfileFields.join(', ')}.`,
+      );
+      return;
+    }
+
+    if (!hasJobProfileAnalysis(resolvedProfile)) {
+      setShowNoJobModal(true);
+      return;
+    }
+
+    await startInterviewSession();
+  };
+
+  const handleConfirmStartWithoutJob = async () => {
+    setShowNoJobModal(false);
+    await startInterviewSession();
+  };
+
+  const roleLabel = TRACK_LABELS[config.track as Track] || config.track || 'Entrevista tecnica';
+
   return (
-    <div className="h-full animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-5xl mx-auto w-full flex flex-col gap-5 overflow-hidden">
-      <p className="text-slate-400 text-sm font-medium">Sua sessao de treino tecnico comeca agora.</p>
+    <div className={styles.page}>
+      <div className={styles.overlay} aria-hidden="true" />
 
-      {error && (
-        <div className="bg-red-500/10 border border-red-500/30 text-red-200 text-xs font-semibold rounded-2xl px-4 py-3">
-          {error}
+      <div className={styles.shell}>
+        <header className={styles.hero}>
+          <h1>Prepare sua entrevista</h1>
+          <p>
+            Revise camera, microfone e inicie sua simulacao com IA.
+          </p>
+        </header>
+
+        {error && <div className={styles.alert}>{error}</div>}
+
+        <div className={styles.grid}>
+          <section className={styles.mainCard}>
+            <div className={styles.previewFrame}>
+              <video ref={videoRef} autoPlay muted playsInline className={styles.video} />
+              <div className={styles.videoShade} />
+
+              {!stream && (
+                <div className={styles.loadingState}>
+                  <div className={styles.spinner} />
+                  <span>Ativando camera e microfone...</span>
+                </div>
+              )}
+
+              <div className={styles.previewTop}>
+                <div className={styles.liveBadge}>
+                  <span />
+                  <strong>Preview ao vivo</strong>
+                </div>
+
+                <div className={styles.micBadge}>
+                  <div className={styles.micBars}>
+                    {[12, 24, 36].map((limit) => (
+                      <i key={limit} className={audioLevel > limit ? styles.micBarOn : ''} />
+                    ))}
+                  </div>
+                  <strong>Mic ativo</strong>
+                </div>
+              </div>
+
+              <div className={styles.previewBottom}>
+                <span>Entrevista para {roleLabel}</span>
+                <span>Nivel {selectedLevel}</span>
+              </div>
+            </div>
+
+            <div className={styles.statusRow}>
+              <span className={`${styles.statusChip} ${stream ? styles.statusOk : styles.statusWarn}`}>
+                Camera {stream ? 'pronta' : 'pendente'}
+              </span>
+              <span className={`${styles.statusChip} ${audioLevel > 6 ? styles.statusOk : styles.statusWarn}`}>
+                Microfone {audioLevel > 6 ? 'pronto' : 'pendente'}
+              </span>
+              <button
+                type="button"
+                className={styles.settingsButton}
+                onClick={() => setError('Ajuste permissoes de camera e microfone nas configuracoes do navegador.')}
+              >
+                Configuracoes
+              </button>
+            </div>
+
+            <div className={styles.metaRow}>
+              <span>Custo: 1 credito</span>
+              <span>Saldo: {userCredits}</span>
+              <span>Duracao aprox: {config.duration} min</span>
+            </div>
+
+            {candidateProfile && !profileCompleteFromCache && (
+              <div className={styles.warningBox}>
+                Complete o perfil do candidato antes de iniciar a entrevista.
+                <div className={styles.warningDetail}>
+                  Faltando: {profileMissingFields.join(', ')}.
+                </div>
+                {onOpenProfile && (
+                  <button type="button" onClick={onOpenProfile} className={styles.warningAction}>
+                    Ir para perfil
+                  </button>
+                )}
+              </div>
+            )}
+
+            {candidateProfile && profileCompleteFromCache && !hasJobAnalysisFromCache && (
+              <div className={styles.warningBox}>
+                Perfil do candidato pronto. A analise da vaga ainda nao foi feita e sera confirmada ao iniciar.
+              </div>
+            )}
+
+            {!hasCredits && (
+              <div className={styles.warningBox}>
+                Creditos insuficientes. Voce precisa de pelo menos 1 credito para iniciar.
+              </div>
+            )}
+
+            <div className={styles.levelBlock}>
+              <p>Nivel da entrevista</p>
+              <div className={styles.levelButtons}>
+                {([1, 2, 3] as DifficultyLevel[]).map((level) => (
+                  <button
+                    key={level}
+                    type="button"
+                    onClick={() => setSelectedLevel(level)}
+                    aria-pressed={selectedLevel === level}
+                    className={`${styles.levelButton} ${selectedLevel === level ? styles.levelButtonActive : ''}`}
+                  >
+                    {level}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className={styles.actionRow}>
+              <button type="button" onClick={onBack} className={styles.backButton}>
+                Voltar
+              </button>
+              <button
+                type="button"
+                onClick={handleEnter}
+                disabled={loading || !stream || !hasCredits || startBlockedByProfile}
+                className={styles.startButton}
+              >
+                {loading ? 'Iniciando...' : 'Iniciar entrevista'}
+              </button>
+            </div>
+          </section>
+
+          <aside className={styles.sideCard}>
+            <h3>Checklist da entrevista</h3>
+            <ul className={styles.checkList}>
+              <li>Teste camera e microfone antes de comecar.</li>
+              <li>Revise descricao da vaga e stack principal.</li>
+              <li>Escolha um nivel de dificuldade adequado.</li>
+              <li>Tenha exemplos reais de projetos para responder.</li>
+            </ul>
+
+            <div className={styles.sideMeta}>
+              <p><strong>Trilha:</strong> {roleLabel}</p>
+              <p><strong>Senioridade:</strong> {config.seniority}</p>
+              <p><strong>Idioma:</strong> {config.interviewLanguage}</p>
+            </div>
+          </aside>
         </div>
-      )}
 
-      <div className="relative flex-1 min-h-0 max-h-[52dvh] bg-slate-900 rounded-[3rem] overflow-hidden border-2 border-slate-800 shadow-3xl shadow-indigo-900/10">
-        <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover mirror grayscale-[20%]" />
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent" />
-
-        {!stream && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950 gap-4">
-            <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+        {showNoJobModal && (
+          <div className={styles.modalOverlay} role="dialog" aria-modal="true" aria-labelledby="no-job-modal-title">
+            <div className={styles.modalCard}>
+              <h3 id="no-job-modal-title">Iniciar sem perfil da vaga?</h3>
+              <p>
+                Voce ainda nao analisou a vaga. Deseja continuar mesmo assim?
+                A entrevista pode ficar menos personalizada.
+              </p>
+              <div className={styles.modalActions}>
+                <button
+                  type="button"
+                  onClick={() => setShowNoJobModal(false)}
+                  className={styles.modalCancelButton}
+                  disabled={loading}
+                >
+                  Voltar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void handleConfirmStartWithoutJob();
+                  }}
+                  className={styles.modalConfirmButton}
+                  disabled={loading}
+                >
+                  {loading ? 'Iniciando...' : 'Iniciar assim mesmo'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
-
-        <div className="absolute top-6 left-6 right-6 flex justify-between">
-          <div className="native-glass px-4 py-2 rounded-2xl flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-            <span className="text-[9px] font-black text-white uppercase tracking-widest">Live Preview</span>
-          </div>
-          <div className="native-glass px-4 py-2 rounded-2xl flex items-center gap-3">
-            <div className="flex gap-0.5 items-center">
-              {[1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className={`w-1 rounded-full ${audioLevel > i * 10 ? 'bg-indigo-400' : 'bg-slate-700'}`}
-                  style={{ height: '8px' }}
-                />
-              ))}
-            </div>
-            <span className="text-[9px] font-black text-white uppercase tracking-widest">Mic Active</span>
-          </div>
-        </div>
-
-        <div className="absolute bottom-8 left-8 right-8 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="native-glass p-4 rounded-[2rem] border-white/5 space-y-1">
-              <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Custo</p>
-              <p className="text-[10px] font-black text-amber-400 uppercase">1 Credito</p>
-            </div>
-            <div className="native-glass p-4 rounded-[2rem] border-white/5 space-y-1">
-              <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Saldo</p>
-              <p className="text-[10px] font-black text-white uppercase">{userCredits} Disp.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {!hasCredits && (
-        <div className="bg-red-500/10 border border-red-500/20 p-6 rounded-[2rem] text-center space-y-2">
-          <p className="text-red-400 text-xs font-black uppercase tracking-widest">Creditos Insuficientes</p>
-          <p className="text-slate-400 text-[10px] font-medium leading-relaxed">
-            Voce precisa de pelo menos 1 credito para iniciar uma simulacao.
-          </p>
-        </div>
-      )}
-
-      <div className="bg-slate-900/70 border border-white/5 rounded-[2rem] p-5 flex items-center justify-between gap-4">
-        <div>
-          <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">Nivel da Entrevista</p>
-          <p className="text-[11px] text-slate-400 font-medium mt-1">Escolha a dificuldade antes de iniciar</p>
-        </div>
-        <div className="flex gap-2">
-          {([1, 2, 3] as DifficultyLevel[]).map((level) => (
-            <button
-              key={level}
-              type="button"
-              onClick={() => setSelectedLevel(level)}
-              aria-pressed={selectedLevel === level}
-              className={`w-10 h-10 rounded-xl text-xs font-black border transition-all ${
-                selectedLevel === level
-                  ? 'bg-indigo-500 text-white border-indigo-400 shadow-lg shadow-indigo-500/30'
-                  : 'bg-slate-800 text-slate-400 border-white/5'
-              }`}
-            >
-              {level}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-4 gap-3">
-        <button
-          onClick={onBack}
-          className="col-span-1 py-7 rounded-[2.5rem] bg-slate-900 text-slate-400 font-black border border-white/5 active:scale-95 transition-all flex items-center justify-center"
-        >
-          {'<'}
-        </button>
-        <button
-          onClick={handleEnter}
-          disabled={loading || !stream || !hasCredits}
-          className={`col-span-3 py-7 rounded-[2.5rem] font-black text-sm uppercase tracking-[0.3em] transition-all shadow-2xl flex items-center justify-center gap-4 btn-haptic border-b-8 ${
-            loading || !stream || !hasCredits
-              ? 'bg-slate-800 text-slate-600 border-slate-900'
-              : 'bg-indigo-600 text-white border-indigo-800'
-          }`}
-        >
-          {loading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Iniciar Treino'}
-        </button>
       </div>
     </div>
   );
