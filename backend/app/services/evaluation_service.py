@@ -3,7 +3,10 @@ from __future__ import annotations
 import os
 import re
 
-from ..schemas import InterviewConfig
+from fastapi import HTTPException
+
+from ..ai.router import AIProviderError
+from ..schemas import AnswerEvaluation, InterviewConfig
 
 
 _DIMENSIONS = ("communication", "technical", "problemSolving", "presence")
@@ -292,11 +295,110 @@ def evaluate_audio(payload, user):
     # Lazy import avoids circular dependency: interview_core imports this module.
     from . import interview_core
 
-    return interview_core.evaluate_audio(payload, user)
+    interview_core._ensure_credits(user["uid"], required=1)
+
+    audio_bytes = interview_core._b64_to_bytes(payload.audioBase64)
+    transcript_fallback = None
+    prompt = interview_core._build_eval_prompt(
+        payload.config,
+        payload.question,
+        payload.confirmedName or "o candidato",
+        auth_token=user.get("token"),
+    )
+
+    try:
+        result = interview_core.ai_router.generate(
+            task_name="evaluate",
+            prompt=prompt,
+            max_tokens=400,
+            temperature=0.2,
+            response_mime_type="application/json",
+            media=[{"data": audio_bytes, "mime_type": payload.mimeType}],
+        )
+    except AIProviderError as e:
+        try:
+            transcript_fallback = interview_core._openai_transcribe_audio(audio_bytes, payload.mimeType)
+            prompt_txt = interview_core._build_eval_prompt(
+                payload.config,
+                payload.question,
+                payload.confirmedName or "o candidato",
+                transcript=transcript_fallback,
+                auth_token=user.get("token"),
+            )
+            result = interview_core.ai_router.generate(
+                task_name="evaluate",
+                prompt=prompt_txt,
+                max_tokens=400,
+                temperature=0.2,
+                response_mime_type="application/json",
+            )
+        except Exception:
+            interview_core._handle_ai_error(e)
+
+    try:
+        data = interview_core._safe_json_loads(result.output_text or "{}")
+        data = interview_core._normalize_eval_payload(data, transcript_fallback=transcript_fallback)
+        data = finalize_evaluation(data, payload.config, payload.question)
+        evaluation = AnswerEvaluation(**data)
+    except Exception:
+        try:
+            interview_core.logger.warning(
+                "Invalid AI evaluation payload (provider=%s model=%s)",
+                result.provider_used,
+                result.model_used,
+            )
+        except Exception:
+            pass
+        raise HTTPException(status_code=503, detail="AI retornou resposta invalida")
+
+    interview_core._debit_credits(user["uid"], amount=1)
+    return evaluation
 
 
 def evaluate_text(payload, user):
     # Lazy import avoids circular dependency: interview_core imports this module.
     from . import interview_core
 
-    return interview_core.evaluate_text(payload, user)
+    interview_core._ensure_credits(user["uid"], required=1)
+
+    transcript = (payload.transcript or "").strip()
+    if not transcript:
+        raise HTTPException(status_code=400, detail="transcript is required")
+
+    prompt = interview_core._build_eval_prompt(
+        payload.config,
+        payload.question,
+        payload.confirmedName or "o candidato",
+        transcript=transcript,
+        auth_token=user.get("token"),
+    )
+
+    try:
+        result = interview_core.ai_router.generate(
+            task_name="evaluate",
+            prompt=prompt,
+            max_tokens=400,
+            temperature=0.2,
+            response_mime_type="application/json",
+        )
+    except AIProviderError as e:
+        interview_core._handle_ai_error(e)
+
+    try:
+        data = interview_core._safe_json_loads(result.output_text or "{}")
+        data = interview_core._normalize_eval_payload(data, transcript_fallback=transcript)
+        data = finalize_evaluation(data, payload.config, payload.question)
+        evaluation = AnswerEvaluation(**data)
+    except Exception:
+        try:
+            interview_core.logger.warning(
+                "Invalid AI text-evaluation payload (provider=%s model=%s)",
+                result.provider_used,
+                result.model_used,
+            )
+        except Exception:
+            pass
+        raise HTTPException(status_code=503, detail="AI retornou resposta invalida")
+
+    interview_core._debit_credits(user["uid"], amount=1)
+    return evaluation

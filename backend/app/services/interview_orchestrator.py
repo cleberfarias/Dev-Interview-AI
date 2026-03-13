@@ -22,7 +22,7 @@ from ..schemas import (
     OrchestratorStartRequest,
     OrchestratorTurnRequest,
 )
-from . import candidate_profile_service, interview_core, session_service
+from . import candidate_profile_service, session_service
 
 logger = logging.getLogger("uvicorn.error")
 

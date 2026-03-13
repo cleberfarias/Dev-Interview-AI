@@ -15,7 +15,6 @@ from ..firebase_admin import get_current_user
 from ..ai.prompts import evaluate_prompt, next_question_prompt, plan_prompt, report_prompt
 from ..ai.router import AIRouter, AIProviderError
 from ..mcp_client import get_rubric as mcp_get_rubric, get_recent_interviews as mcp_get_recent_interviews
-from ..repositories import session_repository, user_repository
 from ..services import evaluation_service, usage_policy_service
 from .. import tts as tts_module
 from ..schemas import (
@@ -187,45 +186,15 @@ def _build_report_context(user_uid: str, config: InterviewConfig, auth_token: Op
 
 @router.get("/health")
 def health():
-    return {"ok": True, "time": now_iso()}
+    from . import profile_service
+
+    return profile_service.health()
 
 @router.get("/me", response_model=UserProfile)
 def me(user=Depends(get_current_user)):
-    logger.info("GET /me called uid=%s email=%s", user.get("uid"), user.get("email"))
-    try:
-        data = user_repository.get_user(user["uid"])
-        if not data:
-            profile = {
-                "uid": user["uid"],
-                "name": user.get("name") or user.get("email", "Usuario").split("@")[0],
-                "displayName": user.get("displayName") or user.get("name") or user.get("email", "Usuario").split("@")[0],
-                "email": user.get("email", ""),
-                "avatar": user.get("picture"),
-                "photoURL": user.get("photoURL") or user.get("picture"),
-                "plan": os.environ.get("DEFAULT_PLAN", "free"),
-                "credits": _initial_credits(),
-                "createdAt": now_iso(),
-                "updatedAt": now_iso(),
-            }
-            user_repository.upsert_user(user["uid"], profile, merge=True)
-            return UserProfile(**profile)
+    from . import profile_service
 
-        data.setdefault("uid", user["uid"])
-        try:
-            data["interviews"] = user_repository.list_user_interviews(user["uid"], limit=20)
-        except Exception:
-            data.setdefault("interviews", [])
-        return UserProfile(**data)
-    except Exception:
-        logger.exception("GET /me failed; returning fallback profile")
-        return UserProfile(
-            uid=user["uid"],
-            name=user.get("name") or user.get("email", "Usuario").split("@")[0],
-            email=user.get("email", ""),
-            avatar=user.get("picture"),
-            credits=_initial_credits(),
-            interviews=[],
-        )
+    return profile_service.me(user)
 
 
 def _get_user_credits(user_uid: str) -> int:
@@ -783,92 +752,9 @@ def start_session(config: InterviewConfig, user=Depends(get_current_user)):
 
 @router.post("/sessions/{session_id}/plan/generate", response_model=PlanGenerateResponse)
 def generate_plan(session_id: str, user=Depends(get_current_user)):
-    data = session_repository.get_session(session_id)
-    if not data or data.get("uid") != user["uid"]:
-        raise HTTPException(status_code=404, detail="Sessao nao encontrada")
+    from . import planning_service
 
-    if data.get("plan"):
-        plan = InterviewPlan(**data.get("plan"))
-        return PlanGenerateResponse(
-            sessionId=session_id,
-            plan=plan,
-            plan_status=data.get("plan_status", "completed"),
-            provider_used=data.get("provider_used", "unknown"),
-            model_used=data.get("model_used", "unknown"),
-            latency_ms=int(data.get("latency_ms", 0) or 0),
-            tokens_used=data.get("tokens_used"),
-            credits=_get_user_credits(user["uid"]),
-        )
-
-    _ensure_credits(user["uid"], required=1)
-
-    config = InterviewConfig(**data.get("config"))
-    plan_context = _build_plan_context(user.get("uid"), config, auth_token=user.get("token"))
-    prompt = _build_plan_prompt(config, plan_context)
-
-    try:
-        result = ai_router.generate(
-            task_name="plan",
-            prompt=prompt,
-            max_tokens=800,
-            temperature=0.2,
-            response_mime_type="application/json",
-        )
-    except AIProviderError as e:
-        _handle_ai_error(e)
-
-    try:
-        payload = _safe_json_loads(result.output_text or "{}")
-        plan = _parse_plan_payload(payload, config)
-        if not plan:
-            raise ValueError("Invalid plan payload")
-    except Exception:
-        logger.warning("Invalid plan payload from AI (provider=%s model=%s)", result.provider_used, result.model_used)
-        # Retry once with stricter prompt
-        try:
-            retry_result = ai_router.generate(
-                task_name="plan",
-                prompt=_build_plan_prompt_strict(config, plan_context),
-                max_tokens=900,
-                temperature=0.1,
-                response_mime_type="application/json",
-            )
-            retry_payload = _safe_json_loads(retry_result.output_text or "{}")
-            plan = _parse_plan_payload(retry_payload, config)
-            if not plan:
-                raise ValueError("Invalid plan payload after retry")
-            result = retry_result
-        except AIProviderError as e:
-            _handle_ai_error(e)
-        except Exception:
-            raise HTTPException(status_code=503, detail="AI retornou resposta invalida")
-
-    new_credits = _debit_credits(user["uid"], amount=1)
-
-    session_repository.upsert_session(
-        session_id,
-        {
-            "plan": plan.model_dump(),
-            "plan_status": "completed",
-            "provider_used": result.provider_used,
-            "model_used": result.model_used,
-            "latency_ms": result.latency_ms,
-            "tokens_used": result.tokens_used,
-            "updatedAt": now_iso(),
-        },
-        merge=True,
-    )
-
-    return PlanGenerateResponse(
-        sessionId=session_id,
-        plan=plan,
-        plan_status="completed",
-        provider_used=result.provider_used,
-        model_used=result.model_used,
-        latency_ms=result.latency_ms,
-        tokens_used=result.tokens_used,
-        credits=new_credits,
-    )
+    return planning_service.generate_plan(session_id, user)
 
 
 @router.post("/ai/name-extract")
@@ -927,101 +813,9 @@ def api_ai_report(payload: FinalReportRequest, user=Depends(get_current_user)):
 
 @router.post("/ai/next-question", response_model=NextQuestionResponse)
 def next_question(payload: NextQuestionRequest, user=Depends(get_current_user)):
-    config = payload.config
-    history = payload.history or []
-    remaining_seconds = int(payload.remainingSeconds or 0)
-    asked_count = len(history)
+    from . import planning_service
 
-    duration = _clamp_duration_minutes(config)
-    min_q, max_q = _plan_question_bounds(duration)
-
-    if remaining_seconds <= 60 or asked_count >= max_q:
-        return NextQuestionResponse(shouldFinish=True, reason="time_or_max")
-
-    context = _build_plan_context(user.get("uid"), config, auth_token=user.get("token"))
-    prompt = _build_next_question_prompt(
-        config=config,
-        history=history,
-        remaining_seconds=remaining_seconds,
-        asked_count=asked_count,
-        min_q=min_q,
-        max_q=max_q,
-        difficulty_level=payload.difficultyLevel,
-        context=context,
-    )
-
-    try:
-        result = ai_router.generate(
-            task_name="plan",
-            prompt=prompt,
-            max_tokens=320,
-            temperature=0.4,
-            response_mime_type="application/json",
-        )
-    except AIProviderError as e:
-        _handle_ai_error(e)
-
-    try:
-        data = _safe_json_loads(result.output_text or "{}")
-        question, should_finish, reason = _parse_next_question_payload(data, asked_count)
-        if should_finish and asked_count >= min_q:
-            return NextQuestionResponse(
-                shouldFinish=True,
-                reason=reason,
-                provider_used=result.provider_used,
-                model_used=result.model_used,
-                latency_ms=result.latency_ms,
-                tokens_used=result.tokens_used,
-            )
-        if not question:
-            raise ValueError("Invalid next question payload")
-    except Exception:
-        logger.warning("Invalid next-question payload (provider=%s model=%s)", result.provider_used, result.model_used)
-        try:
-            retry_result = ai_router.generate(
-                task_name="plan",
-                prompt=_build_next_question_prompt_strict(
-                    config=config,
-                    history=history,
-                    remaining_seconds=remaining_seconds,
-                    asked_count=asked_count,
-                    min_q=min_q,
-                    max_q=max_q,
-                    difficulty_level=payload.difficultyLevel,
-                    context=context,
-                ),
-                max_tokens=360,
-                temperature=0.2,
-                response_mime_type="application/json",
-            )
-            retry_data = _safe_json_loads(retry_result.output_text or "{}")
-            question, should_finish, reason = _parse_next_question_payload(retry_data, asked_count)
-            if should_finish and asked_count >= min_q:
-                return NextQuestionResponse(
-                    shouldFinish=True,
-                    reason=reason,
-                    provider_used=retry_result.provider_used,
-                    model_used=retry_result.model_used,
-                    latency_ms=retry_result.latency_ms,
-                    tokens_used=retry_result.tokens_used,
-                )
-            if not question:
-                raise ValueError("Invalid next question payload after retry")
-            result = retry_result
-        except AIProviderError as e:
-            _handle_ai_error(e)
-        except Exception:
-            raise HTTPException(status_code=503, detail="AI retornou resposta invalida")
-
-    return NextQuestionResponse(
-        shouldFinish=False,
-        reason=None,
-        question=question,
-        provider_used=result.provider_used,
-        model_used=result.model_used,
-        latency_ms=result.latency_ms,
-        tokens_used=result.tokens_used,
-    )
+    return planning_service.next_question(payload, user)
 
 
 @router.post("/ai/tts")
@@ -1054,139 +848,18 @@ def api_tts(body: dict, user=Depends(get_current_user)):
 
 @router.post("/ai/evaluate-audio", response_model=AnswerEvaluation)
 def evaluate_audio(payload: EvaluateAudioRequest, user=Depends(get_current_user)):
-    _ensure_credits(user["uid"], required=1)
-
-    audio_bytes = _b64_to_bytes(payload.audioBase64)
-    transcript_fallback = None
-    prompt = _build_eval_prompt(
-        payload.config,
-        payload.question,
-        payload.confirmedName or "o candidato",
-        auth_token=user.get("token"),
-    )
-
-    try:
-        result = ai_router.generate(
-            task_name="evaluate",
-            prompt=prompt,
-            max_tokens=400,
-            temperature=0.2,
-            response_mime_type="application/json",
-            media=[{"data": audio_bytes, "mime_type": payload.mimeType}],
-        )
-    except AIProviderError as e:
-        # Fallback: transcribe with OpenAI and evaluate from text
-        try:
-            transcript_fallback = _openai_transcribe_audio(audio_bytes, payload.mimeType)
-            prompt_txt = _build_eval_prompt(
-                payload.config,
-                payload.question,
-                payload.confirmedName or "o candidato",
-                transcript=transcript_fallback,
-                auth_token=user.get("token"),
-            )
-            result = ai_router.generate(
-                task_name="evaluate",
-                prompt=prompt_txt,
-                max_tokens=400,
-                temperature=0.2,
-                response_mime_type="application/json",
-            )
-        except Exception:
-            _handle_ai_error(e)
-
-    try:
-        data = _safe_json_loads(result.output_text or "{}")
-        data = _normalize_eval_payload(data, transcript_fallback=transcript_fallback)
-        data = evaluation_service.finalize_evaluation(data, payload.config, payload.question)
-        evaluation = AnswerEvaluation(**data)
-    except Exception:
-        try:
-            logger.warning("Invalid AI evaluation payload (provider=%s model=%s)", result.provider_used, result.model_used)
-        except Exception:
-            pass
-        raise HTTPException(status_code=503, detail="AI retornou resposta invalida")
-
-    _debit_credits(user["uid"], amount=1)
-    return evaluation
+    return evaluation_service.evaluate_audio(payload, user)
 
 
 def evaluate_text(payload: EvaluateTextRequest, user=Depends(get_current_user)):
-    _ensure_credits(user["uid"], required=1)
-
-    transcript = (payload.transcript or "").strip()
-    if not transcript:
-        raise HTTPException(status_code=400, detail="transcript is required")
-
-    prompt = _build_eval_prompt(
-        payload.config,
-        payload.question,
-        payload.confirmedName or "o candidato",
-        transcript=transcript,
-        auth_token=user.get("token"),
-    )
-
-    try:
-        result = ai_router.generate(
-            task_name="evaluate",
-            prompt=prompt,
-            max_tokens=400,
-            temperature=0.2,
-            response_mime_type="application/json",
-        )
-    except AIProviderError as e:
-        _handle_ai_error(e)
-
-    try:
-        data = _safe_json_loads(result.output_text or "{}")
-        data = _normalize_eval_payload(data, transcript_fallback=transcript)
-        data = evaluation_service.finalize_evaluation(data, payload.config, payload.question)
-        evaluation = AnswerEvaluation(**data)
-    except Exception:
-        try:
-            logger.warning("Invalid AI text-evaluation payload (provider=%s model=%s)", result.provider_used, result.model_used)
-        except Exception:
-            pass
-        raise HTTPException(status_code=503, detail="AI retornou resposta invalida")
-
-    _debit_credits(user["uid"], amount=1)
-    return evaluation
+    return evaluation_service.evaluate_text(payload, user)
 
 
 @router.post("/ai/final-report", response_model=FinalReport)
 def final_report(payload: FinalReportRequest, user=Depends(get_current_user)):
-    _ensure_credits(user["uid"], required=1)
+    from . import report_service
 
-    report_context = _build_report_context(user.get("uid"), payload.config, auth_token=user.get("token"))
-    prompt = _build_report_prompt(payload.config, payload.history, report_context)
-    summary = _summarize_scores(payload.history)
-    try:
-        result = ai_router.generate(
-            task_name="report",
-            prompt=prompt,
-            max_tokens=1200,
-            temperature=0.2,
-            response_mime_type="application/json",
-        )
-    except AIProviderError as e:
-        _handle_ai_error(e)
-
-    try:
-        data = _safe_json_loads(result.output_text or "{}")
-        report = FinalReport(**data)
-        if summary:
-            scores_summary, criteria_summary, overall = summary
-            report_data = report.model_dump()
-            report_data["scoresSummary"] = scores_summary.model_dump()
-            if criteria_summary:
-                report_data["criteriaSummary"] = criteria_summary.model_dump()
-            report_data["overallScore"] = overall
-            report = FinalReport(**report_data)
-    except Exception:
-        raise HTTPException(status_code=503, detail="AI retornou resposta invalida")
-
-    _debit_credits(user["uid"], amount=1)
-    return report
+    return report_service.final_report(payload, user)
 
 
 @router.post("/sessions/{session_id}/finish")
