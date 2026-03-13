@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 
+from fastapi import HTTPException
+
 from ..repositories import user_repository
 
 
@@ -25,8 +27,20 @@ def _default_plan() -> str:
     return os.environ.get("DEFAULT_PLAN", "free")
 
 
+def credit_cost(name: str, default: int) -> int:
+    return max(0, _env_int(name, default))
+
+
 def get_user_credits(user_uid: str) -> int:
     return user_repository.get_credits(user_uid, _initial_credits())
+
+
+def ensure_credits(user_uid: str, required: int = 1) -> int:
+    required_safe = max(0, int(required))
+    credits = get_user_credits(user_uid)
+    if credits < required_safe:
+        raise HTTPException(status_code=402, detail="Creditos insuficientes")
+    return credits
 
 
 def debit_credits(user_uid: str, amount: int = 1) -> int:
@@ -41,4 +55,3 @@ def debit_credits(user_uid: str, amount: int = 1) -> int:
 
 def add_credits(user_uid: str, amount: int) -> int:
     return user_repository.add_credits(user_uid, int(amount), _now_iso())
-

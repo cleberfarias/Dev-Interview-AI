@@ -22,7 +22,7 @@ from ..schemas import (
     OrchestratorStartRequest,
     OrchestratorTurnRequest,
 )
-from . import candidate_profile_service, interview_core
+from . import candidate_profile_service, interview_core, session_service
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -54,7 +54,7 @@ def build_context(
 
 
 def start_session(*, config: InterviewConfig, user: dict) -> dict[str, Any]:
-    response = interview_core.start_session(config, user)
+    response = session_service.start_session(config, user)
     return response.model_dump()
 
 

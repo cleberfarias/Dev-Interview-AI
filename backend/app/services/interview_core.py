@@ -15,7 +15,7 @@ from ..firebase_admin import get_current_user
 from ..ai.prompts import evaluate_prompt, next_question_prompt, plan_prompt, report_prompt
 from ..ai.router import AIRouter, AIProviderError
 from ..mcp_client import get_rubric as mcp_get_rubric, get_recent_interviews as mcp_get_recent_interviews
-from ..repositories import candidate_profile_repository, report_repository, session_repository, user_repository
+from ..repositories import session_repository, user_repository
 from ..services import evaluation_service, usage_policy_service
 from .. import tts as tts_module
 from ..schemas import (
@@ -56,8 +56,7 @@ def _env_int(name: str, default: int) -> int:
         return int(default)
 
 def _credit_cost(name: str, default: int) -> int:
-    value = _env_int(name, default)
-    return max(0, value)
+    return usage_policy_service.credit_cost(name, default)
 
 def _initial_credits() -> int:
     return _env_int("FREE_TRIAL_CREDITS", _env_int("DEFAULT_CREDITS", 3))
@@ -186,32 +185,6 @@ def _build_report_context(user_uid: str, config: InterviewConfig, auth_token: Op
     return f"\nContexto adicional (nao inventar, use apenas se ajudar):\n{blob}\n"
 
 
-def _session_analysis_trace_snapshot(user_uid: str, captured_at: str) -> dict | None:
-    try:
-        profile = candidate_profile_repository.get_profile(user_uid) or {}
-    except Exception:
-        logger.warning("Failed to read candidate profile trace snapshot for uid=%s", user_uid)
-        return None
-
-    if not isinstance(profile, dict):
-        return None
-
-    snapshot = {
-        "capturedAt": captured_at,
-        "lastResumeAnalysisTrace": profile.get("lastResumeAnalysisTrace"),
-        "lastJobAnalysisTrace": profile.get("lastJobAnalysisTrace"),
-    }
-    audit = profile.get("analysisAudit")
-    if isinstance(audit, list):
-        snapshot["analysisAuditRecent"] = [item for item in audit[:5] if isinstance(item, dict)]
-
-    has_trace_data = bool(
-        snapshot.get("lastResumeAnalysisTrace")
-        or snapshot.get("lastJobAnalysisTrace")
-        or snapshot.get("analysisAuditRecent")
-    )
-    return snapshot if has_trace_data else None
-
 @router.get("/health")
 def health():
     return {"ok": True, "time": now_iso()}
@@ -257,6 +230,14 @@ def me(user=Depends(get_current_user)):
 
 def _get_user_credits(user_uid: str) -> int:
     return usage_policy_service.get_user_credits(user_uid)
+
+
+def _ensure_credits(user_uid: str, required: int = 1) -> int:
+    required_safe = max(0, int(required))
+    credits = _get_user_credits(user_uid)
+    if credits < required_safe:
+        raise HTTPException(status_code=402, detail="Creditos insuficientes")
+    return credits
 
 
 def _debit_credits(user_uid: str, amount: int = 1) -> int:
@@ -794,36 +775,10 @@ def _summarize_scores(history: list) -> Optional[tuple[AnswerScores, Optional[An
 
 @router.post("/sessions/start", response_model=SessionStartResponse)
 def start_session(config: InterviewConfig, user=Depends(get_current_user)):
-    config = _normalize_config(config)
-    try:
-        ts = now_iso()
-        initial = _initial_credits()
-        trace_snapshot = _session_analysis_trace_snapshot(user["uid"], ts)
-        user_seed = {
-            "uid": user["uid"],
-            "name": user.get("name") or user.get("email", "Usuario").split("@")[0],
-            "displayName": user.get("displayName") or user.get("name") or user.get("email", "Usuario").split("@")[0],
-            "email": user.get("email", ""),
-            "avatar": user.get("picture"),
-            "photoURL": user.get("photoURL") or user.get("picture"),
-            "plan": os.environ.get("DEFAULT_PLAN", "free"),
-            "credits": initial,
-            "createdAt": ts,
-            "updatedAt": ts,
-        }
-        session_id, credits = session_repository.create_pending_session(
-            uid=user["uid"],
-            config=config.model_dump(),
-            user_seed=user_seed,
-            initial_credits=initial,
-            now_iso=ts,
-            analysis_trace_snapshot=trace_snapshot,
-        )
-    except Exception:
-        logger.exception("start_session transaction failed")
-        raise HTTPException(status_code=500, detail="Falha ao iniciar sessao")
+    # Legacy compatibility path. Official session lifecycle lives in session_service.
+    from . import session_service
 
-    return SessionStartResponse(sessionId=session_id, plan=None, plan_status="pending", credits=credits)
+    return session_service.start_session(config, user)
 
 
 @router.post("/sessions/{session_id}/plan/generate", response_model=PlanGenerateResponse)
@@ -845,9 +800,7 @@ def generate_plan(session_id: str, user=Depends(get_current_user)):
             credits=_get_user_credits(user["uid"]),
         )
 
-    credits = _get_user_credits(user["uid"])
-    if credits <= 0:
-        raise HTTPException(status_code=402, detail="Creditos insuficientes")
+    _ensure_credits(user["uid"], required=1)
 
     config = InterviewConfig(**data.get("config"))
     plan_context = _build_plan_context(user.get("uid"), config, auth_token=user.get("token"))
@@ -921,8 +874,8 @@ def generate_plan(session_id: str, user=Depends(get_current_user)):
 @router.post("/ai/name-extract")
 def name_extract(payload: NameExtractRequest, user=Depends(get_current_user)):
     cost = _credit_cost("CREDITS_NAME_EXTRACT", 1)
-    if cost > 0 and _get_user_credits(user["uid"]) < cost:
-        raise HTTPException(status_code=402, detail="Creditos insuficientes")
+    if cost > 0:
+        _ensure_credits(user["uid"], required=cost)
 
     audio_bytes = _b64_to_bytes(payload.audioBase64)
     prompt = f"Extraia apenas o primeiro nome da pessoa do audio. Responda somente o nome (1 palavra). Idioma: {payload.uiLanguage}"
@@ -1077,8 +1030,8 @@ def api_tts(body: dict, user=Depends(get_current_user)):
     if not text:
         raise HTTPException(status_code=400, detail="Missing text")
     cost = _credit_cost("CREDITS_TTS", 1)
-    if cost > 0 and _get_user_credits(user["uid"]) < cost:
-        raise HTTPException(status_code=402, detail="Creditos insuficientes")
+    if cost > 0:
+        _ensure_credits(user["uid"], required=cost)
     language = body.get("language", "pt-BR")
     voice = body.get("voice")
     try:
@@ -1101,8 +1054,7 @@ def api_tts(body: dict, user=Depends(get_current_user)):
 
 @router.post("/ai/evaluate-audio", response_model=AnswerEvaluation)
 def evaluate_audio(payload: EvaluateAudioRequest, user=Depends(get_current_user)):
-    if _get_user_credits(user["uid"]) <= 0:
-        raise HTTPException(status_code=402, detail="Creditos insuficientes")
+    _ensure_credits(user["uid"], required=1)
 
     audio_bytes = _b64_to_bytes(payload.audioBase64)
     transcript_fallback = None
@@ -1160,8 +1112,7 @@ def evaluate_audio(payload: EvaluateAudioRequest, user=Depends(get_current_user)
 
 
 def evaluate_text(payload: EvaluateTextRequest, user=Depends(get_current_user)):
-    if _get_user_credits(user["uid"]) <= 0:
-        raise HTTPException(status_code=402, detail="Creditos insuficientes")
+    _ensure_credits(user["uid"], required=1)
 
     transcript = (payload.transcript or "").strip()
     if not transcript:
@@ -1204,8 +1155,7 @@ def evaluate_text(payload: EvaluateTextRequest, user=Depends(get_current_user)):
 
 @router.post("/ai/final-report", response_model=FinalReport)
 def final_report(payload: FinalReportRequest, user=Depends(get_current_user)):
-    if _get_user_credits(user["uid"]) <= 0:
-        raise HTTPException(status_code=402, detail="Creditos insuficientes")
+    _ensure_credits(user["uid"], required=1)
 
     report_context = _build_report_context(user.get("uid"), payload.config, auth_token=user.get("token"))
     prompt = _build_report_prompt(payload.config, payload.history, report_context)
@@ -1241,57 +1191,18 @@ def final_report(payload: FinalReportRequest, user=Depends(get_current_user)):
 
 @router.post("/sessions/{session_id}/finish")
 def finish_session(session_id: str, payload: SessionFinishRequest, user=Depends(get_current_user)):
-    session = session_repository.get_session(session_id)
-    if not session or session.get("uid") != user["uid"]:
-        raise HTTPException(status_code=404, detail="Sessao nao encontrada")
+    # Legacy compatibility path. Official session lifecycle lives in session_service.
+    from . import session_service
 
-    report = payload.report
-    plan = (session or {}).get("plan", {}) or {}
-    config = (session or {}).get("config", {}) or {}
-    ts = now_iso()
-
-    history_item = {
-        "id": session_id,
-        "date": ts,
-        "role": plan.get("roleTitleGuess", "Entrevista"),
-        "score": float(report.overallScore),
-        "style": config.get("style", ""),
-        "track": config.get("track", ""),
-    }
-
-    report_repository.save_user_interview_history(
-        uid=user["uid"],
-        session_id=session_id,
-        history_item=history_item,
-        now_iso=ts,
-    )
-    session_repository.upsert_session(
-        session_id,
-        {
-            "status": "finished",
-            "report": report.model_dump(),
-            "meta": payload.meta,
-            "updatedAt": ts,
-            "finishedAt": ts,
-        },
-        merge=True,
-    )
-
-    return {"ok": True}
+    return session_service.finish_session(session_id, payload, user)
 
 
 @router.delete("/sessions/{session_id}")
 def delete_session(session_id: str, user=Depends(get_current_user)):
-    session = session_repository.get_session(session_id)
+    # Legacy compatibility path. Official session lifecycle lives in session_service.
+    from . import session_service
 
-    if session and session.get("uid") != user["uid"]:
-        raise HTTPException(status_code=404, detail="Sessao nao encontrada")
-
-    if session:
-        session_repository.delete_session(session_id)
-
-    report_repository.delete_user_interview_history(uid=user["uid"], session_id=session_id)
-    return {"ok": True}
+    return session_service.delete_session(session_id, user)
 
 
 @router.post("/credits/dev-add")

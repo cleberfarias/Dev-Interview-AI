@@ -34,7 +34,7 @@ def test_start_session_includes_profile_trace_snapshot(monkeypatch):
         return "session-123", 5
 
     monkeypatch.setattr(
-        "app.services.interview_core.candidate_profile_repository.get_profile",
+        "app.services.session_service.candidate_profile_repository.get_profile",
         lambda uid: {
             "userId": uid,
             "lastResumeAnalysisTrace": {
@@ -54,7 +54,7 @@ def test_start_session_includes_profile_trace_snapshot(monkeypatch):
         },
     )
     monkeypatch.setattr(
-        "app.services.interview_core.session_repository.create_pending_session",
+        "app.services.session_service.session_repository.create_pending_session",
         _fake_create_pending_session,
     )
 
@@ -81,11 +81,11 @@ def test_start_session_continues_without_trace_snapshot(monkeypatch):
         raise RuntimeError("firestore down")
 
     monkeypatch.setattr(
-        "app.services.interview_core.candidate_profile_repository.get_profile",
+        "app.services.session_service.candidate_profile_repository.get_profile",
         _broken_get_profile,
     )
     monkeypatch.setattr(
-        "app.services.interview_core.session_repository.create_pending_session",
+        "app.services.session_service.session_repository.create_pending_session",
         _fake_create_pending_session,
     )
 
