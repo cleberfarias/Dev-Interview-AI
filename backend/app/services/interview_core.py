@@ -16,7 +16,7 @@ from ..ai.prompts import evaluate_prompt, next_question_prompt, plan_prompt, rep
 from ..ai.router import AIRouter, AIProviderError
 from ..mcp_client import get_rubric as mcp_get_rubric, get_recent_interviews as mcp_get_recent_interviews
 from ..repositories import candidate_profile_repository, report_repository, session_repository, user_repository
-from ..services import evaluation_service
+from ..services import evaluation_service, usage_policy_service
 from .. import tts as tts_module
 from ..schemas import (
     InterviewConfig,
@@ -256,17 +256,11 @@ def me(user=Depends(get_current_user)):
 
 
 def _get_user_credits(user_uid: str) -> int:
-    return user_repository.get_credits(user_uid, _initial_credits())
+    return usage_policy_service.get_user_credits(user_uid)
 
 
 def _debit_credits(user_uid: str, amount: int = 1) -> int:
-    return user_repository.debit_credits(
-        user_uid,
-        amount=amount,
-        initial_credits=_initial_credits(),
-        default_plan=os.environ.get("DEFAULT_PLAN", "free"),
-        now_iso=now_iso(),
-    )
+    return usage_policy_service.debit_credits(user_uid, amount=amount)
 
 
 def _handle_ai_error(e: AIProviderError):
@@ -1307,7 +1301,7 @@ def dev_add_credits(amount: int = 3, user=Depends(get_current_user)):
     if amount <= 0 or amount > 1000:
         raise HTTPException(status_code=400, detail="amount invalido")
 
-    total = user_repository.add_credits(user["uid"], int(amount), now_iso())
+    total = usage_policy_service.add_credits(user["uid"], int(amount))
     return {"credits": total}
 
 

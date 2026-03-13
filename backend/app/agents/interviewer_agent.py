@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from ..schemas import InterviewConfig, NextQuestionRequest
-from ..services import interview_core
+from ..services import planning_service
 
 
 def run(
@@ -18,5 +18,4 @@ def run(
         remainingSeconds=remaining_seconds,
         difficultyLevel=difficulty_level,
     )
-    return interview_core.next_question(payload, user).model_dump()
-
+    return planning_service.next_question(payload, user).model_dump()

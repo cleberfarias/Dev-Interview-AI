@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from ..schemas import EvaluateAudioRequest, EvaluateTextRequest, InterviewConfig
-from ..services import interview_core
+from ..services import evaluation_service
 
 
 def run_text(
@@ -18,7 +18,7 @@ def run_text(
         transcript=transcript,
         confirmedName=confirmed_name or "candidato",
     )
-    return interview_core.evaluate_text(payload, user).model_dump()
+    return evaluation_service.evaluate_text(payload, user).model_dump()
 
 
 def run_audio(
@@ -37,4 +37,4 @@ def run_audio(
         mimeType=mime_type,
         confirmedName=confirmed_name or "candidato",
     )
-    return interview_core.evaluate_audio(payload, user).model_dump()
+    return evaluation_service.evaluate_audio(payload, user).model_dump()

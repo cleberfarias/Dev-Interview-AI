@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
+
+from fastapi import HTTPException
 
 from ..agents import (
     candidate_agent,
@@ -12,8 +15,16 @@ from ..agents import (
     report_agent,
     study_plan_agent,
 )
-from ..schemas import InterviewConfig
+from ..schemas import (
+    InterviewConfig,
+    OrchestratorContextRequest,
+    OrchestratorFinalizeRequest,
+    OrchestratorStartRequest,
+    OrchestratorTurnRequest,
+)
 from . import candidate_profile_service, interview_core
+
+logger = logging.getLogger("uvicorn.error")
 
 
 def build_context(
@@ -130,3 +141,76 @@ def finalize(*, user: dict, config: InterviewConfig, history: list[dict]) -> dic
         "report": report,
         "studyPlan": study_plan,
     }
+
+
+def build_orchestrated_context(*, payload: OrchestratorContextRequest, user: dict) -> dict[str, Any]:
+    return build_context(
+        user=user,
+        config=payload.config,
+        resume_text=payload.resumeText,
+        job_description=payload.jobDescription,
+    )
+
+
+def start_orchestrated_interview(*, payload: OrchestratorStartRequest, user: dict) -> dict[str, Any]:
+    session_data = start_session(config=payload.config, user=user)
+
+    context = None
+    if payload.includeContext:
+        try:
+            context = build_context(
+                user=user,
+                config=payload.config,
+                resume_text=payload.resumeText,
+                job_description=payload.jobDescription,
+            )
+        except Exception:
+            logger.exception("Failed to precompute orchestrator context uid=%s", user.get("uid"))
+
+    initial_next = None
+    try:
+        initial_next = initial_next_question(
+            user=user,
+            config=payload.config,
+            remaining_seconds=max(0, int((payload.config.duration or 0) * 60)),
+            difficulty_level=payload.difficultyLevel,
+        )
+    except Exception:
+        logger.exception("Failed to precompute initial next-question uid=%s", user.get("uid"))
+
+    return {
+        "session": session_data,
+        "context": context,
+        "initialNextQuestion": initial_next,
+    }
+
+
+def run_orchestrated_turn(*, payload: OrchestratorTurnRequest, user: dict) -> dict[str, Any]:
+    transcript = (payload.transcript or "").strip()
+    audio_base64 = (payload.audioBase64 or "").strip()
+    if not transcript and not audio_base64:
+        raise HTTPException(status_code=400, detail="Provide transcript or audioBase64")
+
+    try:
+        return run_turn(
+            user=user,
+            config=payload.config,
+            history=payload.history,
+            question=payload.question,
+            transcript=transcript or None,
+            remaining_seconds=int(payload.remainingSeconds or 0),
+            difficulty_level=payload.difficultyLevel,
+            confirmed_name=payload.confirmedName,
+            audio_base64=audio_base64 or None,
+            mime_type=payload.mimeType,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def finalize_orchestrated_interview(*, payload: OrchestratorFinalizeRequest, user: dict) -> dict[str, Any]:
+    return finalize(
+        user=user,
+        config=payload.config,
+        history=payload.history,
+    )

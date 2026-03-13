@@ -9,3 +9,7 @@ def generate_plan(session_id: str, user):
 
 def ai_plan(config, user):
     return interview_core.api_ai_plan(config, user)
+
+
+def next_question(payload, user):
+    return interview_core.next_question(payload, user)

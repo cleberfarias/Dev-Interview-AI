@@ -286,3 +286,17 @@ def finalize_evaluation(payload: dict, config: InterviewConfig, question: str) -
     payload.pop("_legacyScoresProvided", None)
     payload.pop("_criteriaScoresProvided", None)
     return payload
+
+
+def evaluate_audio(payload, user):
+    # Lazy import avoids circular dependency: interview_core imports this module.
+    from . import interview_core
+
+    return interview_core.evaluate_audio(payload, user)
+
+
+def evaluate_text(payload, user):
+    # Lazy import avoids circular dependency: interview_core imports this module.
+    from . import interview_core
+
+    return interview_core.evaluate_text(payload, user)

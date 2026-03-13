@@ -31,7 +31,7 @@ def _config_payload():
 def test_orchestrator_context_route(monkeypatch):
     app.dependency_overrides[get_current_user] = _auth_user
     monkeypatch.setattr(
-        "app.api.routes_orchestrator.orchestrator_service.build_context",
+        "app.api.routes_orchestrator.interview_orchestrator.build_orchestrated_context",
         lambda payload, user: {
             "profile": {"userId": user["uid"]},
             "candidate": {"skills": ["python"]},
@@ -42,10 +42,7 @@ def test_orchestrator_context_route(monkeypatch):
 
     try:
         client = TestClient(app)
-        resp = client.post(
-            "/orchestrator/interview/context",
-            json={"config": _config_payload()},
-        )
+        resp = client.post("/interview/context", json={"config": _config_payload()})
         assert resp.status_code == 200
         data = resp.json()
         assert data["profile"]["userId"] == "orchestrator-user"
@@ -57,7 +54,7 @@ def test_orchestrator_context_route(monkeypatch):
 def test_orchestrator_start_route(monkeypatch):
     app.dependency_overrides[get_current_user] = _auth_user
     monkeypatch.setattr(
-        "app.api.routes_orchestrator.orchestrator_service.start",
+        "app.api.routes_orchestrator.interview_orchestrator.start_orchestrated_interview",
         lambda payload, user: {
             "session": {
                 "sessionId": "sess-1",
@@ -85,10 +82,7 @@ def test_orchestrator_start_route(monkeypatch):
 
     try:
         client = TestClient(app)
-        resp = client.post(
-            "/orchestrator/interview/start",
-            json={"config": _config_payload(), "includeContext": True, "difficultyLevel": 2},
-        )
+        resp = client.post("/interview/start", json={"config": _config_payload(), "includeContext": True, "difficultyLevel": 2})
         assert resp.status_code == 200
         data = resp.json()
         assert data["session"]["sessionId"] == "sess-1"
@@ -101,7 +95,7 @@ def test_orchestrator_start_route(monkeypatch):
 def test_orchestrator_turn_route(monkeypatch):
     app.dependency_overrides[get_current_user] = _auth_user
     monkeypatch.setattr(
-        "app.api.routes_orchestrator.orchestrator_service.run_turn",
+        "app.api.routes_orchestrator.interview_orchestrator.run_orchestrated_turn",
         lambda payload, user: {
             "evaluation": {
                 "scores": {
@@ -131,7 +125,7 @@ def test_orchestrator_turn_route(monkeypatch):
     try:
         client = TestClient(app)
         resp = client.post(
-            "/orchestrator/interview/turn",
+            "/interview/turn",
             json={
                 "config": _config_payload(),
                 "history": [],
@@ -152,7 +146,7 @@ def test_orchestrator_turn_route(monkeypatch):
 def test_orchestrator_finalize_route(monkeypatch):
     app.dependency_overrides[get_current_user] = _auth_user
     monkeypatch.setattr(
-        "app.api.routes_orchestrator.orchestrator_service.finalize",
+        "app.api.routes_orchestrator.interview_orchestrator.finalize_orchestrated_interview",
         lambda payload, user: {
             "report": {
                 "overallScore": 8.2,
@@ -175,16 +169,36 @@ def test_orchestrator_finalize_route(monkeypatch):
 
     try:
         client = TestClient(app)
-        resp = client.post(
-            "/orchestrator/interview/finalize",
-            json={
-                "config": _config_payload(),
-                "history": [],
-            },
-        )
+        resp = client.post("/interview/finalize", json={"config": _config_payload(), "history": []})
         assert resp.status_code == 200
         data = resp.json()
         assert data["report"]["overallScore"] == 8.2
         assert data["studyPlan"]["priorityTopics"] == ["system design"]
+    finally:
+        app.dependency_overrides = {}
+
+
+def test_orchestrator_legacy_start_route_still_works(monkeypatch):
+    app.dependency_overrides[get_current_user] = _auth_user
+    monkeypatch.setattr(
+        "app.api.routes_orchestrator.interview_orchestrator.start_orchestrated_interview",
+        lambda payload, user: {
+            "session": {
+                "sessionId": "legacy-sess",
+                "plan": None,
+                "plan_status": "pending",
+                "credits": 2,
+            },
+            "context": None,
+            "initialNextQuestion": None,
+        },
+    )
+
+    try:
+        client = TestClient(app)
+        resp = client.post("/orchestrator/interview/start", json={"config": _config_payload()})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["session"]["sessionId"] == "legacy-sess"
     finally:
         app.dependency_overrides = {}

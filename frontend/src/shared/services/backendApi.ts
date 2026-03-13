@@ -322,7 +322,7 @@ export const BackendApi = {
     resumeText?: string;
     jobDescription?: string;
   }) =>
-    apiFetch<OrchestratorContextResponse>("/orchestrator/interview/context", {
+    apiFetch<OrchestratorContextResponse>("/interview/context", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
@@ -334,7 +334,7 @@ export const BackendApi = {
     includeContext?: boolean;
     difficultyLevel?: number;
   }) =>
-    apiFetch<OrchestratorStartResponse>("/orchestrator/interview/start", {
+    apiFetch<OrchestratorStartResponse>("/interview/start", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
@@ -350,13 +350,13 @@ export const BackendApi = {
     audioBase64?: string;
     mimeType?: string;
   }) =>
-    apiFetch<OrchestratorTurnResponse>("/orchestrator/interview/turn", {
+    apiFetch<OrchestratorTurnResponse>("/interview/turn", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
 
   orchestratorFinalize: (payload: { config: InterviewConfig; history: any[] }) =>
-    apiFetch<OrchestratorFinalizeResponse>("/orchestrator/interview/finalize", {
+    apiFetch<OrchestratorFinalizeResponse>("/interview/finalize", {
       method: "POST",
       body: JSON.stringify(payload),
     }),

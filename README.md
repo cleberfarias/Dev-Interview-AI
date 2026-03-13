@@ -10,6 +10,7 @@ Este projeto foi ajustado para um fluxo real de producao:
 - Banco: Firebase Firestore (usuarios, creditos e historico)
 - Creditos: consumidos no backend durante a sessao (gerar plano, avaliar respostas, relatorio e TTS)
 - Limites: duracao e perguntas ajustadas por plano (free/pro)
+- Politica de uso/creditos centralizada em `backend/app/services/usage_policy_service.py`
 
 ---
 
@@ -59,14 +60,13 @@ Frontend: http://localhost:5000
 - GET /me -> retorna perfil (cria automaticamente no primeiro login)
 - POST /sessions/start -> cria sessao e retorna { sessionId, plan, credits }
 - POST /sessions/{id}/plan/generate -> gera plano e consome 1 credito
-- POST /ai/name-extract -> extrai nome do audio
-- POST /ai/evaluate-audio -> avalia resposta + transcricao (JSON)
-- POST /ai/next-question -> gera a proxima pergunta (adaptativa)
-- POST /ai/final-report -> gera relatorio final (JSON)
-- POST /orchestrator/interview/context -> gera contexto multiagente (candidate/job/match)
-- POST /orchestrator/interview/start -> inicia sessao + opcionalmente precomputa contexto multiagente + primeira pergunta adaptativa
-- POST /orchestrator/interview/turn -> avalia resposta (audio/texto), aplica coach e decide proxima pergunta
-- POST /orchestrator/interview/finalize -> gera relatorio final + plano de estudo consolidado
+- POST /interview/context -> gera contexto multiagente (candidate/job/match)
+- POST /interview/start -> rota oficial para iniciar a entrevista multiagente
+- POST /interview/turn -> rota oficial para processar turnos (audio/texto + coaching + proxima pergunta)
+- POST /interview/finalize -> rota oficial para finalizar entrevista (relatorio + plano de estudo)
+- POST /orchestrator/interview/* -> legado compativel (deprecated)
+- POST /ai/name-extract -> utilitario de IA para extrair nome do audio
+- POST /ai/evaluate-audio, /ai/evaluate-text, /ai/next-question, /ai/final-report -> utilitarios/legado (nao fluxo oficial)
 - POST /live-coach/process -> processa chunk de audio para coaching em tempo real (STT + classificacao + sugestao)
 - WS /live-coach/ws -> canal de baixa latencia para live coach em streaming (com fallback HTTP no frontend)
 - POST /sessions/{id}/finish -> salva relatorio e historico
