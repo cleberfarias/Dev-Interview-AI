@@ -142,18 +142,24 @@ const App: React.FC = () => {
       );
       finishFirstLoad();
 
+      const token = await fbUser.getIdToken(false).catch(() => null);
+
       try {
-        const token = await fbUser.getIdToken(false).catch(() => null);
         const profile = token ? await BackendApi.meWithToken(token) : await BackendApi.me();
         if (!mounted) return;
         setUser(profile);
+      } catch (e) {
+        console.warn('Nao foi possivel sincronizar /me. Mantendo perfil local do Firebase.', e);
+      }
 
-        const candidate = await BackendApi.getCandidateProfile().catch(() => null);
+      try {
+        const candidate = await BackendApi.getCandidateProfile();
         if (!mounted) return;
         setCandidateProfile(candidate);
       } catch (e) {
-        console.error('Auth handler error', e);
-        showGlobalNotice('Nao foi possivel carregar seu perfil agora.');
+        if (!mounted) return;
+        setCandidateProfile(null);
+        console.warn('Nao foi possivel carregar /profile/candidate. Continuando sem perfil salvo.', e);
       }
     });
 
