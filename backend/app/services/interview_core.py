@@ -8,15 +8,13 @@ import urllib.error
 from typing import Optional
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import HTTPException
 from dotenv import load_dotenv
 
-from ..firebase_admin import get_current_user
 from ..ai.prompts import evaluate_prompt, next_question_prompt, plan_prompt, report_prompt
 from ..ai.router import AIRouter, AIProviderError
 from ..mcp_client import get_rubric as mcp_get_rubric, get_recent_interviews as mcp_get_recent_interviews
 from ..services import evaluation_service, usage_policy_service
-from .. import tts as tts_module
 from ..schemas import (
     InterviewConfig,
     InterviewPlan,
@@ -41,7 +39,6 @@ from ..schemas import (
 _env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '.env'))
 load_dotenv(_env_path)
 
-router = APIRouter()
 logger = logging.getLogger('uvicorn.error')
 ai_router = AIRouter()
 
@@ -184,14 +181,12 @@ def _build_report_context(user_uid: str, config: InterviewConfig, auth_token: Op
     return f"\nContexto adicional (nao inventar, use apenas se ajudar):\n{blob}\n"
 
 
-@router.get("/health")
 def health():
     from . import profile_service
 
     return profile_service.health()
 
-@router.get("/me", response_model=UserProfile)
-def me(user=Depends(get_current_user)):
+def me(user):
     from . import profile_service
 
     return profile_service.me(user)
@@ -742,144 +737,80 @@ def _summarize_scores(history: list) -> Optional[tuple[AnswerScores, Optional[An
     return AnswerScores(**avg), criteria_summary, overall
 
 
-@router.post("/sessions/start", response_model=SessionStartResponse)
-def start_session(config: InterviewConfig, user=Depends(get_current_user)):
+def start_session(config: InterviewConfig, user):
     # Legacy compatibility path. Official session lifecycle lives in session_service.
     from . import session_service
 
     return session_service.start_session(config, user)
 
 
-@router.post("/sessions/{session_id}/plan/generate", response_model=PlanGenerateResponse)
-def generate_plan(session_id: str, user=Depends(get_current_user)):
+def generate_plan(session_id: str, user):
     from . import planning_service
 
     return planning_service.generate_plan(session_id, user)
 
 
-@router.post("/ai/name-extract")
-def name_extract(payload: NameExtractRequest, user=Depends(get_current_user)):
-    cost = _credit_cost("CREDITS_NAME_EXTRACT", 1)
-    if cost > 0:
-        _ensure_credits(user["uid"], required=cost)
+def name_extract(payload: NameExtractRequest, user):
+    from . import ai_utility_service
 
-    audio_bytes = _b64_to_bytes(payload.audioBase64)
-    prompt = f"Extraia apenas o primeiro nome da pessoa do audio. Responda somente o nome (1 palavra). Idioma: {payload.uiLanguage}"
-    try:
-        result = ai_router.generate(
-            task_name="evaluate",
-            prompt=prompt,
-            max_tokens=20,
-            temperature=0.0,
-            media=[{"data": audio_bytes, "mime_type": payload.mimeType}],
-        )
-    except AIProviderError as e:
-        # Fallback: transcribe with OpenAI and extract name from text
-        try:
-            transcript = _openai_transcribe_audio(audio_bytes, payload.mimeType)
-            prompt_txt = (
-                f"Transcrição: {transcript}\n"
-                f"Extraia apenas o primeiro nome da pessoa. Responda somente o nome (1 palavra). Idioma: {payload.uiLanguage}"
-            )
-            result = ai_router.generate(
-                task_name="evaluate",
-                prompt=prompt_txt,
-                max_tokens=20,
-                temperature=0.0,
-            )
-        except Exception:
-            _handle_ai_error(e)
-
-    name = (result.output_text or "").strip().split()
-    if cost > 0:
-        _debit_credits(user["uid"], amount=cost)
-    return {"name": name[0] if name else "Candidato"}
+    return ai_utility_service.name_extract(payload, user)
 
 
-@router.post("/ai/plan", response_model=SessionStartResponse)
-def api_ai_plan(config: InterviewConfig, user=Depends(get_current_user)):
+def api_ai_plan(config: InterviewConfig, user):
     return start_session(config, user)
 
 
-@router.post("/ai/evaluate", response_model=AnswerEvaluation)
-def api_ai_evaluate(payload: EvaluateAudioRequest, user=Depends(get_current_user)):
+def api_ai_evaluate(payload: EvaluateAudioRequest, user):
     return evaluate_audio(payload, user)
 
 
-@router.post("/ai/report", response_model=FinalReport)
-def api_ai_report(payload: FinalReportRequest, user=Depends(get_current_user)):
+def api_ai_report(payload: FinalReportRequest, user):
     return final_report(payload, user)
 
 
-@router.post("/ai/next-question", response_model=NextQuestionResponse)
-def next_question(payload: NextQuestionRequest, user=Depends(get_current_user)):
+def next_question(payload: NextQuestionRequest, user):
     from . import planning_service
 
     return planning_service.next_question(payload, user)
 
 
-@router.post("/ai/tts")
-def api_tts(body: dict, user=Depends(get_current_user)):
-    text = body.get("text")
-    if not text:
-        raise HTTPException(status_code=400, detail="Missing text")
-    cost = _credit_cost("CREDITS_TTS", 1)
-    if cost > 0:
-        _ensure_credits(user["uid"], required=cost)
-    language = body.get("language", "pt-BR")
-    voice = body.get("voice")
-    try:
-        audio = tts_module.synthesize_text(text=text, language_code=language, voice_name=voice)
-        b64 = base64.b64encode(audio).decode()
-        fmt = (os.environ.get("OPENAI_TTS_FORMAT") or "mp3").lower().strip()
-        if fmt in ("wav", "wave"):
-            mime = "audio/wav"
-        elif fmt in ("ogg", "opus"):
-            mime = "audio/ogg"
-        else:
-            mime = "audio/mpeg"
-        if cost > 0:
-            _debit_credits(user["uid"], amount=cost)
-        return {"audioBase64": b64, "mimeType": mime}
-    except Exception:
-        logger.exception("TTS synth failed")
-        raise HTTPException(status_code=503, detail="TTS service unavailable")
+def api_tts(body: dict, user):
+    from . import ai_utility_service
+
+    return ai_utility_service.tts(body, user)
 
 
-@router.post("/ai/evaluate-audio", response_model=AnswerEvaluation)
-def evaluate_audio(payload: EvaluateAudioRequest, user=Depends(get_current_user)):
+def evaluate_audio(payload: EvaluateAudioRequest, user):
     return evaluation_service.evaluate_audio(payload, user)
 
 
-def evaluate_text(payload: EvaluateTextRequest, user=Depends(get_current_user)):
+def evaluate_text(payload: EvaluateTextRequest, user):
     return evaluation_service.evaluate_text(payload, user)
 
 
-@router.post("/ai/final-report", response_model=FinalReport)
-def final_report(payload: FinalReportRequest, user=Depends(get_current_user)):
+def final_report(payload: FinalReportRequest, user):
     from . import report_service
 
     return report_service.final_report(payload, user)
 
 
-@router.post("/sessions/{session_id}/finish")
-def finish_session(session_id: str, payload: SessionFinishRequest, user=Depends(get_current_user)):
+def finish_session(session_id: str, payload: SessionFinishRequest, user):
     # Legacy compatibility path. Official session lifecycle lives in session_service.
     from . import session_service
 
     return session_service.finish_session(session_id, payload, user)
 
 
-@router.delete("/sessions/{session_id}")
-def delete_session(session_id: str, user=Depends(get_current_user)):
+def delete_session(session_id: str, user):
     # Legacy compatibility path. Official session lifecycle lives in session_service.
     from . import session_service
 
     return session_service.delete_session(session_id, user)
 
 
-@router.post("/credits/dev-add")
-def dev_add_credits(amount: int = 3, user=Depends(get_current_user)):
+def dev_add_credits(amount: int = 3, user=None):
+    if not isinstance(user, dict) or not user.get("uid"):
+        raise HTTPException(status_code=401, detail="Usuario nao autenticado")
     if os.environ.get("ALLOW_DEV_CREDITS", "false").lower() != "true":
         raise HTTPException(status_code=403, detail="Desabilitado")
     if amount <= 0 or amount > 1000:

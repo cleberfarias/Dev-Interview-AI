@@ -16,6 +16,10 @@ def _routes_interview_file() -> Path:
     return _repo_root() / "backend" / "app" / "api" / "routes_interview.py"
 
 
+def _interview_core_file() -> Path:
+    return _repo_root() / "backend" / "app" / "services" / "interview_core.py"
+
+
 def _imported_modules(py_file: Path) -> set[str]:
     tree = ast.parse(py_file.read_text(encoding="utf-8"))
     modules: set[str] = set()
@@ -59,3 +63,9 @@ def test_routes_interview_has_no_http_endpoints():
     found = [token for token in disallowed if token in text]
     assert not found, f"routes_interview.py nao deve expor endpoints HTTP: {found}"
 
+
+def test_interview_core_has_no_http_route_decorators():
+    text = _interview_core_file().read_text(encoding="utf-8")
+    disallowed = ("@router.get(", "@router.post(", "@router.put(", "@router.delete(", "@router.patch(")
+    found = [token for token in disallowed if token in text]
+    assert not found, f"interview_core.py nao deve expor endpoints HTTP: {found}"
