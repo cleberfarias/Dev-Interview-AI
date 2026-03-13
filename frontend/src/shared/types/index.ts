@@ -144,6 +144,7 @@ export interface NextQuestionResponse {
 
 export interface OrchestratorContextResponse {
   profile: Record<string, unknown>;
+  candidate_memory?: Record<string, unknown>;
   candidate: Record<string, unknown>;
   job: Record<string, unknown>;
   match: Record<string, unknown>;

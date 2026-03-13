@@ -7,13 +7,14 @@ from datetime import datetime, timezone
 from fastapi import HTTPException
 
 from ..repositories import candidate_profile_repository, report_repository, session_repository
+from ..request_context import scoped_context
 from ..schemas import (
     InterviewConfig,
     SessionAnalysisTraceResponse,
     SessionFinishRequest,
     SessionStartResponse,
 )
-from . import planning_service
+from . import metrics_service, planning_service
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -116,11 +117,21 @@ def start_session(config: InterviewConfig, user: dict) -> SessionStartResponse:
         logger.exception("start_session transaction failed")
         raise HTTPException(status_code=500, detail="Falha ao iniciar sessao")
 
+    try:
+        metrics_service.record_session_started(
+            session_id=session_id,
+            user_id=user.get("uid"),
+            config=normalized_config,
+        )
+    except Exception:
+        logger.exception("Failed to register interview_metrics start sessionId=%s", session_id)
+
     return SessionStartResponse(sessionId=session_id, plan=None, plan_status="pending", credits=credits)
 
 
 def generate_plan(session_id: str, user: dict):
-    return planning_service.generate_plan(session_id, user)
+    with scoped_context(user_id=str(user.get("uid") or ""), session_id=session_id):
+        return planning_service.generate_plan(session_id, user)
 
 
 def finish_session(session_id: str, payload: SessionFinishRequest, user: dict):
@@ -160,6 +171,15 @@ def finish_session(session_id: str, payload: SessionFinishRequest, user: dict):
         merge=True,
     )
 
+    try:
+        metrics_service.record_session_completed(
+            session_id=session_id,
+            user_id=user.get("uid"),
+            report=report,
+        )
+    except Exception:
+        logger.exception("Failed to register interview_metrics completion sessionId=%s", session_id)
+
     return {"ok": True}
 
 
@@ -188,4 +208,3 @@ def get_session_analysis_trace(session_id: str, user) -> SessionAnalysisTraceRes
         hasTrace=has_trace,
         analysisTraceSnapshot=snapshot if has_trace else None,
     )
-

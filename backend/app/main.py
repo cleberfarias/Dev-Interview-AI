@@ -34,6 +34,7 @@ from .api import (
     routes_resume,
     routes_sessions,
 )
+from .request_context import reset_context, set_context
 from .services import interview_core
 
 # Load backend/.env when present (local dev)
@@ -76,12 +77,15 @@ logger = logging.getLogger('uvicorn.error')
 async def log_requests(request: Request, call_next):
     request_id = str(uuid.uuid4())
     request.state.request_id = request_id
+    context_tokens = set_context(request_id=request_id, user_id=None, session_id=None)
     logger.info('[%s] HTTP %s %s', request_id, request.method, request.url.path)
     try:
         response = await call_next(request)
     except Exception:
         logger.exception('[%s] Unhandled error', request_id)
         raise
+    finally:
+        reset_context(context_tokens)
     response.headers['x-request-id'] = request_id
     return response
 

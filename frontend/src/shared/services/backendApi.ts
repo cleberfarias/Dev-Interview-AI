@@ -209,7 +209,12 @@ export const BackendApi = {
       body: JSON.stringify(payload),
     }),
 
-  liveCoachProcess: (payload: { audioBase64: string; mimeType?: string; context?: Record<string, unknown> }) =>
+  liveCoachProcess: (payload: {
+    audioBase64?: string;
+    audioChunks?: Array<{ chunkIndex: number; audio: string; timestamp: string }>;
+    mimeType?: string;
+    context?: Record<string, unknown>;
+  }) =>
     apiFetch<LiveCoachProcessResponse>("/live-coach/process", {
       method: "POST",
       body: JSON.stringify(payload),
@@ -341,6 +346,7 @@ export const BackendApi = {
 
   orchestratorTurn: (payload: {
     config: InterviewConfig;
+    sessionId?: string;
     history: any[];
     question: string;
     remainingSeconds: number;
@@ -355,7 +361,7 @@ export const BackendApi = {
       body: JSON.stringify(payload),
     }),
 
-  orchestratorFinalize: (payload: { config: InterviewConfig; history: any[] }) =>
+  orchestratorFinalize: (payload: { config: InterviewConfig; sessionId?: string; history: any[] }) =>
     apiFetch<OrchestratorFinalizeResponse>("/interview/finalize", {
       method: "POST",
       body: JSON.stringify(payload),

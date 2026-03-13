@@ -34,7 +34,7 @@ from .interview import (
     Track,
     InterviewStyle,
 )
-from .live_coach import LiveCoachProcessRequest, LiveCoachProcessResponse
+from .live_coach import LiveCoachAudioChunk, LiveCoachProcessRequest, LiveCoachProcessResponse
 from .orchestrator import (
     OrchestratorContextRequest,
     OrchestratorContextResponse,
@@ -98,6 +98,7 @@ __all__ = [
     "SessionAnalysisTraceResponse",
     "LiveCoachProcessRequest",
     "LiveCoachProcessResponse",
+    "LiveCoachAudioChunk",
     "OrchestratorContextRequest",
     "OrchestratorContextResponse",
     "OrchestratorStartRequest",

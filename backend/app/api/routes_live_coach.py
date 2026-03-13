@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from pydantic import ValidationError
 
 from ..firebase_admin import get_current_user, verify_bearer_token
+from ..request_context import scoped_context
 from ..schemas import LiveCoachProcessRequest, LiveCoachProcessResponse
 from ..services import live_coach_service
 
@@ -16,7 +17,10 @@ logger = logging.getLogger("uvicorn.error")
 
 @router.post("/live-coach/process", response_model=LiveCoachProcessResponse)
 def process_live_coach(payload: LiveCoachProcessRequest, user=Depends(get_current_user)):
-    return live_coach_service.process_audio_chunk(payload, user)
+    context_payload = payload.context if isinstance(payload.context, dict) else {}
+    session_id = str(context_payload.get("sessionId") or "").strip() or None
+    with scoped_context(user_id=str(user.get("uid") or ""), session_id=session_id):
+        return live_coach_service.process_audio_chunk(payload, user)
 
 
 def _websocket_user(websocket: WebSocket) -> dict[str, Any]:
@@ -78,7 +82,7 @@ async def live_coach_ws(websocket: WebSocket):
             await websocket.send_json({"type": "pong", "requestId": request_id})
             continue
 
-        if msg_type != "process":
+        if msg_type not in {"process", "audio_chunk"}:
             await websocket.send_json(
                 {
                     "type": "error",
@@ -112,7 +116,10 @@ async def live_coach_ws(websocket: WebSocket):
             continue
 
         try:
-            response = live_coach_service.process_audio_chunk(payload, user)
+            context_payload = payload.context if isinstance(payload.context, dict) else {}
+            session_id = str(context_payload.get("sessionId") or message.get("sessionId") or "").strip() or None
+            with scoped_context(request_id=request_id, user_id=str(user.get("uid") or ""), session_id=session_id):
+                response = live_coach_service.process_audio_chunk(payload, user)
         except Exception:
             logger.exception("Live coach websocket processing failed")
             await websocket.send_json(
@@ -124,6 +131,30 @@ async def live_coach_ws(websocket: WebSocket):
             )
             continue
 
+        if msg_type == "audio_chunk":
+            if response.transcript:
+                await websocket.send_json(
+                    {
+                        "type": "partial_transcription",
+                        "requestId": request_id,
+                        "payload": {
+                            "status": response.status,
+                            "transcript": response.transcript,
+                            "detectedQuestion": response.detectedQuestion,
+                            "questionType": response.questionType,
+                            "provider": response.transcriptionProvider,
+                        },
+                    }
+                )
+            await websocket.send_json(
+                {
+                    "type": "coach_hint",
+                    "requestId": request_id,
+                    "payload": response.model_dump(),
+                }
+            )
+
+        # Keep legacy websocket clients working with the original event.
         await websocket.send_json(
             {
                 "type": "insight",

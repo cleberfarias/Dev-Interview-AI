@@ -68,6 +68,7 @@ class EvaluateAudioRequest(BaseModel):
     audioBase64: str
     mimeType: str = "audio/webm"
     confirmedName: Optional[str] = None
+    sessionId: Optional[str] = None
 
 
 class EvaluateTextRequest(BaseModel):
@@ -75,6 +76,7 @@ class EvaluateTextRequest(BaseModel):
     question: str
     transcript: str
     confirmedName: Optional[str] = None
+    sessionId: Optional[str] = None
 
 
 class NextQuestionRequest(BaseModel):
@@ -82,6 +84,7 @@ class NextQuestionRequest(BaseModel):
     history: List[Dict[str, Any]]
     remainingSeconds: int = 0
     difficultyLevel: Optional[int] = None
+    sessionId: Optional[str] = None
 
 
 class NextQuestionResponse(BaseModel):

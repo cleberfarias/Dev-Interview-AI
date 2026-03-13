@@ -2,13 +2,34 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+
+class LiveCoachAudioChunk(BaseModel):
+    chunkIndex: int
+    audio: str
+    timestamp: str
 
 
 class LiveCoachProcessRequest(BaseModel):
-    audioBase64: str
+    audioBase64: str = ""
+    audioChunks: List[LiveCoachAudioChunk] = Field(default_factory=list)
     mimeType: str = "audio/webm"
     context: Dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_audio_payload(self):
+        has_inline_audio = bool((self.audioBase64 or "").strip())
+        has_chunks = any(bool((chunk.audio or "").strip()) for chunk in self.audioChunks)
+        context_transcript = False
+        if isinstance(self.context, dict):
+            for key in ("transcript", "questionTranscript", "question_text", "questionText"):
+                if str(self.context.get(key) or "").strip():
+                    context_transcript = True
+                    break
+        if not has_inline_audio and not has_chunks and not context_transcript:
+            raise ValueError("audioBase64 or audioChunks is required")
+        return self
 
 
 class LiveCoachProcessResponse(BaseModel):

@@ -16,6 +16,7 @@ class OrchestratorContextRequest(BaseModel):
 
 class OrchestratorContextResponse(BaseModel):
     profile: Dict[str, Any] = Field(default_factory=dict)
+    candidate_memory: Dict[str, Any] = Field(default_factory=dict)
     candidate: Dict[str, Any] = Field(default_factory=dict)
     job: Dict[str, Any] = Field(default_factory=dict)
     match: Dict[str, Any] = Field(default_factory=dict)
@@ -37,6 +38,7 @@ class OrchestratorStartResponse(BaseModel):
 
 class OrchestratorTurnRequest(BaseModel):
     config: InterviewConfig
+    sessionId: Optional[str] = None
     history: List[Dict[str, Any]] = Field(default_factory=list)
     question: str
     remainingSeconds: int = 0
@@ -55,6 +57,7 @@ class OrchestratorTurnResponse(BaseModel):
 
 class OrchestratorFinalizeRequest(BaseModel):
     config: InterviewConfig
+    sessionId: Optional[str] = None
     history: List[Dict[str, Any]] = Field(default_factory=list)
 
 

@@ -13,6 +13,7 @@ from ..ai.router import AIProviderError, AIRouter
 from ..repositories import candidate_profile_repository, resume_analysis_repository
 from ..resume import extractor, matcher, parser
 from ..schemas import AnalysisTrace, ResumeAnalyzeRequest, ResumeAnalyzeResponse, ResumeExtraction, ResumeMatchResult
+from . import ai_observability_service
 
 logger = logging.getLogger("uvicorn.error")
 ai_router = AIRouter()
@@ -222,7 +223,10 @@ def _build_resume_ai_prompt(text: str) -> str:
     )
 
 
-def _extract_resume_with_ai(text: str) -> tuple[dict[str, Any] | None, dict[str, str | None]]:
+def _extract_resume_with_ai(
+    text: str,
+    metadata: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any] | None, dict[str, str | None]]:
     prompt = _build_resume_ai_prompt(text)
     try:
         result = ai_router.generate(
@@ -231,6 +235,7 @@ def _extract_resume_with_ai(text: str) -> tuple[dict[str, Any] | None, dict[str,
             max_tokens=700,
             temperature=0.1,
             response_mime_type="application/json",
+            metadata=metadata,
         )
     except AIProviderError:
         return None, {"provider": None, "model": None}
@@ -269,7 +274,12 @@ def analyze_resume(payload: ResumeAnalyzeRequest, user: dict | None = None) -> R
         raise HTTPException(status_code=400, detail="Empty resume text after parsing")
 
     heuristic_extraction = _normalize_resume_extraction(extractor.extract_resume_data(text))
-    ai_extraction, ai_meta = _extract_resume_with_ai(text)
+    metadata = ai_observability_service.build_metadata(
+        user=user if isinstance(user, dict) else None,
+        agent="resume_analyzer_agent",
+        prompt_version=RESUME_PROMPT_VERSION,
+    )
+    ai_extraction, ai_meta = _extract_resume_with_ai(text, metadata=metadata)
     extraction_data = _merge_extractions(ai_extraction or {}, heuristic_extraction)
     extraction = ResumeExtraction(**extraction_data)
     if not ai_extraction:

@@ -444,6 +444,7 @@ const App: React.FC = () => {
                 <InterviewRoom
                   config={config}
                   plan={plan}
+                  sessionId={sessionId || undefined}
                   user={user}
                   onFinish={handleInterviewFinish}
                   onBack={handleInterviewBack}
