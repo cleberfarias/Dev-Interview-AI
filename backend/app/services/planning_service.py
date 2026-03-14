@@ -11,7 +11,11 @@ from ..schemas import (
     NextQuestionResponse,
     PlanGenerateResponse,
 )
-from . import interview_core
+from . import ai_observability_service, interview_core
+
+
+PLAN_PROMPT_VERSION = "interview_plan_v3"
+NEXT_QUESTION_PROMPT_VERSION = "next_question_v3"
 
 
 def generate_plan(session_id: str, user):
@@ -37,6 +41,12 @@ def generate_plan(session_id: str, user):
     config = InterviewConfig(**data.get("config"))
     plan_context = interview_core._build_plan_context(user.get("uid"), config, auth_token=user.get("token"))
     prompt = interview_core._build_plan_prompt(config, plan_context)
+    metadata = ai_observability_service.build_metadata(
+        user=user,
+        session_id=session_id,
+        agent="interviewer_agent",
+        prompt_version=PLAN_PROMPT_VERSION,
+    )
 
     try:
         result = interview_core.ai_router.generate(
@@ -45,6 +55,7 @@ def generate_plan(session_id: str, user):
             max_tokens=800,
             temperature=0.2,
             response_mime_type="application/json",
+            metadata=metadata,
         )
     except AIProviderError as e:
         interview_core._handle_ai_error(e)
@@ -67,6 +78,7 @@ def generate_plan(session_id: str, user):
                 max_tokens=900,
                 temperature=0.1,
                 response_mime_type="application/json",
+                metadata=metadata,
             )
             retry_payload = interview_core._safe_json_loads(retry_result.output_text or "{}")
             plan = interview_core._parse_plan_payload(retry_payload, config)
@@ -139,6 +151,12 @@ def next_question(payload, user):
         difficulty_level=request.difficultyLevel,
         context=context,
     )
+    metadata = ai_observability_service.build_metadata(
+        user=user,
+        session_id=request.sessionId,
+        agent="interviewer_agent",
+        prompt_version=NEXT_QUESTION_PROMPT_VERSION,
+    )
 
     try:
         result = interview_core.ai_router.generate(
@@ -147,6 +165,7 @@ def next_question(payload, user):
             max_tokens=320,
             temperature=0.4,
             response_mime_type="application/json",
+            metadata=metadata,
         )
     except AIProviderError as e:
         interview_core._handle_ai_error(e)
@@ -187,6 +206,7 @@ def next_question(payload, user):
                 max_tokens=360,
                 temperature=0.2,
                 response_mime_type="application/json",
+                metadata=metadata,
             )
             retry_data = interview_core._safe_json_loads(retry_result.output_text or "{}")
             question, should_finish, reason = interview_core._parse_next_question_payload(

@@ -23,6 +23,7 @@ except Exception:
         return fallback
 from .kiwify_webhook import router as kiwify_webhook_router
 from .api import (
+    routes_avatar,
     routes_auth,
     routes_ai,
     routes_credits,
@@ -34,6 +35,7 @@ from .api import (
     routes_resume,
     routes_sessions,
 )
+from .request_context import reset_context, set_context
 from .services import interview_core
 
 # Load backend/.env when present (local dev)
@@ -76,12 +78,15 @@ logger = logging.getLogger('uvicorn.error')
 async def log_requests(request: Request, call_next):
     request_id = str(uuid.uuid4())
     request.state.request_id = request_id
+    context_tokens = set_context(request_id=request_id, user_id=None, session_id=None)
     logger.info('[%s] HTTP %s %s', request_id, request.method, request.url.path)
     try:
         response = await call_next(request)
     except Exception:
         logger.exception('[%s] Unhandled error', request_id)
         raise
+    finally:
+        reset_context(context_tokens)
     response.headers['x-request-id'] = request_id
     return response
 
@@ -119,6 +124,7 @@ app.include_router(routes_credits.router)
 app.include_router(routes_jobs.router)
 app.include_router(routes_resume.router)
 app.include_router(routes_live_coach.router)
+app.include_router(routes_avatar.router)
 app.include_router(routes_orchestrator.router)
 app.include_router(kiwify_webhook_router)
 

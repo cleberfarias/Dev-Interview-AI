@@ -1,5 +1,5 @@
 import React, { Suspense, useEffect, useRef, useState } from 'react';
-import { AppState, CandidateProfile, InterviewConfig, InterviewPlan, FinalReport, User } from './src/shared/types';
+import { AppState, AvatarResponse, CandidateProfile, InterviewConfig, InterviewPlan, FinalReport, User } from './src/shared/types';
 import { I18N, clampDuration, INTERVIEW_LIMITS } from './src/shared/constants';
 import { LandingPage, Login } from './src/features/auth';
 import { auth } from './src/lib/firebase';
@@ -65,6 +65,7 @@ const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [plan, setPlan] = useState<InterviewPlan | null>(null);
+  const [initialAvatar, setInitialAvatar] = useState<AvatarResponse | null>(null);
   const [report, setReport] = useState<FinalReport | null>(null);
   const [candidateProfile, setCandidateProfile] = useState<CandidateProfile | null>(null);
   const [globalNotice, setGlobalNotice] = useState<string | null>(null);
@@ -121,6 +122,7 @@ const App: React.FC = () => {
       if (!fbUser) {
         setUser(null);
         setCandidateProfile(null);
+        setInitialAvatar(null);
         setState(AppState.LOGIN);
         finishFirstLoad();
         return;
@@ -191,6 +193,7 @@ const App: React.FC = () => {
   const handleLogin = (newUser: User) => {
     setUser(newUser);
     setCandidateProfile(null);
+    setInitialAvatar(null);
     setState(AppState.DASHBOARD);
   };
 
@@ -198,6 +201,7 @@ const App: React.FC = () => {
     await signOut(auth);
     setUser(null);
     setCandidateProfile(null);
+    setInitialAvatar(null);
     setState(AppState.LOGIN);
   };
 
@@ -249,6 +253,7 @@ const App: React.FC = () => {
     if (!shouldExit) return;
     setPlan(null);
     setSessionId(null);
+    setInitialAvatar(null);
     setState(AppState.LOBBY);
     showGlobalNotice('Entrevista interrompida.');
   };
@@ -424,9 +429,10 @@ const App: React.FC = () => {
                   userCredits={user?.credits || 0}
                   candidateProfile={candidateProfile}
                   onOpenProfile={() => setState(AppState.PROFILE)}
-                  onStart={(p, sid, credits, difficultyLevel) => {
+                  onStart={(p, sid, credits, difficultyLevel, nextAvatar) => {
                     setPlan(p);
                     setSessionId(sid);
+                    setInitialAvatar(nextAvatar || null);
                     setConfig((prev) => ({
                       ...prev,
                       difficultyLevel: difficultyLevel ?? prev.difficultyLevel ?? 3,
@@ -444,6 +450,8 @@ const App: React.FC = () => {
                 <InterviewRoom
                   config={config}
                   plan={plan}
+                  sessionId={sessionId || undefined}
+                  initialAvatar={initialAvatar || undefined}
                   user={user}
                   onFinish={handleInterviewFinish}
                   onBack={handleInterviewBack}
@@ -460,6 +468,7 @@ const App: React.FC = () => {
                     setReport(null);
                     setPlan(null);
                     setSessionId(null);
+                    setInitialAvatar(null);
                     setState(AppState.DASHBOARD);
                   }}
                 />

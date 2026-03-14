@@ -4,7 +4,10 @@ from fastapi import HTTPException
 
 from ..ai.router import AIProviderError
 from ..schemas import FinalReport
-from . import interview_core
+from . import ai_observability_service, interview_core, memory_service
+
+
+REPORT_PROMPT_VERSION = "report_v3"
 
 
 def final_report(payload, user):
@@ -13,6 +16,12 @@ def final_report(payload, user):
     report_context = interview_core._build_report_context(user.get("uid"), payload.config, auth_token=user.get("token"))
     prompt = interview_core._build_report_prompt(payload.config, payload.history, report_context)
     summary = interview_core._summarize_scores(payload.history)
+    metadata = ai_observability_service.build_metadata(
+        user=user,
+        session_id=payload.sessionId,
+        agent="report_agent",
+        prompt_version=REPORT_PROMPT_VERSION,
+    )
     try:
         result = interview_core.ai_router.generate(
             task_name="report",
@@ -20,6 +29,7 @@ def final_report(payload, user):
             max_tokens=1200,
             temperature=0.2,
             response_mime_type="application/json",
+            metadata=metadata,
         )
     except AIProviderError as e:
         interview_core._handle_ai_error(e)
@@ -37,6 +47,15 @@ def final_report(payload, user):
             report = FinalReport(**report_data)
     except Exception:
         raise HTTPException(status_code=503, detail="AI retornou resposta invalida")
+
+    try:
+        memory_service.update_candidate_memory_after_report(
+            user_id=user["uid"],
+            report=report,
+            config=payload.config,
+        )
+    except Exception:
+        interview_core.logger.exception("Failed to update candidate memory uid=%s", user.get("uid"))
 
     interview_core._debit_credits(user["uid"], amount=1)
     return report

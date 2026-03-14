@@ -13,6 +13,7 @@ from ..jobs import analyzer
 from ..repositories import candidate_profile_repository, job_analysis_repository
 from ..resume import matcher
 from ..schemas import AnalysisTrace, JobAnalyzeRequest, JobAnalyzeResponse, JobAnalysisResult, ResumeMatchResult
+from . import ai_observability_service
 
 logger = logging.getLogger("uvicorn.error")
 ai_router = AIRouter()
@@ -217,7 +218,10 @@ def _build_job_ai_prompt(text: str) -> str:
     )
 
 
-def _analyze_job_with_ai(text: str) -> tuple[dict[str, Any] | None, dict[str, str | None]]:
+def _analyze_job_with_ai(
+    text: str,
+    metadata: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any] | None, dict[str, str | None]]:
     prompt = _build_job_ai_prompt(text)
     try:
         result = ai_router.generate(
@@ -226,6 +230,7 @@ def _analyze_job_with_ai(text: str) -> tuple[dict[str, Any] | None, dict[str, st
             max_tokens=700,
             temperature=0.1,
             response_mime_type="application/json",
+            metadata=metadata,
         )
     except AIProviderError:
         return None, {"provider": None, "model": None}
@@ -253,7 +258,12 @@ def analyze_job(payload: JobAnalyzeRequest, user: dict | None = None) -> JobAnal
         raise HTTPException(status_code=400, detail="jobDescription is required")
 
     heuristic_analysis = _normalize_job_analysis(analyzer.analyze_job_description(text))
-    ai_analysis, ai_meta = _analyze_job_with_ai(text)
+    metadata = ai_observability_service.build_metadata(
+        user=user if isinstance(user, dict) else None,
+        agent="job_analyzer_agent",
+        prompt_version=JOB_PROMPT_VERSION,
+    )
+    ai_analysis, ai_meta = _analyze_job_with_ai(text, metadata=metadata)
     analysis_data = _merge_job_analyses(ai_analysis or {}, heuristic_analysis)
     analysis = JobAnalysisResult(**analysis_data)
     if not ai_analysis:

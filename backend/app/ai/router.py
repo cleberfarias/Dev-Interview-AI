@@ -1,7 +1,6 @@
 import json
 import os
 import time
-import uuid
 import urllib.request
 import urllib.error
 from dataclasses import dataclass
@@ -9,6 +8,8 @@ from typing import Optional, List, Dict, Any
 
 from google import genai
 from google.genai import types
+
+from ..services import ai_observability_service
 
 
 @dataclass
@@ -286,11 +287,24 @@ class AIRouter:
         model_override: Optional[str] = None,
         response_mime_type: Optional[str] = None,
         media: Optional[List[Dict[str, Any]]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> AIResult:
+        meta = dict(metadata or {})
         if not any(p.is_configured() for p in self.providers.values()):
+            ai_observability_service.log_execution(
+                task_name=task_name,
+                provider=None,
+                model=model_override,
+                latency_ms=0,
+                tokens_used=None,
+                status="error",
+                prompt_text=prompt,
+                output_text=None,
+                metadata=meta,
+                error_message="AI not configured",
+            )
             raise AIProviderError("AI not configured", status_code=503, retryable=False)
 
-        request_id = str(uuid.uuid4())
         last_retry_after = None
         tried = []
 
@@ -312,6 +326,7 @@ class AIRouter:
             if not model:
                 continue
 
+            started_at = time.time()
             try:
                 result = provider.generate(
                     prompt=prompt,
@@ -321,8 +336,31 @@ class AIRouter:
                     response_mime_type=response_mime_type,
                     media=media,
                 )
+                ai_observability_service.log_execution(
+                    task_name=task_name,
+                    provider=result.provider_used,
+                    model=result.model_used,
+                    latency_ms=result.latency_ms or int((time.time() - started_at) * 1000),
+                    tokens_used=result.tokens_used,
+                    status="success",
+                    prompt_text=prompt,
+                    output_text=result.output_text,
+                    metadata=meta,
+                )
                 return result
             except AIProviderError as e:
+                ai_observability_service.log_execution(
+                    task_name=task_name,
+                    provider=provider_name,
+                    model=model,
+                    latency_ms=int((time.time() - started_at) * 1000),
+                    tokens_used=None,
+                    status="error",
+                    prompt_text=prompt,
+                    output_text=None,
+                    metadata=meta,
+                    error_message=str(e),
+                )
                 tried.append(f"{provider_name}:{model}")
                 if e.retry_after:
                     last_retry_after = e.retry_after

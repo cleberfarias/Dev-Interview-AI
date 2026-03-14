@@ -11,12 +11,14 @@ def run_text(
     transcript: str,
     confirmed_name: str | None,
     user: dict,
+    session_id: str | None = None,
 ) -> dict:
     payload = EvaluateTextRequest(
         config=config,
         question=question,
         transcript=transcript,
         confirmedName=confirmed_name or "candidato",
+        sessionId=session_id,
     )
     return evaluation_service.evaluate_text(payload, user).model_dump()
 
@@ -29,6 +31,7 @@ def run_audio(
     mime_type: str,
     confirmed_name: str | None,
     user: dict,
+    session_id: str | None = None,
 ) -> dict:
     payload = EvaluateAudioRequest(
         config=config,
@@ -36,5 +39,6 @@ def run_audio(
         audioBase64=audio_base64,
         mimeType=mime_type,
         confirmedName=confirmed_name or "candidato",
+        sessionId=session_id,
     )
     return evaluation_service.evaluate_audio(payload, user).model_dump()

@@ -17,6 +17,13 @@ from .analysis import (
     ResumeExtraction,
     ResumeMatchResult,
 )
+from .avatar import (
+    AvatarLipsyncPayload,
+    AvatarRenderPayload,
+    AvatarRespondRequest,
+    AvatarResponse,
+    AvatarVisemeFrame,
+)
 from .interview import (
     EvaluateAudioRequest,
     EvaluateTextRequest,
@@ -34,7 +41,7 @@ from .interview import (
     Track,
     InterviewStyle,
 )
-from .live_coach import LiveCoachProcessRequest, LiveCoachProcessResponse
+from .live_coach import LiveCoachAudioChunk, LiveCoachProcessRequest, LiveCoachProcessResponse
 from .orchestrator import (
     OrchestratorContextRequest,
     OrchestratorContextResponse,
@@ -56,6 +63,11 @@ from .report import (
 from .user import InterviewHistoryItem, UserProfile
 
 __all__ = [
+    "AvatarRespondRequest",
+    "AvatarResponse",
+    "AvatarLipsyncPayload",
+    "AvatarVisemeFrame",
+    "AvatarRenderPayload",
     "LanguageCode",
     "Track",
     "Seniority",
@@ -98,6 +110,7 @@ __all__ = [
     "SessionAnalysisTraceResponse",
     "LiveCoachProcessRequest",
     "LiveCoachProcessResponse",
+    "LiveCoachAudioChunk",
     "OrchestratorContextRequest",
     "OrchestratorContextResponse",
     "OrchestratorStartRequest",

@@ -7,6 +7,7 @@ from fastapi import HTTPException
 
 from .. import tts as tts_module
 from ..ai.router import AIProviderError
+from . import ai_observability_service
 
 
 def name_extract(payload, user):
@@ -23,12 +24,18 @@ def name_extract(payload, user):
         f"Responda somente o nome (1 palavra). Idioma: {payload.uiLanguage}"
     )
     try:
+        metadata = ai_observability_service.build_metadata(
+            user=user,
+            agent="name_extractor_agent",
+            prompt_version="name_extract_v1",
+        )
         result = interview_core.ai_router.generate(
             task_name="evaluate",
             prompt=prompt,
             max_tokens=20,
             temperature=0.0,
             media=[{"data": audio_bytes, "mime_type": payload.mimeType}],
+            metadata=metadata,
         )
     except AIProviderError as e:
         try:
@@ -43,6 +50,7 @@ def name_extract(payload, user):
                 prompt=prompt_txt,
                 max_tokens=20,
                 temperature=0.0,
+                metadata=metadata,
             )
         except Exception:
             interview_core._handle_ai_error(e)

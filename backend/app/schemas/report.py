@@ -45,6 +45,7 @@ class FinalReport(BaseModel):
 class FinalReportRequest(BaseModel):
     config: InterviewConfig
     history: List[Dict[str, Any]]
+    sessionId: Optional[str] = None
 
 
 class SessionFinishRequest(BaseModel):

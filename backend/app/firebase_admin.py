@@ -4,7 +4,9 @@ from typing import Optional, Dict, Any
 
 import firebase_admin
 from firebase_admin import auth, credentials, firestore
-from fastapi import Depends, Header, HTTPException
+from fastapi import Depends, Header, HTTPException, Request
+
+from .request_context import set_context
 
 _app = None
 _db = None
@@ -73,7 +75,7 @@ def verify_bearer_token(authorization: Optional[str]) -> Dict[str, Any]:
         print(f"verify_bearer_token error: {e}")
         raise HTTPException(status_code=401, detail=f"Invalid or expired token: {str(e)}")
 
-def get_current_user(authorization: Optional[str] = Header(default=None)):
+def get_current_user(request: Request, authorization: Optional[str] = Header(default=None)):
     decoded = verify_bearer_token(authorization)
     # best-effort extra fields (frontend can send as claims or we can enrich from Firebase)
     uid = decoded.get("uid") or decoded.get("user_id") or decoded.get("sub")
@@ -86,6 +88,9 @@ def get_current_user(authorization: Optional[str] = Header(default=None)):
     token = None
     if authorization and authorization.lower().startswith("bearer "):
         token = authorization.split(" ", 1)[1].strip() or None
+
+    request.state.user_id = uid
+    set_context(user_id=uid)
 
     return {
         "uid": uid,

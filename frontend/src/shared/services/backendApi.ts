@@ -21,6 +21,7 @@ import type {
   JobAnalyzeResponse,
   LiveCoachProcessResponse,
   SessionAnalysisTraceResponse,
+  AvatarResponse,
 } from "../types";
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || "/api";
@@ -209,7 +210,12 @@ export const BackendApi = {
       body: JSON.stringify(payload),
     }),
 
-  liveCoachProcess: (payload: { audioBase64: string; mimeType?: string; context?: Record<string, unknown> }) =>
+  liveCoachProcess: (payload: {
+    audioBase64?: string;
+    audioChunks?: Array<{ chunkIndex: number; audio: string; timestamp: string }>;
+    mimeType?: string;
+    context?: Record<string, unknown>;
+  }) =>
     apiFetch<LiveCoachProcessResponse>("/live-coach/process", {
       method: "POST",
       body: JSON.stringify(payload),
@@ -341,6 +347,7 @@ export const BackendApi = {
 
   orchestratorTurn: (payload: {
     config: InterviewConfig;
+    sessionId?: string;
     history: any[];
     question: string;
     remainingSeconds: number;
@@ -355,7 +362,19 @@ export const BackendApi = {
       body: JSON.stringify(payload),
     }),
 
-  orchestratorFinalize: (payload: { config: InterviewConfig; history: any[] }) =>
+  avatarRespond: (payload: {
+    text: string;
+    emotion?: string;
+    language?: string;
+    voice?: string;
+    sessionId?: string;
+  }) =>
+    apiFetch<AvatarResponse>("/avatar/respond", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  orchestratorFinalize: (payload: { config: InterviewConfig; sessionId?: string; history: any[] }) =>
     apiFetch<OrchestratorFinalizeResponse>("/interview/finalize", {
       method: "POST",
       body: JSON.stringify(payload),

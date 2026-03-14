@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
+from .avatar import AvatarResponse
 from .interview import InterviewConfig, NextQuestionResponse, SessionStartResponse
 from .report import AnswerEvaluation, FinalReport
 
@@ -16,6 +17,7 @@ class OrchestratorContextRequest(BaseModel):
 
 class OrchestratorContextResponse(BaseModel):
     profile: Dict[str, Any] = Field(default_factory=dict)
+    candidate_memory: Dict[str, Any] = Field(default_factory=dict)
     candidate: Dict[str, Any] = Field(default_factory=dict)
     job: Dict[str, Any] = Field(default_factory=dict)
     match: Dict[str, Any] = Field(default_factory=dict)
@@ -33,10 +35,12 @@ class OrchestratorStartResponse(BaseModel):
     session: SessionStartResponse
     context: Optional[OrchestratorContextResponse] = None
     initialNextQuestion: Optional[NextQuestionResponse] = None
+    initialAvatar: Optional[AvatarResponse] = None
 
 
 class OrchestratorTurnRequest(BaseModel):
     config: InterviewConfig
+    sessionId: Optional[str] = None
     history: List[Dict[str, Any]] = Field(default_factory=list)
     question: str
     remainingSeconds: int = 0
@@ -51,10 +55,12 @@ class OrchestratorTurnResponse(BaseModel):
     evaluation: AnswerEvaluation
     coach: Dict[str, Any] = Field(default_factory=dict)
     nextQuestion: NextQuestionResponse
+    avatar: Optional[AvatarResponse] = None
 
 
 class OrchestratorFinalizeRequest(BaseModel):
     config: InterviewConfig
+    sessionId: Optional[str] = None
     history: List[Dict[str, Any]] = Field(default_factory=list)
 
 

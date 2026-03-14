@@ -179,6 +179,58 @@ def test_live_coach_websocket_process_message(monkeypatch):
         assert response["payload"]["status"] == "ok"
 
 
+def test_live_coach_websocket_audio_chunk_streaming_events(monkeypatch):
+    monkeypatch.setattr(
+        routes_live_coach,
+        "verify_bearer_token",
+        lambda authorization: {
+            "uid": "ws-live-coach-user",
+            "email": "ws@example.com",
+            "name": "WS Coach",
+            "picture": None,
+        },
+    )
+
+    client = TestClient(app)
+    with client.websocket_connect("/live-coach/ws?token=fake-token") as websocket:
+        ready = websocket.receive_json()
+        assert ready["type"] == "ready"
+
+        websocket.send_json(
+            {
+                "type": "audio_chunk",
+                "requestId": "chunk-1",
+                "payload": {
+                    "audioChunks": [
+                        {
+                            "chunkIndex": 1,
+                            "audio": "Q29tbyB2b2NlIGRlc2VuaGFyaWEgdW0gc2lzdGVtYSByZXNpbGllbnRlPw==",
+                            "timestamp": "2026-03-13T12:00:00Z",
+                        }
+                    ],
+                    "context": {
+                        "source": "interview-room",
+                        "questionText": "Como voce desenharia um sistema resiliente?",
+                    },
+                },
+            }
+        )
+
+        partial = websocket.receive_json()
+        assert partial["type"] == "partial_transcription"
+        assert partial["requestId"] == "chunk-1"
+        assert isinstance(partial["payload"]["transcript"], str)
+
+        hint = websocket.receive_json()
+        assert hint["type"] == "coach_hint"
+        assert hint["requestId"] == "chunk-1"
+        assert hint["payload"]["status"] in {"ok", "insufficient_context", "transcription_failed"}
+
+        legacy = websocket.receive_json()
+        assert legacy["type"] == "insight"
+        assert legacy["requestId"] == "chunk-1"
+
+
 def test_live_coach_websocket_accepts_api_prefix(monkeypatch):
     monkeypatch.setattr(
         routes_live_coach,

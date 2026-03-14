@@ -1,0 +1,24 @@
+.panel {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+
+.chip {
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(111, 195, 245, 0.35);
+  background: rgba(7, 22, 68, 0.55);
+  color: #d5e9ff;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.active {
+  border-color: rgba(94, 231, 255, 0.7);
+  box-shadow: 0 0 12px rgba(94, 231, 255, 0.35);
+}

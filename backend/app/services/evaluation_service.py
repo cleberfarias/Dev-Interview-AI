@@ -7,6 +7,7 @@ from fastapi import HTTPException
 
 from ..ai.router import AIProviderError
 from ..schemas import AnswerEvaluation, InterviewConfig
+from . import ai_observability_service
 
 
 _DIMENSIONS = ("communication", "technical", "problemSolving", "presence")
@@ -26,6 +27,7 @@ _STRUCTURE_TOKENS = {
     "fim",
     "passo",
 }
+EVALUATION_PROMPT_VERSION = "evaluation_v3"
 
 
 def _clamp_score(value: float) -> float:
@@ -305,6 +307,12 @@ def evaluate_audio(payload, user):
         payload.confirmedName or "o candidato",
         auth_token=user.get("token"),
     )
+    metadata = ai_observability_service.build_metadata(
+        user=user,
+        session_id=payload.sessionId,
+        agent="evaluator_agent",
+        prompt_version=EVALUATION_PROMPT_VERSION,
+    )
 
     try:
         result = interview_core.ai_router.generate(
@@ -314,6 +322,7 @@ def evaluate_audio(payload, user):
             temperature=0.2,
             response_mime_type="application/json",
             media=[{"data": audio_bytes, "mime_type": payload.mimeType}],
+            metadata=metadata,
         )
     except AIProviderError as e:
         try:
@@ -331,6 +340,7 @@ def evaluate_audio(payload, user):
                 max_tokens=400,
                 temperature=0.2,
                 response_mime_type="application/json",
+                metadata=metadata,
             )
         except Exception:
             interview_core._handle_ai_error(e)
@@ -372,6 +382,12 @@ def evaluate_text(payload, user):
         transcript=transcript,
         auth_token=user.get("token"),
     )
+    metadata = ai_observability_service.build_metadata(
+        user=user,
+        session_id=payload.sessionId,
+        agent="evaluator_agent",
+        prompt_version=EVALUATION_PROMPT_VERSION,
+    )
 
     try:
         result = interview_core.ai_router.generate(
@@ -380,6 +396,7 @@ def evaluate_text(payload, user):
             max_tokens=400,
             temperature=0.2,
             response_mime_type="application/json",
+            metadata=metadata,
         )
     except AIProviderError as e:
         interview_core._handle_ai_error(e)

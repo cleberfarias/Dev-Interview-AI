@@ -4,16 +4,17 @@ import { useUserMedia } from '../../../../hooks/useUserMedia';
 import { useAudioRecorder } from '../../../../hooks/useAudioRecorder';
 import { useLipSync } from '../../../hooks/useLipSync';
 import {
-  AvatarInterviewerCard,
   PrimaryActionButton,
   QuestionVisualCard,
   TopBar,
   UserCameraCard,
 } from '../../../shared/components';
+import { AvatarInterview } from '../../avatar';
 import { I18N } from '../../../shared/constants';
 import { BackendApi } from '../../../shared/services/backendApi';
 import type {
   AnswerEvaluation,
+  AvatarResponse,
   FinalReport,
   InterviewConfig,
   InterviewPlan,
@@ -42,6 +43,9 @@ type InterviewFlowState =
   | 'next_question'
   | 'finished';
 
+type ConversationState = 'idle' | 'listening' | 'processing' | 'ai_speaking' | 'candidate_speaking';
+type AvatarInterviewState = 'idle' | 'avatar_listening' | 'avatar_thinking' | 'avatar_speaking';
+
 type AnswerMode = 'audio' | 'text';
 
 const MEDIA_CONSTRAINTS: MediaStreamConstraints = { video: true, audio: true };
@@ -57,6 +61,8 @@ const LIVE_COACH_WS_RESPONSE_TIMEOUT_MS = 7000;
 interface InterviewRoomLayoutProps {
   config: InterviewConfig;
   plan: InterviewPlan;
+  sessionId?: string;
+  initialAvatar?: AvatarResponse | null;
   onFinish?: (report: FinalReport) => void;
   onBack?: () => void;
 }
@@ -69,9 +75,17 @@ type LiveCoachFeedItem = {
   suggestion: string;
 };
 
-const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan, onFinish, onBack }) => {
+const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
+  config,
+  plan,
+  sessionId,
+  initialAvatar,
+  onFinish,
+  onBack,
+}) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [flowState, setFlowState] = useState<InterviewFlowState>('idle');
+  const [conversationState, setConversationState] = useState<ConversationState>('idle');
   const [answerMode, setAnswerMode] = useState<AnswerMode>('audio');
   const [textAnswer, setTextAnswer] = useState('');
   const [audioEl, setAudioEl] = useState<HTMLAudioElement | null>(null);
@@ -84,6 +98,8 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
   const [liveCoachLoading, setLiveCoachLoading] = useState(false);
   const [liveCoachError, setLiveCoachError] = useState<string | null>(null);
   const [liveCoachFeed, setLiveCoachFeed] = useState<LiveCoachFeedItem[]>([]);
+  const [avatarByQuestionId, setAvatarByQuestionId] = useState<Record<string, AvatarResponse>>({});
+  const [currentAvatar, setCurrentAvatar] = useState<AvatarResponse | null>(null);
   const historyRef = useRef<HistoryItem[]>([]);
   const liveCoachFeedRef = useRef<LiveCoachFeedItem[]>([]);
   const finishingRef = useRef(false);
@@ -93,6 +109,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
   const stopInProgressRef = useRef(false);
   const liveCoachChunkInFlightRef = useRef(false);
   const lastLiveCoachChunkAtRef = useRef(0);
+  const liveCoachChunkIndexRef = useRef(0);
   const liveCoachChunkHandlerRef = useRef<(chunk: Blob) => Promise<void>>(() => Promise.resolve());
   const liveCoachWsRef = useRef<WebSocket | null>(null);
   const liveCoachWsConnectRef = useRef<Promise<WebSocket | null> | null>(null);
@@ -103,6 +120,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
       {
         resolve: (value: LiveCoachProcessResponse | null) => void;
         reject: (reason?: unknown) => void;
+        onPartial?: (value: { transcript?: string | null }) => void;
         timeoutId: number;
       }
     >(),
@@ -141,6 +159,11 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
     const filtered = all.filter((question) => question.difficulty === selectedLevel);
     return filtered.length ? filtered : all;
   }, [plan, selectedLevel]);
+  const initialAvatarByQuestionId = useMemo<Record<string, AvatarResponse>>(() => {
+    const firstQuestion = baseQuestions[0];
+    if (!initialAvatar || !firstQuestion?.id) return {};
+    return { [firstQuestion.id]: initialAvatar };
+  }, [baseQuestions, initialAvatar]);
   const [questions, setQuestions] = useState<UiQuestion[]>(() => baseQuestions);
   const sanitizedConfig = useMemo(() => {
     const { difficultyLevel, ...rest } = config;
@@ -258,14 +281,20 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
           const pending = liveCoachWsPendingRef.current.get(requestId);
           if (!pending) return;
 
-          liveCoachWsPendingRef.current.delete(requestId);
-          window.clearTimeout(pending.timeoutId);
+          if (payload?.type === 'partial_transcription') {
+            pending.onPartial?.(payload?.payload || {});
+            return;
+          }
 
-          if (payload?.type === 'insight' && payload?.payload) {
+          if ((payload?.type === 'coach_hint' || payload?.type === 'insight') && payload?.payload) {
+            liveCoachWsPendingRef.current.delete(requestId);
+            window.clearTimeout(pending.timeoutId);
             pending.resolve(payload.payload as LiveCoachProcessResponse);
             return;
           }
 
+          liveCoachWsPendingRef.current.delete(requestId);
+          window.clearTimeout(pending.timeoutId);
           pending.reject(new Error(payload?.error || 'live_coach_socket_error'));
         });
 
@@ -294,23 +323,40 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
   }, [clearLiveCoachWsPending]);
 
   const requestLiveCoachViaWebSocket = useCallback(
-    async (payload: { audioBase64: string; mimeType?: string; context?: Record<string, unknown> }) => {
+    async (
+      payload: {
+        audioBase64?: string;
+        audioChunks?: Array<{ chunkIndex: number; audio: string; timestamp: string }>;
+        mimeType?: string;
+        context?: Record<string, unknown>;
+      },
+      options: {
+        messageType?: 'process' | 'audio_chunk';
+        onPartial?: (value: { transcript?: string | null }) => void;
+      } = {},
+    ) => {
       const ws = await ensureLiveCoachSocket();
       if (!ws || ws.readyState !== WebSocket.OPEN) return null;
 
       const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      const messageType = options.messageType || 'audio_chunk';
       return new Promise<LiveCoachProcessResponse | null>((resolve, reject) => {
         const timeoutId = window.setTimeout(() => {
           liveCoachWsPendingRef.current.delete(requestId);
           reject(new Error('live_coach_socket_timeout'));
         }, LIVE_COACH_WS_RESPONSE_TIMEOUT_MS);
 
-        liveCoachWsPendingRef.current.set(requestId, { resolve, reject, timeoutId });
+        liveCoachWsPendingRef.current.set(requestId, {
+          resolve,
+          reject,
+          timeoutId,
+          onPartial: options.onPartial,
+        });
 
         try {
           ws.send(
             JSON.stringify({
-              type: 'process',
+              type: messageType,
               requestId,
               payload,
             }),
@@ -328,7 +374,12 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
 
   const requestLiveCoachInsight = useCallback(
     async (
-      input: { audioBase64: string; mimeType?: string; transcript?: string },
+      input: {
+        audioBase64: string;
+        audioChunks?: Array<{ chunkIndex: number; audio: string; timestamp: string }>;
+        mimeType?: string;
+        transcript?: string;
+      },
       options: { background?: boolean; silent?: boolean } = {},
     ) => {
       if (!currentQuestion?.title) return;
@@ -337,6 +388,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
       if (!background) {
         setLiveCoachLoading(true);
         setLiveCoachError(null);
+        setConversationState('processing');
       }
       const recentHistory = historyRef.current.slice(-3).map((item) => ({
         question: item.question,
@@ -347,9 +399,11 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
       const recentTips = liveCoachFeedRef.current.slice(0, 3).map((item) => item.suggestion);
       const requestPayload = {
         audioBase64: input.audioBase64,
+        audioChunks: input.audioChunks || undefined,
         mimeType: input.mimeType || 'audio/webm',
         context: {
           source: 'interview-room',
+          sessionId: sessionId || undefined,
           questionText: currentQuestion.title,
           transcript: input.transcript || undefined,
           candidateProfile: {
@@ -366,7 +420,15 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
       try {
         let response: LiveCoachProcessResponse | null = null;
         try {
-          response = await requestLiveCoachViaWebSocket(requestPayload);
+          const messageType = input.transcript ? 'process' : 'audio_chunk';
+          response = await requestLiveCoachViaWebSocket(requestPayload, {
+            messageType,
+            onPartial: (partial) => {
+              if (partial?.transcript && flowState === 'recording') {
+                setConversationState('candidate_speaking');
+              }
+            },
+          });
         } catch (wsError) {
           console.warn('Live coach websocket fallback to HTTP', wsError);
         }
@@ -389,6 +451,11 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
       } finally {
         if (!background) {
           setLiveCoachLoading(false);
+          if (flowState === 'recording') {
+            setConversationState('candidate_speaking');
+          } else if (flowState === 'awaiting_answer') {
+            setConversationState('listening');
+          }
         }
       }
     },
@@ -398,7 +465,9 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
       config.stacks,
       config.track,
       currentQuestion?.title,
+      flowState,
       requestLiveCoachViaWebSocket,
+      sessionId,
     ],
   );
 
@@ -415,9 +484,18 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
       lastLiveCoachChunkAtRef.current = now;
       try {
         const base64Audio = await blobToBase64(chunk);
+        const chunkIndex = liveCoachChunkIndexRef.current + 1;
+        liveCoachChunkIndexRef.current = chunkIndex;
         await requestLiveCoachInsight(
           {
             audioBase64: base64Audio,
+            audioChunks: [
+              {
+                chunkIndex,
+                audio: base64Audio,
+                timestamp: new Date().toISOString(),
+              },
+            ],
             mimeType: chunk.type || 'audio/webm',
           },
           { background: true, silent: true },
@@ -439,6 +517,39 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
     audioEl.load();
   }, [audioEl]);
 
+  const playAudioPayload = useCallback(
+    async (payload: { audioBase64: string; mimeType: string }) => {
+      if (!audioEl) return;
+      if (!payload.audioBase64) return;
+
+      stopTTS();
+      audioEl.src = `data:${payload.mimeType};base64,${payload.audioBase64}`;
+
+      const playPromise = audioEl.play();
+      if (playPromise) {
+        await playPromise;
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        const handleEnd = () => {
+          audioEl.removeEventListener('ended', handleEnd);
+          audioEl.removeEventListener('error', handleError);
+          resolve();
+        };
+
+        const handleError = () => {
+          audioEl.removeEventListener('ended', handleEnd);
+          audioEl.removeEventListener('error', handleError);
+          reject(new Error('Falha ao tocar o audio.'));
+        };
+
+        audioEl.addEventListener('ended', handleEnd);
+        audioEl.addEventListener('error', handleError);
+      });
+    },
+    [audioEl, stopTTS],
+  );
+
   const speakQuestion = useCallback(
     async (text: string, voiceId?: string) => {
       if (!audioEl) return;
@@ -447,35 +558,33 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
 
       try {
         const response = await BackendApi.tts(text, config.interviewLanguage, voiceId);
-        audioEl.src = `data:${response.mimeType};base64,${response.audioBase64}`;
-
-        const playPromise = audioEl.play();
-        if (playPromise) {
-          await playPromise;
-        }
-
-        await new Promise<void>((resolve, reject) => {
-          const handleEnd = () => {
-            audioEl.removeEventListener('ended', handleEnd);
-            audioEl.removeEventListener('error', handleError);
-            resolve();
-          };
-
-          const handleError = () => {
-            audioEl.removeEventListener('ended', handleEnd);
-            audioEl.removeEventListener('error', handleError);
-            reject(new Error('Falha ao tocar o audio.'));
-          };
-
-          audioEl.addEventListener('ended', handleEnd);
-          audioEl.addEventListener('error', handleError);
-        });
+        await playAudioPayload({ audioBase64: response.audioBase64, mimeType: response.mimeType });
       } catch (error) {
         console.warn('TTS falhou', error);
         showRuntimeNotice('Audio da pergunta indisponivel no momento.');
       }
     },
-    [audioEl, config.interviewLanguage, showRuntimeNotice, stopTTS],
+    [audioEl, config.interviewLanguage, playAudioPayload, showRuntimeNotice, stopTTS],
+  );
+
+  const resolveAvatarForQuestion = useCallback(
+    async (questionId: string, prompt: string): Promise<AvatarResponse | null> => {
+      const cached = avatarByQuestionId[questionId];
+      if (cached) return cached;
+      try {
+        const avatar = await BackendApi.avatarRespond({
+          text: prompt,
+          language: config.interviewLanguage,
+          sessionId,
+        });
+        setAvatarByQuestionId((prev) => ({ ...prev, [questionId]: avatar }));
+        return avatar;
+      } catch (error) {
+        console.warn('Avatar respond fallback to regular TTS', error);
+        return null;
+      }
+    },
+    [avatarByQuestionId, config.interviewLanguage, sessionId],
   );
 
   const clearNoResponseTimer = useCallback(() => {
@@ -560,11 +669,12 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
       if (finishingRef.current) return;
       finishingRef.current = true;
       setFlowState('finished');
+      setConversationState('idle');
       clearNoResponseTimer();
       stopVoiceMonitor();
       stopTTS();
       try {
-        const finalized = await BackendApi.orchestratorFinalize({ config: sanitizedConfig, history });
+        const finalized = await BackendApi.orchestratorFinalize({ config: sanitizedConfig, sessionId, history });
         const weeklyPlan = Array.isArray(finalized.studyPlan?.weeklyPlan)
           ? finalized.studyPlan.weeklyPlan
               .map((item, index) => {
@@ -591,7 +701,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
         finishingRef.current = false;
       }
     },
-    [config, onFinish, plan, sanitizedConfig, showRuntimeNotice, stopTTS],
+    [config, onFinish, plan, sanitizedConfig, sessionId, showRuntimeNotice, stopTTS],
   );
 
   const handleFinish = useCallback(async () => {
@@ -609,8 +719,10 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
     async (overridePrompt?: string) => {
       if (!currentQuestion) return;
       setFlowState('asking');
+      setConversationState('ai_speaking');
       if (!audioEl) {
         setFlowState('awaiting_answer');
+        setConversationState('listening');
         return;
       }
       const prompt = overridePrompt || buildSpokenPrompt(
@@ -619,10 +731,34 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
         config.style,
         config.interviewLanguage,
       );
-      await speakQuestion(prompt);
+      const avatarPayload = await resolveAvatarForQuestion(currentQuestion.id, prompt);
+      if (avatarPayload) {
+        setCurrentAvatar(avatarPayload);
+      }
+
+      if (avatarPayload?.audio) {
+        try {
+          await playAudioPayload({ audioBase64: avatarPayload.audio, mimeType: avatarPayload.mimeType });
+        } catch (error) {
+          console.warn('Avatar audio playback failed, using fallback TTS', error);
+          await speakQuestion(prompt);
+        }
+      } else {
+        await speakQuestion(prompt);
+      }
       setFlowState('awaiting_answer');
+      setConversationState('listening');
     },
-    [audioEl, config.interviewLanguage, config.style, currentIndex, currentQuestion, speakQuestion],
+    [
+      audioEl,
+      config.interviewLanguage,
+      config.style,
+      currentIndex,
+      currentQuestion,
+      playAudioPayload,
+      resolveAvatarForQuestion,
+      speakQuestion,
+    ],
   );
 
   const handleNoResponse = useCallback(async () => {
@@ -634,9 +770,11 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
       } catch {}
     }
     setFlowState('no_response');
+    setConversationState('ai_speaking');
     try {
       await speakQuestion(buildNoResponsePrompt(config.interviewLanguage));
     } catch {}
+    setConversationState('listening');
   }, [clearNoResponseTimer, config.interviewLanguage, isRecorderActive, speakQuestion, stopRecording, stopVoiceMonitor]);
 
   const startRecordingFlow = useCallback(async () => {
@@ -644,6 +782,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
     try {
       startRecording();
       setFlowState('recording');
+      setConversationState('candidate_speaking');
       hasSpokenRef.current = false;
       lastSoundAtRef.current = Date.now();
       autoStopRef.current = false;
@@ -670,6 +809,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
         question?: { id?: string; section?: string; difficulty?: number; prompt?: string };
       };
       coach?: { tips?: string[] };
+      avatar?: AvatarResponse | null;
     }) => {
       const response = turnResult.evaluation;
       const nextHistory = [
@@ -700,6 +840,9 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
         }
 
         const mapped = toUiQuestion(nextRes.question, nextIndex, baseBullets);
+        if (turnResult.avatar) {
+          setAvatarByQuestionId((prev) => ({ ...prev, [mapped.id]: turnResult.avatar as AvatarResponse }));
+        }
         setQuestions((prev) => {
           const next = [...prev];
           if (next[nextIndex]) {
@@ -711,10 +854,12 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
         });
 
         setFlowState('next_question');
+        setConversationState('processing');
       } catch (error) {
         console.warn(error);
         if (hasPlannedNext) {
           setFlowState('next_question');
+          setConversationState('processing');
         } else {
           showRuntimeNotice('Conexao instavel. Tentando manter a entrevista ativa.');
           const shouldFallbackLocally = nextIndex < fallbackMaxQuestions;
@@ -741,6 +886,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
                 return next;
               });
               setFlowState('next_question');
+              setConversationState('processing');
               return;
             }
           }
@@ -761,6 +907,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
       finalizeInterview,
       questions,
       remainingSeconds,
+      setAvatarByQuestionId,
       showRuntimeNotice,
       timeLimitReached,
     ],
@@ -774,6 +921,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
       clearNoResponseTimer();
       stopVoiceMonitor();
       setFlowState('evaluating');
+      setConversationState('processing');
       try {
         const blob = await stopRecording();
         const base64Audio = await blobToBase64(blob);
@@ -783,6 +931,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
         });
         const turnResult = await BackendApi.orchestratorTurn({
           config: sanitizedConfig,
+          sessionId,
           history: historyRef.current,
           question: currentQuestion.title,
           remainingSeconds,
@@ -795,6 +944,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
         console.warn(error);
         showRuntimeNotice('Nao foi possivel processar sua resposta. Tente novamente.');
         setFlowState('awaiting_answer');
+        setConversationState('listening');
       } finally {
         stopInProgressRef.current = false;
       }
@@ -811,6 +961,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
       stopVoiceMonitor,
       requestLiveCoachInsight,
       currentQuestion.title,
+      sessionId,
     ],
   );
 
@@ -827,6 +978,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
     clearNoResponseTimer();
     stopVoiceMonitor();
     setFlowState('evaluating');
+    setConversationState('processing');
     try {
       void requestLiveCoachInsight({
         audioBase64: '',
@@ -835,6 +987,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
       });
       const turnResult = await BackendApi.orchestratorTurn({
         config: sanitizedConfig,
+        sessionId,
         history: historyRef.current,
         question: currentQuestion.title,
         remainingSeconds,
@@ -847,6 +1000,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
       console.warn(error);
       showRuntimeNotice('Nao foi possivel processar a resposta em texto.');
       setFlowState('awaiting_answer');
+      setConversationState('listening');
     }
   }, [
     clearNoResponseTimer,
@@ -860,6 +1014,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
     stopVoiceMonitor,
     textAnswer,
     requestLiveCoachInsight,
+    sessionId,
   ]);
 
   useEffect(() => {
@@ -868,13 +1023,17 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
     historyRef.current = [];
     setCurrentIndex(0);
     setFlowState('idle');
+    setConversationState('idle');
     setAnswerMode('audio');
     setTextAnswer('');
     setTimeLimitReached(false);
     setRemainingSeconds(totalSeconds);
     setQuestions(baseQuestions);
     setLiveCoachFeed([]);
+    setAvatarByQuestionId(initialAvatarByQuestionId);
+    setCurrentAvatar(baseQuestions[0] ? initialAvatarByQuestionId[baseQuestions[0].id] || null : null);
     liveCoachFeedRef.current = [];
+    liveCoachChunkIndexRef.current = 0;
     startTimeRef.current = Date.now();
     if (timerRef.current) {
       window.clearInterval(timerRef.current);
@@ -896,16 +1055,25 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
       stopVoiceMonitor();
       closeLiveCoachSocket('session_cleanup');
     };
-  }, [baseQuestions, clearNoResponseTimer, closeLiveCoachSocket, stopVoiceMonitor, totalSeconds]);
+  }, [
+    baseQuestions,
+    clearNoResponseTimer,
+    closeLiveCoachSocket,
+    initialAvatarByQuestionId,
+    stopVoiceMonitor,
+    totalSeconds,
+  ]);
 
   useEffect(() => {
     setTextAnswer('');
     setLiveCoachInsight(null);
     setLiveCoachError(null);
     setLiveCoachLoading(false);
+    setCurrentAvatar(currentQuestion ? avatarByQuestionId[currentQuestion.id] || null : null);
     liveCoachChunkInFlightRef.current = false;
     lastLiveCoachChunkAtRef.current = 0;
-  }, [currentQuestion?.id]);
+    liveCoachChunkIndexRef.current = 0;
+  }, [avatarByQuestionId, currentQuestion]);
 
   useEffect(() => {
     liveCoachChunkHandlerRef.current = handleLiveCoachChunk;
@@ -933,6 +1101,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
 
   useEffect(() => {
     if (flowState !== 'finished') return;
+    setConversationState('idle');
     if (timerRef.current) {
       window.clearInterval(timerRef.current);
       timerRef.current = null;
@@ -978,7 +1147,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
 
   const isRecording = flowState === 'recording' || isRecorderActive;
   const isLoading = flowState === 'idle' || !currentQuestion;
-  const isAvatarSpeaking = isSpeaking || flowState === 'asking';
+  const isAvatarSpeaking = isSpeaking || flowState === 'asking' || conversationState === 'ai_speaking';
   const isFinished = flowState === 'finished';
   const isTextMode = answerMode === 'text';
   const canSubmitText = isTextMode && flowState === 'awaiting_answer' && textAnswer.trim().length > 0;
@@ -1013,11 +1182,33 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
     typeof responseQuality === 'number' ? responseQuality.toFixed(1) : '--';
   const confidenceLabel =
     typeof confidenceScore === 'number' ? confidenceScore.toFixed(1) : '--';
+  const conversationStateLabelMap: Record<ConversationState, string> = {
+    idle: 'idle',
+    listening: 'listening',
+    processing: 'processing',
+    ai_speaking: 'ai_speaking',
+    candidate_speaking: 'candidate_speaking',
+  };
+  const conversationStateLabel = conversationStateLabelMap[conversationState];
+  const avatarInterviewState: AvatarInterviewState =
+    conversationState === 'ai_speaking'
+      ? 'avatar_speaking'
+      : conversationState === 'processing'
+        ? 'avatar_thinking'
+        : conversationState === 'listening' || conversationState === 'candidate_speaking'
+          ? 'avatar_listening'
+          : 'idle';
 
   const sideStatusText =
-    flowState === 'evaluating'
+    conversationState === 'processing'
       ? 'IA analisando sua resposta...'
-      : flowState === 'next_question'
+      : conversationState === 'ai_speaking'
+        ? 'IA conduzindo a pergunta atual.'
+        : conversationState === 'candidate_speaking'
+          ? 'Voce esta respondendo. Continue com exemplos concretos.'
+          : conversationState === 'listening'
+            ? 'Escute com atencao e prepare sua resposta.'
+            : flowState === 'next_question'
         ? 'Proxima pergunta em instantes.'
         : flowState === 'awaiting_answer' || flowState === 'recording'
           ? 'Responda quando estiver pronto.'
@@ -1048,6 +1239,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
     if (isFinished || flowState === 'evaluating' || flowState === 'recording') return;
     setAnswerMode(nextMode);
     clearNoResponseTimer();
+    setConversationState('listening');
     if (nextMode === 'text') {
       stopVoiceMonitor();
     }
@@ -1086,12 +1278,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
       <section className={styles.content} aria-label="Sala de entrevista">
         <div className={styles.grid}>
           <div className={styles.leftColumn}>
-            <AvatarInterviewerCard
-              isSpeaking={isAvatarSpeaking}
-              mouthOpen={mouthOpen}
-              avatarGender="female"
-              showHeader={false}
-            />
+            <AvatarInterview avatar={currentAvatar} state={avatarInterviewState} />
           </div>
           <div className={styles.centerColumn}>
             <div className={styles.presentationChip} aria-label="Tela de apresentacao">
@@ -1127,6 +1314,10 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({ config, plan,
               <div className={styles.scoreLine}>
                 <span>Confianca ao falar</span>
                 <strong>{confidenceLabel}</strong>
+              </div>
+              <div className={styles.scoreLine}>
+                <span>Estado da conversa</span>
+                <strong>{conversationStateLabel}</strong>
               </div>
               <p className={styles.nextHint}>{sideStatusText}</p>
             </div>

@@ -144,6 +144,7 @@ export interface NextQuestionResponse {
 
 export interface OrchestratorContextResponse {
   profile: Record<string, unknown>;
+  candidate_memory?: Record<string, unknown>;
   candidate: Record<string, unknown>;
   job: Record<string, unknown>;
   match: Record<string, unknown>;
@@ -153,6 +154,7 @@ export interface OrchestratorStartResponse {
   session: SessionStartResponse;
   context?: OrchestratorContextResponse | null;
   initialNextQuestion?: NextQuestionResponse | null;
+  initialAvatar?: AvatarResponse | null;
 }
 
 export interface OrchestratorTurnResponse {
@@ -164,6 +166,7 @@ export interface OrchestratorTurnResponse {
     [key: string]: unknown;
   };
   nextQuestion: NextQuestionResponse;
+  avatar?: AvatarResponse | null;
 }
 
 export interface OrchestratorFinalizeResponse {
@@ -334,6 +337,28 @@ export interface LiveCoachProcessResponse {
   transcriptionError?: string | null;
   contextUsed: boolean;
   audioReceived: boolean;
+}
+
+export interface AvatarVisemeFrame {
+  time: number;
+  viseme: string;
+}
+
+export interface AvatarResponse {
+  audio: string;
+  mimeType: string;
+  lipsync: {
+    frames: AvatarVisemeFrame[];
+    durationMs: number;
+  };
+  emotion: string;
+  ttsProvider: string;
+  render: {
+    state: string;
+    facialPreset: string;
+    intensity: number;
+    meta: Record<string, unknown>;
+  };
 }
 
 export enum AppState {

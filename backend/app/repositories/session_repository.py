@@ -61,3 +61,10 @@ def upsert_session(session_id: str, data: dict[str, Any], merge: bool = True) ->
 
 def delete_session(session_id: str) -> None:
     get_firestore_client().collection("sessions").document(session_id).delete()
+
+
+def count_sessions(status: str | None = None) -> int:
+    query = get_firestore_client().collection("sessions")
+    if status:
+        query = query.where("status", "==", status)
+    return sum(1 for _ in query.stream())

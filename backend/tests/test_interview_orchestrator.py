@@ -53,6 +53,17 @@ def test_run_turn_returns_evaluation_coach_and_next_question(monkeypatch):
         "app.services.interview_orchestrator.interviewer_agent.run",
         lambda **kwargs: {"shouldFinish": False, "question": {"prompt": "Next?"}},
     )
+    monkeypatch.setattr(
+        "app.services.interview_orchestrator.avatar_controller.generate_avatar_response",
+        lambda **kwargs: {
+            "audio": "ZmFrZS1hdWRpbw==",
+            "mimeType": "audio/mpeg",
+            "lipsync": {"frames": [{"time": 0.1, "viseme": "A"}], "durationMs": 1200},
+            "emotion": "neutral",
+            "ttsProvider": "openai",
+            "render": {"state": "speaking", "facialPreset": "neutral", "intensity": 0.5, "meta": {}},
+        },
+    )
 
     result = interview_orchestrator.run_turn(
         user={"uid": "u1"},
@@ -65,6 +76,7 @@ def test_run_turn_returns_evaluation_coach_and_next_question(monkeypatch):
     assert "evaluation" in result
     assert "coach" in result
     assert result["nextQuestion"]["shouldFinish"] is False
+    assert result["avatar"]["ttsProvider"] == "openai"
 
 
 def test_finalize_returns_report_and_study_plan(monkeypatch):
@@ -80,4 +92,3 @@ def test_finalize_returns_report_and_study_plan(monkeypatch):
     result = interview_orchestrator.finalize(user={"uid": "u1"}, config=_config(), history=[])
     assert result["report"]["overallScore"] == 8.2
     assert result["studyPlan"]["priorityTopics"] == ["APIs"]
-

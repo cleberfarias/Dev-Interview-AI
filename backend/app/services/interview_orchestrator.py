@@ -5,6 +5,7 @@ from typing import Any
 
 from fastapi import HTTPException
 
+from ..avatar_engine import avatar_controller
 from ..agents import (
     candidate_agent,
     coach_agent,
@@ -22,9 +23,32 @@ from ..schemas import (
     OrchestratorStartRequest,
     OrchestratorTurnRequest,
 )
-from . import candidate_profile_service, session_service
+from ..request_context import scoped_context
+from . import candidate_profile_service, memory_service, session_service
 
 logger = logging.getLogger("uvicorn.error")
+
+
+def _avatar_for_question(*, question_payload: dict[str, Any] | None, config: InterviewConfig) -> dict[str, Any] | None:
+    if not isinstance(question_payload, dict):
+        return None
+    should_finish = bool(question_payload.get("shouldFinish"))
+    if should_finish:
+        return None
+    question = question_payload.get("question")
+    if not isinstance(question, dict):
+        return None
+    prompt = str(question.get("prompt") or "").strip()
+    if not prompt:
+        return None
+    try:
+        return avatar_controller.generate_avatar_response(
+            text=prompt,
+            language=config.interviewLanguage,
+        )
+    except Exception:
+        logger.exception("Failed to generate avatar payload for question")
+        return None
 
 
 def build_context(
@@ -34,7 +58,9 @@ def build_context(
     resume_text: str | None = None,
     job_description: str | None = None,
 ) -> dict[str, Any]:
+    user_id = str(user.get("uid") or "")
     profile = candidate_profile_service.get_candidate_profile(user).model_dump()
+    candidate_memory = memory_service.load_candidate_memory(user_id)
     candidate = candidate_agent.run(
         resume_text=resume_text or (profile.get("resumeSummary") or ""),
         profile=profile,
@@ -47,6 +73,7 @@ def build_context(
     )
     return {
         "profile": profile,
+        "candidate_memory": candidate_memory,
         "candidate": candidate,
         "job": job,
         "match": match,
@@ -64,6 +91,7 @@ def initial_next_question(
     config: InterviewConfig,
     remaining_seconds: int,
     difficulty_level: int | None = None,
+    session_id: str | None = None,
 ) -> dict[str, Any]:
     return interviewer_agent.run(
         config=config,
@@ -71,6 +99,7 @@ def initial_next_question(
         remaining_seconds=max(0, int(remaining_seconds)),
         difficulty_level=difficulty_level,
         user=user,
+        session_id=session_id,
     )
 
 
@@ -86,6 +115,7 @@ def run_turn(
     confirmed_name: str | None = None,
     audio_base64: str | None = None,
     mime_type: str = "audio/webm",
+    session_id: str | None = None,
 ) -> dict[str, Any]:
     transcript_text = (transcript or "").strip()
     audio_text = (audio_base64 or "").strip()
@@ -97,6 +127,7 @@ def run_turn(
             mime_type=mime_type,
             confirmed_name=confirmed_name,
             user=user,
+            session_id=session_id,
         )
     elif transcript_text:
         evaluation = evaluator_agent.run_text(
@@ -105,6 +136,7 @@ def run_turn(
             transcript=transcript_text,
             confirmed_name=confirmed_name,
             user=user,
+            session_id=session_id,
         )
     else:
         raise ValueError("Either transcript or audio input is required")
@@ -126,16 +158,25 @@ def run_turn(
         remaining_seconds=remaining_seconds,
         difficulty_level=difficulty_level,
         user=user,
+        session_id=session_id,
     )
+    avatar = _avatar_for_question(question_payload=next_question, config=config)
     return {
         "evaluation": evaluation,
         "coach": coach,
         "nextQuestion": next_question,
+        "avatar": avatar,
     }
 
 
-def finalize(*, user: dict, config: InterviewConfig, history: list[dict]) -> dict[str, Any]:
-    report = report_agent.run(config=config, history=history, user=user)
+def finalize(
+    *,
+    user: dict,
+    config: InterviewConfig,
+    history: list[dict],
+    session_id: str | None = None,
+) -> dict[str, Any]:
+    report = report_agent.run(config=config, history=history, user=user, session_id=session_id)
     study_plan = study_plan_agent.run(report=report)
     return {
         "report": report,
@@ -154,27 +195,33 @@ def build_orchestrated_context(*, payload: OrchestratorContextRequest, user: dic
 
 def start_orchestrated_interview(*, payload: OrchestratorStartRequest, user: dict) -> dict[str, Any]:
     session_data = start_session(config=payload.config, user=user)
+    session_id = str(session_data.get("sessionId") or "").strip() or None
 
     context = None
     if payload.includeContext:
         try:
-            context = build_context(
-                user=user,
-                config=payload.config,
-                resume_text=payload.resumeText,
-                job_description=payload.jobDescription,
-            )
+            with scoped_context(user_id=str(user.get("uid") or ""), session_id=session_id):
+                context = build_context(
+                    user=user,
+                    config=payload.config,
+                    resume_text=payload.resumeText,
+                    job_description=payload.jobDescription,
+                )
         except Exception:
             logger.exception("Failed to precompute orchestrator context uid=%s", user.get("uid"))
 
     initial_next = None
+    initial_avatar = None
     try:
-        initial_next = initial_next_question(
-            user=user,
-            config=payload.config,
-            remaining_seconds=max(0, int((payload.config.duration or 0) * 60)),
-            difficulty_level=payload.difficultyLevel,
-        )
+        with scoped_context(user_id=str(user.get("uid") or ""), session_id=session_id):
+            initial_next = initial_next_question(
+                user=user,
+                config=payload.config,
+                remaining_seconds=max(0, int((payload.config.duration or 0) * 60)),
+                difficulty_level=payload.difficultyLevel,
+                session_id=session_id,
+            )
+            initial_avatar = _avatar_for_question(question_payload=initial_next, config=payload.config)
     except Exception:
         logger.exception("Failed to precompute initial next-question uid=%s", user.get("uid"))
 
@@ -182,6 +229,7 @@ def start_orchestrated_interview(*, payload: OrchestratorStartRequest, user: dic
         "session": session_data,
         "context": context,
         "initialNextQuestion": initial_next,
+        "initialAvatar": initial_avatar,
     }
 
 
@@ -192,25 +240,29 @@ def run_orchestrated_turn(*, payload: OrchestratorTurnRequest, user: dict) -> di
         raise HTTPException(status_code=400, detail="Provide transcript or audioBase64")
 
     try:
-        return run_turn(
-            user=user,
-            config=payload.config,
-            history=payload.history,
-            question=payload.question,
-            transcript=transcript or None,
-            remaining_seconds=int(payload.remainingSeconds or 0),
-            difficulty_level=payload.difficultyLevel,
-            confirmed_name=payload.confirmedName,
-            audio_base64=audio_base64 or None,
-            mime_type=payload.mimeType,
-        )
+        with scoped_context(user_id=str(user.get("uid") or ""), session_id=payload.sessionId):
+            return run_turn(
+                user=user,
+                config=payload.config,
+                history=payload.history,
+                question=payload.question,
+                transcript=transcript or None,
+                remaining_seconds=int(payload.remainingSeconds or 0),
+                difficulty_level=payload.difficultyLevel,
+                confirmed_name=payload.confirmedName,
+                audio_base64=audio_base64 or None,
+                mime_type=payload.mimeType,
+                session_id=payload.sessionId,
+            )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def finalize_orchestrated_interview(*, payload: OrchestratorFinalizeRequest, user: dict) -> dict[str, Any]:
-    return finalize(
-        user=user,
-        config=payload.config,
-        history=payload.history,
-    )
+    with scoped_context(user_id=str(user.get("uid") or ""), session_id=payload.sessionId):
+        return finalize(
+            user=user,
+            config=payload.config,
+            history=payload.history,
+            session_id=payload.sessionId,
+        )
