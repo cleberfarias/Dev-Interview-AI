@@ -21,6 +21,7 @@ import type {
   JobAnalyzeResponse,
   LiveCoachProcessResponse,
   SessionAnalysisTraceResponse,
+  AvatarResponse,
 } from "../types";
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || "/api";
@@ -357,6 +358,18 @@ export const BackendApi = {
     mimeType?: string;
   }) =>
     apiFetch<OrchestratorTurnResponse>("/interview/turn", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  avatarRespond: (payload: {
+    text: string;
+    emotion?: string;
+    language?: string;
+    voice?: string;
+    sessionId?: string;
+  }) =>
+    apiFetch<AvatarResponse>("/avatar/respond", {
       method: "POST",
       body: JSON.stringify(payload),
     }),

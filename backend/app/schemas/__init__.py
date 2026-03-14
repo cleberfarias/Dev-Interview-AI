@@ -17,6 +17,13 @@ from .analysis import (
     ResumeExtraction,
     ResumeMatchResult,
 )
+from .avatar import (
+    AvatarLipsyncPayload,
+    AvatarRenderPayload,
+    AvatarRespondRequest,
+    AvatarResponse,
+    AvatarVisemeFrame,
+)
 from .interview import (
     EvaluateAudioRequest,
     EvaluateTextRequest,
@@ -56,6 +63,11 @@ from .report import (
 from .user import InterviewHistoryItem, UserProfile
 
 __all__ = [
+    "AvatarRespondRequest",
+    "AvatarResponse",
+    "AvatarLipsyncPayload",
+    "AvatarVisemeFrame",
+    "AvatarRenderPayload",
     "LanguageCode",
     "Track",
     "Seniority",

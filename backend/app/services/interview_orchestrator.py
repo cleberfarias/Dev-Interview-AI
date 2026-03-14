@@ -5,6 +5,7 @@ from typing import Any
 
 from fastapi import HTTPException
 
+from ..avatar_engine import avatar_controller
 from ..agents import (
     candidate_agent,
     coach_agent,
@@ -26,6 +27,28 @@ from ..request_context import scoped_context
 from . import candidate_profile_service, memory_service, session_service
 
 logger = logging.getLogger("uvicorn.error")
+
+
+def _avatar_for_question(*, question_payload: dict[str, Any] | None, config: InterviewConfig) -> dict[str, Any] | None:
+    if not isinstance(question_payload, dict):
+        return None
+    should_finish = bool(question_payload.get("shouldFinish"))
+    if should_finish:
+        return None
+    question = question_payload.get("question")
+    if not isinstance(question, dict):
+        return None
+    prompt = str(question.get("prompt") or "").strip()
+    if not prompt:
+        return None
+    try:
+        return avatar_controller.generate_avatar_response(
+            text=prompt,
+            language=config.interviewLanguage,
+        )
+    except Exception:
+        logger.exception("Failed to generate avatar payload for question")
+        return None
 
 
 def build_context(
@@ -137,10 +160,12 @@ def run_turn(
         user=user,
         session_id=session_id,
     )
+    avatar = _avatar_for_question(question_payload=next_question, config=config)
     return {
         "evaluation": evaluation,
         "coach": coach,
         "nextQuestion": next_question,
+        "avatar": avatar,
     }
 
 
@@ -186,6 +211,7 @@ def start_orchestrated_interview(*, payload: OrchestratorStartRequest, user: dic
             logger.exception("Failed to precompute orchestrator context uid=%s", user.get("uid"))
 
     initial_next = None
+    initial_avatar = None
     try:
         with scoped_context(user_id=str(user.get("uid") or ""), session_id=session_id):
             initial_next = initial_next_question(
@@ -195,6 +221,7 @@ def start_orchestrated_interview(*, payload: OrchestratorStartRequest, user: dic
                 difficulty_level=payload.difficultyLevel,
                 session_id=session_id,
             )
+            initial_avatar = _avatar_for_question(question_payload=initial_next, config=payload.config)
     except Exception:
         logger.exception("Failed to precompute initial next-question uid=%s", user.get("uid"))
 
@@ -202,6 +229,7 @@ def start_orchestrated_interview(*, payload: OrchestratorStartRequest, user: dic
         "session": session_data,
         "context": context,
         "initialNextQuestion": initial_next,
+        "initialAvatar": initial_avatar,
     }
 
 

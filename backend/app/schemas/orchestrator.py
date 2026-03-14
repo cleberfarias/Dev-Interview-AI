@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
+from .avatar import AvatarResponse
 from .interview import InterviewConfig, NextQuestionResponse, SessionStartResponse
 from .report import AnswerEvaluation, FinalReport
 
@@ -34,6 +35,7 @@ class OrchestratorStartResponse(BaseModel):
     session: SessionStartResponse
     context: Optional[OrchestratorContextResponse] = None
     initialNextQuestion: Optional[NextQuestionResponse] = None
+    initialAvatar: Optional[AvatarResponse] = None
 
 
 class OrchestratorTurnRequest(BaseModel):
@@ -53,6 +55,7 @@ class OrchestratorTurnResponse(BaseModel):
     evaluation: AnswerEvaluation
     coach: Dict[str, Any] = Field(default_factory=dict)
     nextQuestion: NextQuestionResponse
+    avatar: Optional[AvatarResponse] = None
 
 
 class OrchestratorFinalizeRequest(BaseModel):

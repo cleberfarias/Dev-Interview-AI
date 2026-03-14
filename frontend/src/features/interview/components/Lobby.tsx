@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { CandidateProfile, InterviewConfig, InterviewPlan } from '../../../shared/types';
+import type { AvatarResponse, CandidateProfile, InterviewConfig, InterviewPlan } from '../../../shared/types';
 import type { DifficultyLevel } from '../../../shared/types/interview';
 import type { Track } from '../../../shared/types';
 import { clampDuration } from '../../../shared/constants';
@@ -11,7 +11,13 @@ interface Props {
   userCredits: number;
   candidateProfile?: CandidateProfile | null;
   onOpenProfile?: () => void;
-  onStart: (plan: InterviewPlan, sessionId: string, credits: number, difficultyLevel?: DifficultyLevel) => void;
+  onStart: (
+    plan: InterviewPlan,
+    sessionId: string,
+    credits: number,
+    difficultyLevel?: DifficultyLevel,
+    initialAvatar?: AvatarResponse | null,
+  ) => void;
   onBack: () => void;
 }
 
@@ -190,7 +196,7 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
           blueprint: { hr: 15, technical: 50, design: 20, behavioral: 15 },
           questions: [nextRes.question],
         };
-        onStart(planStub, res.sessionId, res.credits, selectedLevel);
+        onStart(planStub, res.sessionId, res.credits, selectedLevel, orchestratedStart.initialAvatar || null);
         return;
       }
 
@@ -200,14 +206,14 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
           PLAN_GENERATE_TIMEOUT_MS,
         );
         if (generated?.plan?.questions?.length) {
-          onStart(generated.plan, generated.sessionId, generated.credits, selectedLevel);
+          onStart(generated.plan, generated.sessionId, generated.credits, selectedLevel, null);
           return;
         }
       } catch (planErr) {
         console.warn('Plan generation fallback failed', planErr);
       }
 
-      onStart(buildStarterPlan(effectiveConfig, selectedLevel), res.sessionId, res.credits, selectedLevel);
+      onStart(buildStarterPlan(effectiveConfig, selectedLevel), res.sessionId, res.credits, selectedLevel, null);
     } catch (err) {
       console.error(err);
       const message = err instanceof Error ? err.message : 'Erro ao iniciar sessao.';
