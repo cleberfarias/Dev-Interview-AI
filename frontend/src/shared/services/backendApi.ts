@@ -462,6 +462,8 @@ export const BackendApi = {
       body: JSON.stringify(payload),
     }),
 
+  listMyCompanies: () => apiFetch<{ items: Array<{ company: any; membership: any }> }>('/company/mine'),
+
   tts: (text: string, language = "pt-BR", voice?: string) =>
     apiFetch<{ audioBase64: string; mimeType: string }>("/ai/tts", {
       method: "POST",

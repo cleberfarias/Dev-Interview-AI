@@ -46,6 +46,7 @@ const UserProfile = React.lazy(() =>
 const Report = React.lazy(() =>
   import('./src/features/report').then((module) => ({ default: module.Report })),
 );
+const CompanyApp = React.lazy(() => import('./src/features/company').then((m) => ({ default: m.CompanyApp })));
 const retryAudioChunksInBackground = async () => {
   const audioModule = await import('./src/features/audio');
   await audioModule.retryPendingAudioChunks();
@@ -327,6 +328,7 @@ const App: React.FC = () => {
 
   const wideStates = [
     AppState.DASHBOARD,
+    AppState.COMPANY,
     AppState.INTERVIEWING,
     AppState.ONBOARDING,
     AppState.PROFILE,
@@ -381,12 +383,22 @@ const App: React.FC = () => {
               <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">{user?.name?.split(' ')[0] || ''}</p>
             </div>
           </div>
-          <button
-            onClick={() => setState(AppState.PROFILE)}
-            className="w-10 h-10 rounded-full bg-slate-800 border border-white/5 flex items-center justify-center text-sm overflow-hidden"
-          >
-            {user?.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : (user?.name?.charAt(0) || 'U')}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              title="Empresa"
+              type="button"
+              onClick={() => setState(AppState.COMPANY)}
+              className="w-9 h-9 rounded-lg bg-slate-800 border border-white/5 flex items-center justify-center text-sm text-slate-200 hover:scale-95"
+            >
+              E
+            </button>
+            <button
+              onClick={() => setState(AppState.PROFILE)}
+              className="w-10 h-10 rounded-full bg-slate-800 border border-white/5 flex items-center justify-center text-sm overflow-hidden"
+            >
+              {user?.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : (user?.name?.charAt(0) || 'U')}
+            </button>
+          </div>
         </header>
       )}
 
@@ -403,6 +415,12 @@ const App: React.FC = () => {
                 onStartInterview={() => setState(AppState.ONBOARDING)}
                 onDeleteInterview={handleDeleteInterview}
               />
+            )}
+
+            {state === AppState.COMPANY && user && (
+              <div className="h-full">
+                <CompanyApp user={user} onBack={() => setState(AppState.DASHBOARD)} />
+              </div>
             )}
 
             {state === AppState.PROFILE && user && (
