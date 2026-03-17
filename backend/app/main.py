@@ -23,6 +23,7 @@ except Exception:
         return fallback
 from .kiwify_webhook import router as kiwify_webhook_router
 from .api import (
+    routes_audio,
     routes_avatar,
     routes_auth,
     routes_ai,
@@ -124,6 +125,7 @@ app.include_router(routes_credits.router)
 app.include_router(routes_jobs.router)
 app.include_router(routes_resume.router)
 app.include_router(routes_live_coach.router)
+app.include_router(routes_audio.router)
 app.include_router(routes_avatar.router)
 app.include_router(routes_orchestrator.router)
 app.include_router(kiwify_webhook_router)

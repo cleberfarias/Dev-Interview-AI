@@ -12,8 +12,14 @@ def process_audio_chunk(payload: LiveCoachProcessRequest, user: dict | None = No
         if not audio_base64:
             audio_base64 = (latest_chunk.audio or "").strip()
         chunk_context = {
+            "chunkId": latest_chunk.chunkId,
             "chunkIndex": int(latest_chunk.chunkIndex),
-            "chunkTimestamp": latest_chunk.timestamp,
+            "chunkTimestamp": latest_chunk.timestamp or latest_chunk.endedAt,
+            "startedAt": latest_chunk.startedAt,
+            "endedAt": latest_chunk.endedAt,
+            "durationMs": latest_chunk.durationMs,
+            "sessionId": latest_chunk.sessionId,
+            "questionId": latest_chunk.questionId,
             "chunkCount": len(payload.audioChunks),
         }
 

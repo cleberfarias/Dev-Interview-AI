@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styles from './InterviewRoomLayout.module.css';
 import { useUserMedia } from '../../../../hooks/useUserMedia';
-import { useAudioRecorder } from '../../../../hooks/useAudioRecorder';
 import { useLipSync } from '../../../hooks/useLipSync';
 import {
   PrimaryActionButton,
@@ -9,6 +8,12 @@ import {
   TopBar,
   UserCameraCard,
 } from '../../../shared/components';
+import {
+  AudioPermissionCard,
+  MicrophoneSelector,
+  RecordingStatusBadge,
+  useAudioCapture,
+} from '../../audio';
 import { AvatarInterview } from '../../avatar';
 import { FIXED_INTERVIEW_DURATION_MINUTES, FIXED_INTERVIEW_QUESTION_COUNT, I18N } from '../../../shared/constants';
 import { BackendApi } from '../../../shared/services/backendApi';
@@ -50,7 +55,7 @@ type AvatarInterviewState = 'idle' | 'avatar_listening' | 'avatar_thinking' | 'a
 
 type AnswerMode = 'audio' | 'text';
 
-const MEDIA_CONSTRAINTS: MediaStreamConstraints = { video: true, audio: true };
+const VIDEO_MEDIA_CONSTRAINTS: MediaStreamConstraints = { video: true, audio: false };
 const NO_RESPONSE_MS = 5000;
 const SILENCE_STOP_MS = 1500;
 const SILENCE_THRESHOLD = 0.02;
@@ -151,18 +156,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     rafId: number | null;
   }>({ ctx: null, analyser: null, data: null, rafId: null });
 
-  const { stream, status: mediaStatus, error: mediaError } = useUserMedia(MEDIA_CONSTRAINTS);
-  const {
-    start: startRecording,
-    stop: stopRecording,
-    isRecording: isRecorderActive,
-    error: recorderError,
-  } = useAudioRecorder(stream, {
-    timesliceMs: LIVE_COACH_CHUNK_TIMESLICE_MS,
-    onChunk: (chunk) => {
-      void liveCoachChunkHandlerRef.current(chunk);
-    },
-  });
+  const { stream: videoStream, status: mediaStatus, error: mediaError } = useUserMedia(VIDEO_MEDIA_CONSTRAINTS);
 
   const { mouthOpen, isSpeaking } = useLipSync(audioEl);
 
@@ -190,6 +184,18 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     return rest;
   }, [config]);
   const currentQuestion = questions[currentIndex] ?? questions[0];
+  const audioCapture = useAudioCapture({
+    autoRequest: true,
+    sessionId,
+    questionId: currentQuestion?.id,
+    userId: user.uid,
+    chunkTimesliceMs: LIVE_COACH_CHUNK_TIMESLICE_MS,
+    onChunkCaptured: async (chunk) => {
+      void liveCoachChunkHandlerRef.current(chunk);
+    },
+  });
+  const isRecorderActive = audioCapture.isRecordingSessionActive;
+  const recorderError = audioCapture.error;
   const contextLabel = useMemo(
     () => deriveContextLabel(currentQuestion, config.stacks),
     [currentQuestion, config.stacks],
@@ -221,7 +227,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     const seconds = clamped % 60;
     return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   }, [remainingSeconds]);
-  const isMediaReady = mediaStatus === 'ready';
+  const isMediaReady = mediaStatus === 'ready' && audioCapture.isMicrophoneReady;
 
   const showRuntimeNotice = useCallback((message: string) => {
     setRuntimeNotice(message);
@@ -631,7 +637,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
   }, []);
 
   const startVoiceMonitor = useCallback(() => {
-    if (!stream) return;
+    if (!audioCapture.stream) return;
     stopVoiceMonitor();
 
     try {
@@ -640,7 +646,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
       analyser.fftSize = 2048;
       const data = new Uint8Array(analyser.fftSize);
 
-      const source = ctx.createMediaStreamSource(stream);
+      const source = ctx.createMediaStreamSource(audioCapture.stream);
       source.connect(analyser);
 
       const baselineStart = Date.now();
@@ -686,7 +692,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
       console.warn('Falha ao iniciar monitor de voz', error);
       showRuntimeNotice('Nao foi possivel monitorar sua voz. Continue normalmente.');
     }
-  }, [showRuntimeNotice, stream, stopVoiceMonitor]);
+  }, [audioCapture.stream, showRuntimeNotice, stopVoiceMonitor]);
 
   const finalizeInterview = useCallback(
     async (history: HistoryItem[]) => {
@@ -732,14 +738,14 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
   const handleFinish = useCallback(async () => {
     if (isRecorderActive) {
       try {
-        await stopRecording();
+        await audioCapture.stop();
       } catch {}
     }
     clearNoResponseTimer();
     clearRecordingFailsafeTimer();
     stopVoiceMonitor();
     await finalizeInterview(historyRef.current);
-  }, [clearNoResponseTimer, clearRecordingFailsafeTimer, finalizeInterview, isRecorderActive, stopRecording, stopVoiceMonitor]);
+  }, [audioCapture, clearNoResponseTimer, clearRecordingFailsafeTimer, finalizeInterview, isRecorderActive, stopVoiceMonitor]);
 
   const askCurrentQuestion = useCallback(
     async (overridePrompt?: string) => {
@@ -795,7 +801,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     stopVoiceMonitor();
     if (isRecorderActiveRef.current) {
       try {
-        await stopRecording();
+        await audioCapture.stop();
       } catch {}
     }
     setFlowState('no_response');
@@ -804,12 +810,12 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
       await speakQuestion(buildNoResponsePrompt(config.interviewLanguage));
     } catch {}
     setConversationState('listening');
-  }, [clearNoResponseTimer, clearRecordingFailsafeTimer, config.interviewLanguage, speakQuestion, stopRecording, stopVoiceMonitor]);
+  }, [audioCapture, clearNoResponseTimer, clearRecordingFailsafeTimer, config.interviewLanguage, speakQuestion, stopVoiceMonitor]);
 
   const startRecordingFlow = useCallback(async () => {
     if (flowState !== 'awaiting_answer') return;
     try {
-      startRecording();
+      await audioCapture.start();
       setFlowState('recording');
       setConversationState('candidate_speaking');
       hasSpokenRef.current = false;
@@ -834,7 +840,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
       console.warn(error);
       showRuntimeNotice('Nao foi possivel iniciar a gravacao. Verifique permissoes de microfone.');
     }
-  }, [clearNoResponseTimer, clearRecordingFailsafeTimer, flowState, handleNoResponse, showRuntimeNotice, startRecording, startVoiceMonitor]);
+  }, [audioCapture, clearNoResponseTimer, clearRecordingFailsafeTimer, flowState, handleNoResponse, showRuntimeNotice, startVoiceMonitor]);
 
   const continueWithTurnResult = useCallback(
     async (turnResult: {
@@ -989,7 +995,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
       setFlowState('evaluating');
       setConversationState('processing');
       try {
-        const blob = await stopRecording();
+        const blob = await audioCapture.stop();
         const base64Audio = await blobToBase64(blob);
         void requestLiveCoachInsight({
           audioBase64: base64Audio,
@@ -1025,7 +1031,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
       sanitizedConfig,
       selectedLevel,
       showRuntimeNotice,
-      stopRecording,
+      audioCapture,
       stopVoiceMonitor,
       candidateFirstName,
       requestLiveCoachInsight,
@@ -1279,9 +1285,19 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
         : conversationState === 'listening' || conversationState === 'candidate_speaking'
           ? 'avatar_listening'
           : 'idle';
+  const audioTransportState =
+    audioCapture.state === 'paused'
+      ? 'paused'
+      : audioCapture.uploadState === 'retry_pending'
+        ? 'retry_pending'
+        : audioCapture.uploadState === 'uploading'
+          ? 'uploading'
+          : audioCapture.state;
 
   const sideStatusText =
-    conversationState === 'processing'
+    audioCapture.state === 'paused'
+      ? 'Gravacao pausada. Retome quando estiver pronto para continuar a resposta.'
+      : conversationState === 'processing'
       ? 'IA analisando sua resposta...'
       : conversationState === 'ai_speaking'
         ? `Entrevistadora conduzindo a pergunta para ${candidateFirstName}.`
@@ -1316,8 +1332,38 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     }
   };
 
+  const handlePauseAnswer = () => {
+    if (flowState !== 'recording') return;
+    audioCapture.pause();
+    clearNoResponseTimer();
+    clearRecordingFailsafeTimer();
+    stopVoiceMonitor();
+    setConversationState('listening');
+  };
+
+  const handleResumeAnswer = async () => {
+    if (audioCapture.state !== 'paused') return;
+    audioCapture.resume();
+    setConversationState('candidate_speaking');
+    lastSoundAtRef.current = Date.now();
+    autoStopRef.current = false;
+    startVoiceMonitor();
+    clearNoResponseTimer();
+    clearRecordingFailsafeTimer();
+    noResponseTimerRef.current = window.setTimeout(() => {
+      if (!hasSpokenRef.current) {
+        void handleNoResponseRef.current?.();
+      }
+    }, NO_RESPONSE_MS);
+    recordingFailsafeTimerRef.current = window.setTimeout(() => {
+      if (!stopInProgressRef.current) {
+        void stopRecordingFlowRef.current?.('auto');
+      }
+    }, MAX_RECORDING_MS);
+  };
+
   const handleModeChange = (nextMode: AnswerMode) => {
-    if (isFinished || flowState === 'evaluating' || flowState === 'recording') return;
+    if (isFinished || flowState === 'evaluating' || flowState === 'recording' || audioCapture.state === 'paused') return;
     setAnswerMode(nextMode);
     clearNoResponseTimer();
     setConversationState('listening');
@@ -1383,12 +1429,31 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
               <UserCameraCard
                 label="Voce"
                 isReady={isMediaReady}
-                stream={stream}
+                stream={videoStream}
                 isRecording={isRecording}
                 error={mediaError || recorderError}
                 compact
               />
             </div>
+
+            {!audioCapture.isMicrophoneReady && (
+              <AudioPermissionCard
+                state={audioCapture.state}
+                error={audioCapture.error}
+                onRequestPermission={() => {
+                  void audioCapture.requestPermission();
+                }}
+              />
+            )}
+
+            <MicrophoneSelector
+              devices={audioCapture.devices}
+              value={audioCapture.selectedDeviceId}
+              disabled={flowState === 'recording' || audioCapture.state === 'paused'}
+              onChange={(deviceId) => {
+                void audioCapture.selectMicrophone(deviceId);
+              }}
+            />
 
             <div className={styles.sideStatusCard}>
               <div className={styles.sideCardTitle}>Coaching e feedback</div>
@@ -1403,6 +1468,10 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
               <div className={styles.scoreLine}>
                 <span>Estado da conversa</span>
                 <strong>{conversationStateLabel}</strong>
+              </div>
+              <div className={styles.scoreLine}>
+                <span>Estado do audio</span>
+                <strong>{audioTransportState}</strong>
               </div>
               <p className={styles.nextHint}>{sideStatusText}</p>
             </div>
@@ -1457,13 +1526,18 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
 
       <div className={styles.actionArea}>
         <div className={styles.actionStack}>
+          <RecordingStatusBadge
+            captureState={audioCapture.state}
+            uploadState={audioCapture.uploadState}
+            pendingChunkCount={audioCapture.pendingChunkCount}
+          />
           {!isFinished && (
             <div className={styles.modeSwitch} role="group" aria-label="Modo de resposta">
               <button
                 type="button"
                 className={`${styles.modeButton} ${!isTextMode ? styles.modeButtonActive : ''}`}
                 onClick={() => handleModeChange('audio')}
-                disabled={flowState === 'recording' || flowState === 'evaluating'}
+                disabled={isRecorderActive || flowState === 'evaluating'}
               >
                 Voz
               </button>
@@ -1471,10 +1545,43 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
                 type="button"
                 className={`${styles.modeButton} ${isTextMode ? styles.modeButtonActive : ''}`}
                 onClick={() => handleModeChange('text')}
-                disabled={flowState === 'recording' || flowState === 'evaluating'}
+                disabled={isRecorderActive || flowState === 'evaluating'}
               >
                 Texto
               </button>
+            </div>
+          )}
+          {!isFinished && !isTextMode && (flowState === 'recording' || audioCapture.state === 'paused') && (
+            <div className={styles.audioControlsRow}>
+              {audioCapture.state === 'paused' ? (
+                <button type="button" className={styles.audioControlButton} onClick={() => void handleResumeAnswer()}>
+                  Retomar gravacao
+                </button>
+              ) : (
+                <button type="button" className={styles.audioControlButton} onClick={handlePauseAnswer}>
+                  Pausar gravacao
+                </button>
+              )}
+              <button
+                type="button"
+                className={styles.audioControlButton}
+                onClick={() => {
+                  void stopRecordingFlow('manual');
+                }}
+              >
+                Finalizar resposta
+              </button>
+              {audioCapture.pendingChunkCount > 0 && (
+                <button
+                  type="button"
+                  className={styles.audioControlButton}
+                  onClick={() => {
+                    void audioCapture.retryPending();
+                  }}
+                >
+                  Reenviar chunks
+                </button>
+              )}
             </div>
           )}
           {isTextMode && (flowState === 'awaiting_answer' || flowState === 'evaluating') && (

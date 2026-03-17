@@ -221,6 +221,31 @@ export const BackendApi = {
       body: JSON.stringify(payload),
     }),
 
+  uploadAudioChunk: (payload: {
+    sessionId: string;
+    questionId?: string;
+    chunkId?: string;
+    chunkIndex: number;
+    startedAt: string;
+    endedAt: string;
+    durationMs: number;
+    mimeType?: string;
+    audioBase64: string;
+    processWithLiveCoach?: boolean;
+  }) =>
+    apiFetch<{
+      ok: boolean;
+      chunkId: string;
+      duplicate: boolean;
+      stored: boolean;
+      processedWithLiveCoach: boolean;
+      liveCoachStatus?: string | null;
+      audioBytes: number;
+    }>("/audio/chunk", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
   openLiveCoachSocket: async (): Promise<WebSocket> => {
     const token = await getValidAuthToken();
     if (!token) {

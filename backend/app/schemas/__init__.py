@@ -17,6 +17,7 @@ from .analysis import (
     ResumeExtraction,
     ResumeMatchResult,
 )
+from .audio_chunk import AudioChunkUploadRequest, AudioChunkUploadResponse
 from .avatar import (
     AvatarLipsyncPayload,
     AvatarRenderPayload,
@@ -63,6 +64,8 @@ from .report import (
 from .user import InterviewHistoryItem, UserProfile
 
 __all__ = [
+    "AudioChunkUploadRequest",
+    "AudioChunkUploadResponse",
     "AvatarRespondRequest",
     "AvatarResponse",
     "AvatarLipsyncPayload",

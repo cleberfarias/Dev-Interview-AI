@@ -8,7 +8,13 @@ from pydantic import BaseModel, Field, model_validator
 class LiveCoachAudioChunk(BaseModel):
     chunkIndex: int
     audio: str
-    timestamp: str
+    timestamp: str = ""
+    chunkId: Optional[str] = None
+    startedAt: Optional[str] = None
+    endedAt: Optional[str] = None
+    durationMs: Optional[int] = None
+    sessionId: Optional[str] = None
+    questionId: Optional[str] = None
 
 
 class LiveCoachProcessRequest(BaseModel):
