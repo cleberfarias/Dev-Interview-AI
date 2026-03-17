@@ -33,6 +33,16 @@ from .avatar import (
     AvatarResponse,
     AvatarVisemeFrame,
 )
+from .company import (
+    Company,
+    CompanyAccessContext,
+    CompanyCreateRequest,
+    CompanyMemberListResponse,
+    CompanyMembership,
+    CompanyMembershipUpsertRequest,
+    CompanySummary,
+    CompanySummaryListResponse,
+)
 from .interview import (
     EvaluateAudioRequest,
     EvaluateTextRequest,
@@ -49,6 +59,22 @@ from .interview import (
     SessionStartResponse,
     Track,
     InterviewStyle,
+)
+from .interview_template import (
+    InterviewTemplate,
+    InterviewTemplateCreateRequest,
+    InterviewTemplateListResponse,
+    InterviewTemplateUpdateRequest,
+)
+from .candidate_invite import (
+    CandidateInvite,
+    CandidateInviteCreateRequest,
+    CandidateInviteListResponse,
+)
+from .company_interview_result import (
+    CompanyInterviewResult,
+    CompanyInterviewResultCreateRequest,
+    CompanyInterviewResultListResponse,
 )
 from .live_coach import LiveCoachAudioChunk, LiveCoachProcessRequest, LiveCoachProcessResponse
 from .orchestrator import (
@@ -81,6 +107,14 @@ __all__ = [
     "AvatarLipsyncPayload",
     "AvatarVisemeFrame",
     "AvatarRenderPayload",
+    "Company",
+    "CompanyMembership",
+    "CompanyCreateRequest",
+    "CompanyMembershipUpsertRequest",
+    "CompanyAccessContext",
+    "CompanySummary",
+    "CompanySummaryListResponse",
+    "CompanyMemberListResponse",
     "LanguageCode",
     "Track",
     "Seniority",
@@ -91,6 +125,16 @@ __all__ = [
     "InterviewConfig",
     "InterviewQuestion",
     "InterviewPlan",
+    "InterviewTemplate",
+    "InterviewTemplateCreateRequest",
+    "InterviewTemplateUpdateRequest",
+    "InterviewTemplateListResponse",
+    "CandidateInvite",
+    "CandidateInviteCreateRequest",
+    "CandidateInviteListResponse",
+    "CompanyInterviewResult",
+    "CompanyInterviewResultCreateRequest",
+    "CompanyInterviewResultListResponse",
     "SessionStartResponse",
     "PlanGenerateResponse",
     "NameExtractRequest",

@@ -28,6 +28,7 @@ from .api import (
     routes_avatar,
     routes_auth,
     routes_ai,
+    routes_company,
     routes_credits,
     routes_jobs,
     routes_live_coach,
@@ -166,6 +167,7 @@ app.mount('/mcp', get_mcp_app())
 # App routes
 app.include_router(routes_profile.router)
 app.include_router(routes_auth.router)
+app.include_router(routes_company.router)
 app.include_router(routes_sessions.router)
 app.include_router(routes_ai.router)
 app.include_router(routes_reports.router)
