@@ -5,22 +5,7 @@ import {
   removePendingAudioChunk,
   savePendingAudioChunk,
 } from './audioRetryStore';
-import type {
-  AudioChunkMeta,
-  AudioChunkUploadResult,
-  PendingAudioChunk,
-} from './types';
-
-const blobToBase64 = (blob: Blob): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('Falha ao ler blob de audio.'));
-    reader.onloadend = () => {
-      const result = typeof reader.result === 'string' ? reader.result : '';
-      resolve(result.split(',')[1] || '');
-    };
-    reader.readAsDataURL(blob);
-  });
+import type { AudioChunkMeta, AudioChunkUploadResult, PendingAudioChunk } from './types';
 
 export async function uploadAudioChunk(params: {
   blob: Blob;
@@ -29,7 +14,6 @@ export async function uploadAudioChunk(params: {
   userId?: string;
   processWithLiveCoach?: boolean;
 }): Promise<AudioChunkUploadResult> {
-  const audioBase64 = await blobToBase64(params.blob);
   return BackendApi.uploadAudioChunk({
     sessionId: params.sessionId,
     questionId: params.metadata.questionId,
@@ -39,7 +23,7 @@ export async function uploadAudioChunk(params: {
     endedAt: params.metadata.endedAt,
     durationMs: params.metadata.durationMs,
     mimeType: params.blob.type || 'audio/webm',
-    audioBase64,
+    file: params.blob,
     processWithLiveCoach: Boolean(params.processWithLiveCoach),
   });
 }

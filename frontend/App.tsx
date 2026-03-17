@@ -46,6 +46,10 @@ const UserProfile = React.lazy(() =>
 const Report = React.lazy(() =>
   import('./src/features/report').then((module) => ({ default: module.Report })),
 );
+const retryAudioChunksInBackground = async () => {
+  const audioModule = await import('./src/features/audio');
+  await audioModule.retryPendingAudioChunks();
+};
 
 const defaultRoleFromTrack = (track: string): string => {
   const map: Record<string, string> = {
@@ -150,6 +154,9 @@ const App: React.FC = () => {
         const profile = token ? await BackendApi.meWithToken(token) : await BackendApi.me();
         if (!mounted) return;
         setUser(profile);
+        void retryAudioChunksInBackground().catch((error) => {
+          console.warn('Audio chunk retry bootstrap failed', error);
+        });
       } catch (e) {
         console.warn('Nao foi possivel sincronizar /me. Mantendo perfil local do Firebase.', e);
       }

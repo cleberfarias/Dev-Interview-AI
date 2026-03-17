@@ -230,21 +230,55 @@ export const BackendApi = {
     endedAt: string;
     durationMs: number;
     mimeType?: string;
-    audioBase64: string;
+    file: Blob;
     processWithLiveCoach?: boolean;
   }) =>
-    apiFetch<{
-      ok: boolean;
-      chunkId: string;
-      duplicate: boolean;
-      stored: boolean;
-      processedWithLiveCoach: boolean;
-      liveCoachStatus?: string | null;
-      audioBytes: number;
-    }>("/audio/chunk", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }),
+    (async () => {
+      const form = new FormData();
+      form.set("sessionId", payload.sessionId);
+      if (payload.questionId) form.set("questionId", payload.questionId);
+      if (payload.chunkId) form.set("chunkId", payload.chunkId);
+      form.set("chunkIndex", String(payload.chunkIndex));
+      form.set("startedAt", payload.startedAt);
+      form.set("endedAt", payload.endedAt);
+      form.set("durationMs", String(payload.durationMs));
+      form.set("mimeType", payload.mimeType || payload.file.type || "audio/webm");
+      form.set("processWithLiveCoach", payload.processWithLiveCoach ? "true" : "false");
+      form.set("file", payload.file, `chunk-${payload.chunkIndex}`);
+
+      const headers = new Headers();
+      try {
+        const token = await getValidAuthToken();
+        if (token) headers.set("Authorization", `Bearer ${token}`);
+      } catch (e) {
+        console.warn("Failed to get auth token:", e);
+      }
+
+      const res = await fetch(`${API_BASE_URL}/audio/chunk`, {
+        method: "POST",
+        headers,
+        body: form,
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        let detail = text;
+        try {
+          const j = JSON.parse(text);
+          detail = j.detail || j.error || text;
+        } catch {}
+        throw new Error(detail || `HTTP ${res.status}`);
+      }
+      return (await res.json()) as {
+        ok: boolean;
+        chunkId: string;
+        duplicate: boolean;
+        stored: boolean;
+        payloadStored?: boolean;
+        processedWithLiveCoach: boolean;
+        liveCoachStatus?: string | null;
+        audioBytes: number;
+      };
+    })(),
 
   openLiveCoachSocket: async (): Promise<WebSocket> => {
     const token = await getValidAuthToken();

@@ -29,6 +29,9 @@ class AudioChunkUploadResponse(BaseModel):
     chunkId: str
     duplicate: bool = False
     stored: bool = True
+    payloadStored: bool = False
+    storagePath: Optional[str] = None
+    storageProvider: Optional[str] = None
     processedWithLiveCoach: bool = False
     liveCoachStatus: Optional[str] = None
     audioBytes: int = 0

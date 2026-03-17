@@ -32,14 +32,22 @@ def build_chunk_id(
     )
 
 
-def create_chunk_metadata(chunk_id: str, data: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
+def get_chunk_metadata(chunk_id: str) -> dict[str, Any] | None:
     ref = _collection().document(chunk_id)
     snap = ref.get()
-    if snap.exists:
-        payload = snap.to_dict() or {}
-        payload.setdefault("id", snap.id)
-        return False, payload
+    if not snap.exists:
+        return None
+    payload = snap.to_dict() or {}
+    payload.setdefault("id", snap.id)
+    return payload
 
+
+def create_chunk_metadata(chunk_id: str, data: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
+    existing = get_chunk_metadata(chunk_id)
+    if existing is not None:
+        return False, existing
+
+    ref = _collection().document(chunk_id)
     payload = dict(data or {})
     payload["id"] = chunk_id
     ref.set(payload, merge=False)
