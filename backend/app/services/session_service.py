@@ -177,6 +177,13 @@ def finish_session(session_id: str, payload: SessionFinishRequest, user: dict):
     return {"ok": True}
 
 
+def store_answer_communication_analysis(session_id: str, answer_id: str, analysis: dict, user: dict) -> None:
+    session = session_repository.get_session(session_id)
+    if not session or session.get("uid") != user["uid"]:
+        raise HTTPException(status_code=404, detail="Sessao nao encontrada")
+    session_repository.merge_answer_communication_analysis(session_id, answer_id, analysis)
+
+
 def delete_session(session_id: str, user: dict):
     session = session_repository.get_session(session_id)
 

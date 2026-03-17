@@ -1,0 +1,64 @@
+.badge {
+  width: min(760px, calc(100vw - 36px));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(125, 211, 252, 0.3);
+  background: rgba(8, 14, 34, 0.88);
+  box-shadow: 0 14px 30px rgba(2, 6, 23, 0.32);
+  pointer-events: auto;
+}
+
+.primary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #93c5fd;
+  box-shadow: 0 0 14px rgba(147, 197, 253, 0.55);
+}
+
+.recording {
+  background: #fb7185;
+  box-shadow: 0 0 14px rgba(251, 113, 133, 0.58);
+}
+
+.paused {
+  background: #f59e0b;
+  box-shadow: 0 0 14px rgba(245, 158, 11, 0.52);
+}
+
+.retry {
+  background: #a78bfa;
+  box-shadow: 0 0 14px rgba(167, 139, 250, 0.5);
+}
+
+.text {
+  display: grid;
+  gap: 2px;
+}
+
+.title {
+  color: #eff6ff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.subtitle {
+  color: #bfdbfe;
+  font-size: 10px;
+}
+
+.meta {
+  color: #93c5fd;
+  font-size: 10px;
+  font-weight: 700;
+}

@@ -59,6 +59,20 @@ def upsert_session(session_id: str, data: dict[str, Any], merge: bool = True) ->
     get_firestore_client().collection("sessions").document(session_id).set(data, merge=merge)
 
 
+def merge_answer_communication_analysis(session_id: str, answer_id: str, data: dict[str, Any]) -> None:
+    if not session_id or not answer_id:
+        return
+    safe_answer_id = str(answer_id).strip().replace("/", "_").replace("\\", "_").replace(".", "_")
+    payload = {
+        "communicationAnalysis": {
+            "answers": {
+                safe_answer_id: dict(data or {}),
+            }
+        }
+    }
+    get_firestore_client().collection("sessions").document(session_id).set(payload, merge=True)
+
+
 def delete_session(session_id: str) -> None:
     get_firestore_client().collection("sessions").document(session_id).delete()
 

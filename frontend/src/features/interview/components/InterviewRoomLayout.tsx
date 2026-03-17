@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styles from './InterviewRoomLayout.module.css';
 import { useUserMedia } from '../../../../hooks/useUserMedia';
-import { useAudioRecorder } from '../../../../hooks/useAudioRecorder';
 import { useLipSync } from '../../../hooks/useLipSync';
 import {
   PrimaryActionButton,
@@ -9,16 +8,27 @@ import {
   TopBar,
   UserCameraCard,
 } from '../../../shared/components';
+import {
+  AudioPermissionCard,
+  MicrophoneSelector,
+  RecordingStatusBadge,
+  analyzeSpeechMetrics,
+  useAudioCapture,
+} from '../../audio';
 import { AvatarInterview } from '../../avatar';
 import { FIXED_INTERVIEW_DURATION_MINUTES, FIXED_INTERVIEW_QUESTION_COUNT, I18N } from '../../../shared/constants';
 import { BackendApi } from '../../../shared/services/backendApi';
 import type {
   AnswerEvaluation,
   AvatarResponse,
+  CommunicationAnalysis,
   FinalReport,
   InterviewConfig,
+  InterviewMode,
   InterviewPlan,
   LiveCoachProcessResponse,
+  PartialFeedback,
+  SpeechMetrics,
   User,
 } from '../../../shared/types';
 import {
@@ -50,7 +60,7 @@ type AvatarInterviewState = 'idle' | 'avatar_listening' | 'avatar_thinking' | 'a
 
 type AnswerMode = 'audio' | 'text';
 
-const MEDIA_CONSTRAINTS: MediaStreamConstraints = { video: true, audio: true };
+const VIDEO_MEDIA_CONSTRAINTS: MediaStreamConstraints = { video: true, audio: false };
 const NO_RESPONSE_MS = 5000;
 const SILENCE_STOP_MS = 1500;
 const SILENCE_THRESHOLD = 0.02;
@@ -59,11 +69,23 @@ const MAX_RECORDING_MS = 90000;
 const LIVE_COACH_CHUNK_TIMESLICE_MS = 3000;
 const LIVE_COACH_CHUNK_INTERVAL_MS = 8000;
 const LIVE_COACH_WS_RESPONSE_TIMEOUT_MS = 7000;
+const LONG_PAUSE_MS = 1200;
+const PARTIAL_FEEDBACK_ENABLED = true;
 
 const getPreferredCandidateName = (name?: string): string => {
   const raw = String(name || '').trim();
   if (!raw) return 'Candidato';
   return raw.split(/\s+/)[0] || 'Candidato';
+};
+
+const appendPartialTranscript = (currentValue: string, nextValue?: string | null): string => {
+  const current = String(currentValue || '').trim();
+  const incoming = String(nextValue || '').trim();
+  if (!incoming) return current;
+  if (!current) return incoming;
+  if (current === incoming || current.endsWith(incoming)) return current;
+  if (incoming.startsWith(current)) return incoming;
+  return `${current} ${incoming}`.replace(/\s+/g, ' ').trim();
 };
 
 interface InterviewRoomLayoutProps {
@@ -108,9 +130,16 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
   const [liveCoachLoading, setLiveCoachLoading] = useState(false);
   const [liveCoachError, setLiveCoachError] = useState<string | null>(null);
   const [liveCoachFeed, setLiveCoachFeed] = useState<LiveCoachFeedItem[]>([]);
+  const [partialFeedback, setPartialFeedback] = useState<PartialFeedback | null>(null);
+  const [partialTranscript, setPartialTranscript] = useState('');
+  const [activeAnswerId, setActiveAnswerId] = useState<string | null>(null);
   const [avatarByQuestionId, setAvatarByQuestionId] = useState<Record<string, AvatarResponse>>({});
   const [currentAvatar, setCurrentAvatar] = useState<AvatarResponse | null>(null);
   const historyRef = useRef<HistoryItem[]>([]);
+  const partialTranscriptRef = useRef('');
+  const partialFeedbackShownRef = useRef(false);
+  const currentSpeechMetricsRef = useRef<SpeechMetrics | null>(null);
+  const currentCommunicationAnalysisRef = useRef<CommunicationAnalysis | null>(null);
   const liveCoachFeedRef = useRef<LiveCoachFeedItem[]>([]);
   const finishingRef = useRef(false);
   const timerRef = useRef<number | null>(null);
@@ -150,19 +179,20 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     data: Uint8Array | null;
     rafId: number | null;
   }>({ ctx: null, analyser: null, data: null, rafId: null });
+  const answerMetricsRef = useRef<{
+    answerId: string;
+    startedAtMs: number;
+    firstSpeechAtMs: number | null;
+    silenceDurationMs: number;
+    pauseCount: number;
+    longPauseCount: number;
+    interruptionRecoveryCount: number;
+    lastTickAtMs: number;
+    silenceStartedAtMs: number | null;
+    wasSpeaking: boolean;
+  } | null>(null);
 
-  const { stream, status: mediaStatus, error: mediaError } = useUserMedia(MEDIA_CONSTRAINTS);
-  const {
-    start: startRecording,
-    stop: stopRecording,
-    isRecording: isRecorderActive,
-    error: recorderError,
-  } = useAudioRecorder(stream, {
-    timesliceMs: LIVE_COACH_CHUNK_TIMESLICE_MS,
-    onChunk: (chunk) => {
-      void liveCoachChunkHandlerRef.current(chunk);
-    },
-  });
+  const { stream: videoStream, status: mediaStatus, error: mediaError } = useUserMedia(VIDEO_MEDIA_CONSTRAINTS);
 
   const { mouthOpen, isSpeaking } = useLipSync(audioEl);
 
@@ -172,6 +202,10 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
 
   const selectedLevel = config.difficultyLevel ?? 3;
   const candidateFirstName = useMemo(() => getPreferredCandidateName(user?.name), [user?.name]);
+  const interviewMode: InterviewMode = config.interviewMode || 'candidate_coaching_mode';
+  const isCandidateCoachingMode = interviewMode === 'candidate_coaching_mode';
+  const interviewModeLabel =
+    interviewMode === 'candidate_coaching_mode' ? 'Coaching do candidato' : 'Avaliacao de contratacao';
   const baseBullets = useMemo(() => (plan.mustHaveSkills ?? []).slice(0, 3), [plan]);
   const baseQuestions = useMemo(() => {
     const all = buildUiQuestions(plan);
@@ -190,6 +224,19 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     return rest;
   }, [config]);
   const currentQuestion = questions[currentIndex] ?? questions[0];
+  const audioCapture = useAudioCapture({
+    autoRequest: true,
+    answerId: activeAnswerId || undefined,
+    sessionId,
+    questionId: currentQuestion?.id,
+    userId: user.uid,
+    chunkTimesliceMs: LIVE_COACH_CHUNK_TIMESLICE_MS,
+    onChunkCaptured: async (chunk) => {
+      void liveCoachChunkHandlerRef.current(chunk);
+    },
+  });
+  const isRecorderActive = audioCapture.isRecordingSessionActive;
+  const recorderError = audioCapture.error;
   const contextLabel = useMemo(
     () => deriveContextLabel(currentQuestion, config.stacks),
     [currentQuestion, config.stacks],
@@ -221,11 +268,71 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     const seconds = clamped % 60;
     return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   }, [remainingSeconds]);
-  const isMediaReady = mediaStatus === 'ready';
+  const isMediaReady = mediaStatus === 'ready' && audioCapture.isMicrophoneReady;
 
   const showRuntimeNotice = useCallback((message: string) => {
     setRuntimeNotice(message);
   }, []);
+
+  const buildAnswerId = useCallback(() => {
+    const questionToken = currentQuestion?.id || `q${currentIndex + 1}`;
+    return [sessionId || 'session', questionToken, Date.now().toString(36)].join('__');
+  }, [currentIndex, currentQuestion?.id, sessionId]);
+
+  const resetCurrentAnswerAnalysis = useCallback((nextAnswerId?: string | null) => {
+    setActiveAnswerId(nextAnswerId || null);
+    setPartialFeedback(null);
+    setPartialTranscript('');
+    partialTranscriptRef.current = '';
+    partialFeedbackShownRef.current = false;
+    currentSpeechMetricsRef.current = null;
+    currentCommunicationAnalysisRef.current = null;
+    answerMetricsRef.current = nextAnswerId
+      ? {
+          answerId: nextAnswerId,
+          startedAtMs: Date.now(),
+          firstSpeechAtMs: null,
+          silenceDurationMs: 0,
+          pauseCount: 0,
+          longPauseCount: 0,
+          interruptionRecoveryCount: 0,
+          lastTickAtMs: Date.now(),
+          silenceStartedAtMs: null,
+          wasSpeaking: false,
+        }
+      : null;
+  }, []);
+
+  const computeSpeechMetrics = useCallback(
+    (transcript: string, durationOverrideMs?: number): SpeechMetrics | null => {
+      const snapshot = answerMetricsRef.current;
+      const answerId = snapshot?.answerId || activeAnswerId;
+      if (!answerId) return null;
+      const totalDurationMs =
+        typeof durationOverrideMs === 'number'
+          ? Math.max(0, durationOverrideMs)
+          : snapshot
+            ? Math.max(0, Date.now() - snapshot.startedAtMs)
+            : 0;
+      const timeToFirstSpeechMs = snapshot?.firstSpeechAtMs
+        ? Math.max(0, snapshot.firstSpeechAtMs - snapshot.startedAtMs)
+        : totalDurationMs;
+      const metrics = analyzeSpeechMetrics({
+        answerId,
+        transcript,
+        durationMs: totalDurationMs,
+        silenceMs: snapshot?.silenceDurationMs || 0,
+        pauseCount: snapshot?.pauseCount || 0,
+        longPauseCount: snapshot?.longPauseCount || 0,
+        timeToFirstSpeechMs,
+        interruptionRecoveryCount: snapshot?.interruptionRecoveryCount || 0,
+        language: config.interviewLanguage,
+      });
+      currentSpeechMetricsRef.current = metrics;
+      return metrics;
+    },
+    [activeAnswerId, config.interviewLanguage],
+  );
 
   const appendLiveCoachFeed = useCallback((insight: LiveCoachProcessResponse) => {
     const suggestion = (insight?.suggestion || '').trim();
@@ -396,9 +503,12 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
         audioChunks?: Array<{ chunkIndex: number; audio: string; timestamp: string }>;
         mimeType?: string;
         transcript?: string;
+        answerId?: string;
+        speechMetrics?: SpeechMetrics | null;
       },
       options: { background?: boolean; silent?: boolean } = {},
     ) => {
+      if (!isCandidateCoachingMode) return null;
       if (!currentQuestion?.title) return;
       const background = Boolean(options.background);
       const silent = Boolean(options.silent);
@@ -414,12 +524,19 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
         improvements: (item.evaluation?.improvements || []).slice(0, 2),
       }));
       const recentTips = liveCoachFeedRef.current.slice(0, 3).map((item) => item.suggestion);
+      const effectiveAnswerId = input.answerId || activeAnswerId || undefined;
+      const effectiveSpeechMetrics = input.speechMetrics || currentSpeechMetricsRef.current || undefined;
       const requestPayload = {
         audioBase64: input.audioBase64,
         audioChunks: input.audioChunks || undefined,
         mimeType: input.mimeType || 'audio/webm',
         context: {
           source: 'interview-room',
+          mode: interviewMode,
+          answerId: effectiveAnswerId,
+          partialFeedbackEnabled: PARTIAL_FEEDBACK_ENABLED && isCandidateCoachingMode,
+          partialFeedbackDelivered: partialFeedbackShownRef.current,
+          speechMetrics: effectiveSpeechMetrics,
           sessionId: sessionId || undefined,
           questionText: currentQuestion.title,
           transcript: input.transcript || undefined,
@@ -441,6 +558,11 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
           response = await requestLiveCoachViaWebSocket(requestPayload, {
             messageType,
             onPartial: (partial) => {
+              const nextTranscript = appendPartialTranscript(partialTranscriptRef.current, partial?.transcript);
+              if (nextTranscript !== partialTranscriptRef.current) {
+                partialTranscriptRef.current = nextTranscript;
+                setPartialTranscript(nextTranscript);
+              }
               if (partial?.transcript && flowState === 'recording') {
                 setConversationState('candidate_speaking');
               }
@@ -452,6 +574,31 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
 
         if (!response) {
           response = await BackendApi.liveCoachProcess(requestPayload);
+        }
+
+        const mergedTranscript = appendPartialTranscript(partialTranscriptRef.current, response.transcript);
+        if (mergedTranscript !== partialTranscriptRef.current) {
+          partialTranscriptRef.current = mergedTranscript;
+          setPartialTranscript(mergedTranscript);
+        }
+        if (response.speechMetrics) {
+          currentSpeechMetricsRef.current = response.speechMetrics;
+        }
+        if (
+          effectiveAnswerId &&
+          (response.communicationSignals || response.behavioralSpeechSignals || response.speechMetrics)
+        ) {
+          currentCommunicationAnalysisRef.current = {
+            answerId: effectiveAnswerId,
+            mode: response.mode || interviewMode,
+            speechMetrics: response.speechMetrics || effectiveSpeechMetrics || null,
+            communicationSignals: response.communicationSignals || null,
+            behavioralSpeechSignals: response.behavioralSpeechSignals || null,
+          };
+        }
+        if (response.partialFeedback && !partialFeedbackShownRef.current) {
+          partialFeedbackShownRef.current = true;
+          setPartialFeedback(response.partialFeedback);
         }
 
         if (!background || response.status === 'ok') {
@@ -477,12 +624,16 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
       }
     },
     [
+      activeAnswerId,
       appendLiveCoachFeed,
       config.jobDescription,
+      config.interviewLanguage,
       config.stacks,
       config.track,
       currentQuestion?.title,
       flowState,
+      interviewMode,
+      isCandidateCoachingMode,
       requestLiveCoachViaWebSocket,
       sessionId,
     ],
@@ -503,9 +654,12 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
         const base64Audio = await blobToBase64(chunk);
         const chunkIndex = liveCoachChunkIndexRef.current + 1;
         liveCoachChunkIndexRef.current = chunkIndex;
+        const transcript = partialTranscriptRef.current;
+        const speechMetrics = computeSpeechMetrics(transcript);
         await requestLiveCoachInsight(
           {
             audioBase64: base64Audio,
+            answerId: activeAnswerId || undefined,
             audioChunks: [
               {
                 chunkIndex,
@@ -514,6 +668,8 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
               },
             ],
             mimeType: chunk.type || 'audio/webm',
+            transcript,
+            speechMetrics,
           },
           { background: true, silent: true },
         );
@@ -523,7 +679,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
         liveCoachChunkInFlightRef.current = false;
       }
     },
-    [answerMode, currentQuestion?.title, flowState, requestLiveCoachInsight],
+    [activeAnswerId, answerMode, computeSpeechMetrics, currentQuestion?.title, flowState, requestLiveCoachInsight],
   );
 
   const stopTTS = useCallback(() => {
@@ -631,7 +787,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
   }, []);
 
   const startVoiceMonitor = useCallback(() => {
-    if (!stream) return;
+    if (!audioCapture.stream) return;
     stopVoiceMonitor();
 
     try {
@@ -640,13 +796,14 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
       analyser.fftSize = 2048;
       const data = new Uint8Array(analyser.fftSize);
 
-      const source = ctx.createMediaStreamSource(stream);
+      const source = ctx.createMediaStreamSource(audioCapture.stream);
       source.connect(analyser);
 
       const baselineStart = Date.now();
       const baselineSamples: number[] = [];
 
       const tick = () => {
+        const now = Date.now();
         analyser.getByteTimeDomainData(data);
         let sum = 0;
         for (let i = 0; i < data.length; i += 1) {
@@ -654,10 +811,15 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
           sum += v * v;
         }
         const rms = Math.sqrt(sum / data.length);
+        const analysis = answerMetricsRef.current;
+        const deltaMs = analysis ? Math.max(0, now - analysis.lastTickAtMs) : 0;
+        if (analysis) {
+          analysis.lastTickAtMs = now;
+        }
 
         if (!baselineDoneRef.current) {
           baselineSamples.push(rms);
-          if (Date.now() - baselineStart >= 400) {
+          if (now - baselineStart >= 400) {
             const avg =
               baselineSamples.reduce((acc, val) => acc + val, 0) / Math.max(baselineSamples.length, 1);
             noiseThresholdRef.current = Math.max(SILENCE_THRESHOLD, avg * 2.5);
@@ -665,13 +827,41 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
           }
         }
 
-        if (baselineDoneRef.current && rms > noiseThresholdRef.current) {
+        const isSpeakingNow = baselineDoneRef.current && rms > noiseThresholdRef.current;
+
+        if (analysis && baselineDoneRef.current) {
+          if (isSpeakingNow) {
+            if (analysis.firstSpeechAtMs === null) {
+              analysis.firstSpeechAtMs = now;
+            }
+            if (!analysis.wasSpeaking && analysis.silenceStartedAtMs) {
+              const pauseDurationMs = Math.max(0, now - analysis.silenceStartedAtMs);
+              if (pauseDurationMs >= 250) {
+                analysis.pauseCount += 1;
+                if (pauseDurationMs >= LONG_PAUSE_MS) {
+                  analysis.longPauseCount += 1;
+                  analysis.interruptionRecoveryCount += 1;
+                }
+              }
+            }
+            analysis.silenceStartedAtMs = null;
+            analysis.wasSpeaking = true;
+          } else if (analysis.firstSpeechAtMs !== null) {
+            analysis.silenceDurationMs += deltaMs;
+            if (analysis.wasSpeaking && analysis.silenceStartedAtMs === null) {
+              analysis.silenceStartedAtMs = now;
+            }
+            analysis.wasSpeaking = false;
+          }
+        }
+
+        if (isSpeakingNow) {
           hasSpokenRef.current = true;
-          lastSoundAtRef.current = Date.now();
+          lastSoundAtRef.current = now;
         }
 
         if (hasSpokenRef.current && !autoStopRef.current) {
-          if (Date.now() - lastSoundAtRef.current > SILENCE_STOP_MS) {
+          if (now - lastSoundAtRef.current > SILENCE_STOP_MS) {
             autoStopRef.current = true;
             void stopRecordingFlowRef.current?.('auto');
             return;
@@ -686,7 +876,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
       console.warn('Falha ao iniciar monitor de voz', error);
       showRuntimeNotice('Nao foi possivel monitorar sua voz. Continue normalmente.');
     }
-  }, [showRuntimeNotice, stream, stopVoiceMonitor]);
+  }, [audioCapture.stream, showRuntimeNotice, stopVoiceMonitor]);
 
   const finalizeInterview = useCallback(
     async (history: HistoryItem[]) => {
@@ -732,14 +922,14 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
   const handleFinish = useCallback(async () => {
     if (isRecorderActive) {
       try {
-        await stopRecording();
+        await audioCapture.stop();
       } catch {}
     }
     clearNoResponseTimer();
     clearRecordingFailsafeTimer();
     stopVoiceMonitor();
     await finalizeInterview(historyRef.current);
-  }, [clearNoResponseTimer, clearRecordingFailsafeTimer, finalizeInterview, isRecorderActive, stopRecording, stopVoiceMonitor]);
+  }, [audioCapture, clearNoResponseTimer, clearRecordingFailsafeTimer, finalizeInterview, isRecorderActive, stopVoiceMonitor]);
 
   const askCurrentQuestion = useCallback(
     async (overridePrompt?: string) => {
@@ -793,9 +983,10 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     clearNoResponseTimer();
     clearRecordingFailsafeTimer();
     stopVoiceMonitor();
+    resetCurrentAnswerAnalysis(null);
     if (isRecorderActiveRef.current) {
       try {
-        await stopRecording();
+        await audioCapture.stop();
       } catch {}
     }
     setFlowState('no_response');
@@ -804,12 +995,22 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
       await speakQuestion(buildNoResponsePrompt(config.interviewLanguage));
     } catch {}
     setConversationState('listening');
-  }, [clearNoResponseTimer, clearRecordingFailsafeTimer, config.interviewLanguage, speakQuestion, stopRecording, stopVoiceMonitor]);
+  }, [
+    audioCapture,
+    clearNoResponseTimer,
+    clearRecordingFailsafeTimer,
+    config.interviewLanguage,
+    resetCurrentAnswerAnalysis,
+    speakQuestion,
+    stopVoiceMonitor,
+  ]);
 
   const startRecordingFlow = useCallback(async () => {
     if (flowState !== 'awaiting_answer') return;
     try {
-      startRecording();
+      const nextAnswerId = buildAnswerId();
+      resetCurrentAnswerAnalysis(nextAnswerId);
+      await audioCapture.start();
       setFlowState('recording');
       setConversationState('candidate_speaking');
       hasSpokenRef.current = false;
@@ -834,7 +1035,17 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
       console.warn(error);
       showRuntimeNotice('Nao foi possivel iniciar a gravacao. Verifique permissoes de microfone.');
     }
-  }, [clearNoResponseTimer, clearRecordingFailsafeTimer, flowState, handleNoResponse, showRuntimeNotice, startRecording, startVoiceMonitor]);
+  }, [
+    audioCapture,
+    buildAnswerId,
+    clearNoResponseTimer,
+    clearRecordingFailsafeTimer,
+    flowState,
+    handleNoResponse,
+    resetCurrentAnswerAnalysis,
+    showRuntimeNotice,
+    startVoiceMonitor,
+  ]);
 
   const continueWithTurnResult = useCallback(
     async (turnResult: {
@@ -845,8 +1056,10 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
       };
       coach?: { tips?: string[] };
       avatar?: AvatarResponse | null;
+      communicationAnalysis?: CommunicationAnalysis | null;
     }) => {
       const response = turnResult.evaluation;
+      const communicationAnalysis = turnResult.communicationAnalysis || currentCommunicationAnalysisRef.current || null;
       const nextHistory = [
         ...historyRef.current,
         {
@@ -855,6 +1068,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
           section: currentQuestion.section,
           difficulty: currentQuestion.sourceDifficulty,
           evaluation: response,
+          communicationAnalysis,
         },
       ];
       historyRef.current = nextHistory;
@@ -989,11 +1203,19 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
       setFlowState('evaluating');
       setConversationState('processing');
       try {
-        const blob = await stopRecording();
+        const blob = await audioCapture.stop();
         const base64Audio = await blobToBase64(blob);
+        const transcript = partialTranscriptRef.current;
+        const speechMetrics = computeSpeechMetrics(
+          transcript,
+          answerMetricsRef.current ? Date.now() - answerMetricsRef.current.startedAtMs : undefined,
+        );
         void requestLiveCoachInsight({
           audioBase64: base64Audio,
+          answerId: activeAnswerId || undefined,
           mimeType: blob.type || 'audio/webm',
+          transcript,
+          speechMetrics,
         });
         const turnResult = await BackendApi.orchestratorTurn({
           config: sanitizedConfig,
@@ -1003,6 +1225,9 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
           remainingSeconds,
           difficultyLevel: selectedLevel,
           confirmedName: candidateFirstName,
+          answerId: activeAnswerId || undefined,
+          interviewMode,
+          speechMetrics: speechMetrics || undefined,
           audioBase64: base64Audio,
           mimeType: blob.type || 'audio/webm',
         });
@@ -1025,11 +1250,14 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
       sanitizedConfig,
       selectedLevel,
       showRuntimeNotice,
-      stopRecording,
+      audioCapture,
+      activeAnswerId,
+      computeSpeechMetrics,
       stopVoiceMonitor,
       candidateFirstName,
       requestLiveCoachInsight,
       currentQuestion.title,
+      interviewMode,
       sessionId,
     ],
   );
@@ -1046,11 +1274,16 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
 
     clearNoResponseTimer();
     stopVoiceMonitor();
+    const nextAnswerId = activeAnswerId || buildAnswerId();
+    if (!activeAnswerId) {
+      resetCurrentAnswerAnalysis(nextAnswerId);
+    }
     setFlowState('evaluating');
     setConversationState('processing');
     try {
       void requestLiveCoachInsight({
         audioBase64: '',
+        answerId: nextAnswerId,
         transcript,
         mimeType: 'text/plain',
       });
@@ -1062,6 +1295,8 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
         remainingSeconds,
         difficultyLevel: selectedLevel,
         confirmedName: candidateFirstName,
+        answerId: nextAnswerId,
+        interviewMode,
         transcript,
       });
       setTextAnswer('');
@@ -1075,9 +1310,12 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
   }, [
     clearNoResponseTimer,
     continueWithTurnResult,
+    buildAnswerId,
     currentQuestion,
     flowState,
     remainingSeconds,
+    activeAnswerId,
+    resetCurrentAnswerAnalysis,
     sanitizedConfig,
     selectedLevel,
     showRuntimeNotice,
@@ -1085,6 +1323,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     textAnswer,
     candidateFirstName,
     requestLiveCoachInsight,
+    interviewMode,
     sessionId,
   ]);
 
@@ -1105,13 +1344,21 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     setConversationState('idle');
     setAnswerMode('audio');
     setTextAnswer('');
+    setActiveAnswerId(null);
     setTimeLimitReached(false);
     setRemainingSeconds(totalSeconds);
     setQuestions(baseQuestions);
     setLiveCoachFeed([]);
+    setPartialFeedback(null);
+    setPartialTranscript('');
     setAvatarByQuestionId(initialAvatarByQuestionId);
     setCurrentAvatar(baseQuestions[0] ? initialAvatarByQuestionId[baseQuestions[0].id] || null : null);
     liveCoachFeedRef.current = [];
+    partialTranscriptRef.current = '';
+    partialFeedbackShownRef.current = false;
+    currentSpeechMetricsRef.current = null;
+    currentCommunicationAnalysisRef.current = null;
+    answerMetricsRef.current = null;
     liveCoachChunkIndexRef.current = 0;
     startTimeRef.current = Date.now();
     if (timerRef.current) {
@@ -1150,7 +1397,15 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     setLiveCoachInsight(null);
     setLiveCoachError(null);
     setLiveCoachLoading(false);
+    setPartialFeedback(null);
+    setPartialTranscript('');
+    setActiveAnswerId(null);
     setCurrentAvatar(currentQuestion ? avatarByQuestionId[currentQuestion.id] || null : null);
+    partialTranscriptRef.current = '';
+    partialFeedbackShownRef.current = false;
+    currentSpeechMetricsRef.current = null;
+    currentCommunicationAnalysisRef.current = null;
+    answerMetricsRef.current = null;
     liveCoachChunkInFlightRef.current = false;
     lastLiveCoachChunkAtRef.current = 0;
     liveCoachChunkIndexRef.current = 0;
@@ -1279,28 +1534,46 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
         : conversationState === 'listening' || conversationState === 'candidate_speaking'
           ? 'avatar_listening'
           : 'idle';
+  const audioTransportState =
+    audioCapture.state === 'paused'
+      ? 'paused'
+      : audioCapture.uploadState === 'retry_pending'
+        ? 'retry_pending'
+        : audioCapture.uploadState === 'uploading'
+          ? 'uploading'
+          : audioCapture.state;
 
   const sideStatusText =
-    conversationState === 'processing'
+    audioCapture.state === 'paused'
+      ? 'Gravacao pausada. Retome quando estiver pronto para continuar a resposta.'
+      : conversationState === 'processing'
       ? 'IA analisando sua resposta...'
       : conversationState === 'ai_speaking'
         ? `Entrevistadora conduzindo a pergunta para ${candidateFirstName}.`
         : conversationState === 'candidate_speaking'
-          ? `${candidateFirstName}, voce esta respondendo. Continue com exemplos concretos.`
+          ? isCandidateCoachingMode
+            ? `${candidateFirstName}, voce esta respondendo. Continue com exemplos concretos.`
+            : `${candidateFirstName}, voce esta respondendo. A sessao segue em modo avaliativo.`
           : conversationState === 'listening'
-            ? `${candidateFirstName}, pode responder quando estiver pronto.`
+            ? isCandidateCoachingMode
+              ? `${candidateFirstName}, pode responder quando estiver pronto.`
+              : `${candidateFirstName}, pode responder quando estiver pronto. O entrevistador vai apenas observar sua resposta.`
             : flowState === 'next_question'
         ? 'Proxima pergunta em instantes.'
         : flowState === 'awaiting_answer' || flowState === 'recording'
-          ? `${candidateFirstName}, responda quando estiver pronto.`
+          ? isCandidateCoachingMode
+            ? `${candidateFirstName}, responda quando estiver pronto.`
+            : `${candidateFirstName}, responda quando estiver pronto. Esta entrevista esta em modo de avaliacao.`
           : flowState === 'asking'
             ? 'Escute a pergunta e prepare sua resposta.'
             : isFinished
               ? 'Entrevista encerrada.'
               : 'Preparando entrevista...';
+  const partialFeedbackVisible = Boolean(partialFeedback && isCandidateCoachingMode);
+  const showLiveCoachPanel = isCandidateCoachingMode && !isFinished && (liveCoachLoading || liveCoachInsight || liveCoachError);
 
   const topStacks = (config.stacks || []).slice(0, 3);
-  const roleSummary = `Candidato: ${candidateFirstName} | ${plan.roleTitleGuess || config.track || 'Entrevista'} | ${FIXED_INTERVIEW_QUESTION_COUNT} perguntas | ${FIXED_INTERVIEW_DURATION_MINUTES} min | Stack: ${topStacks.length ? topStacks.join(', ') : 'Nao informado'}`;
+  const roleSummary = `Candidato: ${candidateFirstName} | ${plan.roleTitleGuess || config.track || 'Entrevista'} | ${interviewModeLabel} | ${FIXED_INTERVIEW_QUESTION_COUNT} perguntas | ${FIXED_INTERVIEW_DURATION_MINUTES} min | Stack: ${topStacks.length ? topStacks.join(', ') : 'Nao informado'}`;
 
   const handlePrimaryAction = async () => {
     if (!currentQuestion) return;
@@ -1316,11 +1589,51 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     }
   };
 
+  const handlePauseAnswer = () => {
+    if (flowState !== 'recording') return;
+    audioCapture.pause();
+    if (answerMetricsRef.current) {
+      answerMetricsRef.current.lastTickAtMs = Date.now();
+      answerMetricsRef.current.silenceStartedAtMs = null;
+      answerMetricsRef.current.wasSpeaking = false;
+    }
+    clearNoResponseTimer();
+    clearRecordingFailsafeTimer();
+    stopVoiceMonitor();
+    setConversationState('listening');
+  };
+
+  const handleResumeAnswer = async () => {
+    if (audioCapture.state !== 'paused') return;
+    audioCapture.resume();
+    setConversationState('candidate_speaking');
+    if (answerMetricsRef.current) {
+      answerMetricsRef.current.lastTickAtMs = Date.now();
+      answerMetricsRef.current.silenceStartedAtMs = null;
+    }
+    lastSoundAtRef.current = Date.now();
+    autoStopRef.current = false;
+    startVoiceMonitor();
+    clearNoResponseTimer();
+    clearRecordingFailsafeTimer();
+    noResponseTimerRef.current = window.setTimeout(() => {
+      if (!hasSpokenRef.current) {
+        void handleNoResponseRef.current?.();
+      }
+    }, NO_RESPONSE_MS);
+    recordingFailsafeTimerRef.current = window.setTimeout(() => {
+      if (!stopInProgressRef.current) {
+        void stopRecordingFlowRef.current?.('auto');
+      }
+    }, MAX_RECORDING_MS);
+  };
+
   const handleModeChange = (nextMode: AnswerMode) => {
-    if (isFinished || flowState === 'evaluating' || flowState === 'recording') return;
+    if (isFinished || flowState === 'evaluating' || flowState === 'recording' || audioCapture.state === 'paused') return;
     setAnswerMode(nextMode);
     clearNoResponseTimer();
     setConversationState('listening');
+    resetCurrentAnswerAnalysis(null);
     if (nextMode === 'text') {
       stopVoiceMonitor();
     }
@@ -1383,15 +1696,36 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
               <UserCameraCard
                 label="Voce"
                 isReady={isMediaReady}
-                stream={stream}
+                stream={videoStream}
                 isRecording={isRecording}
                 error={mediaError || recorderError}
                 compact
               />
             </div>
 
+            {!audioCapture.isMicrophoneReady && (
+              <AudioPermissionCard
+                state={audioCapture.state}
+                error={audioCapture.error}
+                onRequestPermission={() => {
+                  void audioCapture.requestPermission();
+                }}
+              />
+            )}
+
+            <MicrophoneSelector
+              devices={audioCapture.devices}
+              value={audioCapture.selectedDeviceId}
+              disabled={flowState === 'recording' || audioCapture.state === 'paused'}
+              onChange={(deviceId) => {
+                void audioCapture.selectMicrophone(deviceId);
+              }}
+            />
+
             <div className={styles.sideStatusCard}>
-              <div className={styles.sideCardTitle}>Coaching e feedback</div>
+              <div className={styles.sideCardTitle}>
+                {isCandidateCoachingMode ? 'Coaching e feedback' : 'Avaliacao silenciosa'}
+              </div>
               <div className={styles.scoreLine}>
                 <span>Qualidade da resposta</span>
                 <strong>{responseQualityLabel}</strong>
@@ -1404,10 +1738,28 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
                 <span>Estado da conversa</span>
                 <strong>{conversationStateLabel}</strong>
               </div>
+              <div className={styles.scoreLine}>
+                <span>Estado do audio</span>
+                <strong>{audioTransportState}</strong>
+              </div>
               <p className={styles.nextHint}>{sideStatusText}</p>
             </div>
 
-            {!isFinished && (liveCoachLoading || liveCoachInsight || liveCoachError) && (
+            {partialFeedbackVisible && partialFeedback && (
+              <div className={styles.partialFeedbackCard}>
+                <div className={styles.partialFeedbackLabel}>Insight parcial</div>
+                <p className={styles.partialFeedbackText}>{partialFeedback.message}</p>
+              </div>
+            )}
+
+            {isCandidateCoachingMode && !isFinished && flowState === 'recording' && partialTranscript && (
+              <div className={styles.partialFeedbackCard}>
+                <div className={styles.partialFeedbackLabel}>Transcricao parcial</div>
+                <p className={styles.partialFeedbackText}>{partialTranscript}</p>
+              </div>
+            )}
+
+            {showLiveCoachPanel && (
               <div className={styles.liveCoachCard}>
                 <div className={styles.liveCoachHeader}>
                   <span className={styles.liveCoachTitle}>Live Coach</span>
@@ -1457,13 +1809,18 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
 
       <div className={styles.actionArea}>
         <div className={styles.actionStack}>
+          <RecordingStatusBadge
+            captureState={audioCapture.state}
+            uploadState={audioCapture.uploadState}
+            pendingChunkCount={audioCapture.pendingChunkCount}
+          />
           {!isFinished && (
             <div className={styles.modeSwitch} role="group" aria-label="Modo de resposta">
               <button
                 type="button"
                 className={`${styles.modeButton} ${!isTextMode ? styles.modeButtonActive : ''}`}
                 onClick={() => handleModeChange('audio')}
-                disabled={flowState === 'recording' || flowState === 'evaluating'}
+                disabled={isRecorderActive || flowState === 'evaluating'}
               >
                 Voz
               </button>
@@ -1471,10 +1828,43 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
                 type="button"
                 className={`${styles.modeButton} ${isTextMode ? styles.modeButtonActive : ''}`}
                 onClick={() => handleModeChange('text')}
-                disabled={flowState === 'recording' || flowState === 'evaluating'}
+                disabled={isRecorderActive || flowState === 'evaluating'}
               >
                 Texto
               </button>
+            </div>
+          )}
+          {!isFinished && !isTextMode && (flowState === 'recording' || audioCapture.state === 'paused') && (
+            <div className={styles.audioControlsRow}>
+              {audioCapture.state === 'paused' ? (
+                <button type="button" className={styles.audioControlButton} onClick={() => void handleResumeAnswer()}>
+                  Retomar gravacao
+                </button>
+              ) : (
+                <button type="button" className={styles.audioControlButton} onClick={handlePauseAnswer}>
+                  Pausar gravacao
+                </button>
+              )}
+              <button
+                type="button"
+                className={styles.audioControlButton}
+                onClick={() => {
+                  void stopRecordingFlow('manual');
+                }}
+              >
+                Finalizar resposta
+              </button>
+              {audioCapture.pendingChunkCount > 0 && (
+                <button
+                  type="button"
+                  className={styles.audioControlButton}
+                  onClick={() => {
+                    void audioCapture.retryPending();
+                  }}
+                >
+                  Reenviar chunks
+                </button>
+              )}
             </div>
           )}
           {isTextMode && (flowState === 'awaiting_answer' || flowState === 'evaluating') && (

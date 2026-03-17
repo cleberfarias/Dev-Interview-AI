@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from .interview import InterviewConfig
+from .analysis import BehaviorProfile, BehavioralSpeechSignals, CultureFitSignals, HiringCommunicationSignals
 
 
 class AnswerScores(BaseModel):
@@ -32,6 +33,15 @@ class AnswerEvaluation(BaseModel):
     transcript: str
 
 
+class CommunicationScore(BaseModel):
+    clarity: float = 0.0
+    fluency: float = 0.0
+    confidence: float = 0.0
+    conciseness: float = 0.0
+    structure: float = 0.0
+    overall: float = 0.0
+
+
 class FinalReport(BaseModel):
     overallScore: float
     levelEstimate: str
@@ -40,6 +50,13 @@ class FinalReport(BaseModel):
     plan7Days: List[Dict[str, Any]]
     scoresSummary: Optional[AnswerScores] = None
     criteriaSummary: Optional[AnswerCriteriaScores] = None
+    communicationScore: Optional[CommunicationScore] = None
+    communicationStrengths: List[str] = Field(default_factory=list)
+    communicationImprovements: List[str] = Field(default_factory=list)
+    communicationSignals: Optional[HiringCommunicationSignals] = None
+    behavioralSpeechSignals: Optional[BehavioralSpeechSignals] = None
+    behaviorProfile: Optional[BehaviorProfile] = None
+    cultureFitSignals: Optional[CultureFitSignals] = None
 
 
 class FinalReportRequest(BaseModel):

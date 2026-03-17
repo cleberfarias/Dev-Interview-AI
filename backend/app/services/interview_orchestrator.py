@@ -7,8 +7,10 @@ from fastapi import HTTPException
 
 from ..avatar_engine import avatar_controller
 from ..agents import (
+    behavior_agent,
     candidate_agent,
     coach_agent,
+    culture_fit_agent,
     evaluator_agent,
     interviewer_agent,
     job_agent,
@@ -25,6 +27,7 @@ from ..schemas import (
 )
 from ..request_context import scoped_context
 from . import candidate_profile_service, memory_service, session_service
+from . import communication_analysis_service
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -66,10 +69,18 @@ def build_context(
         profile=profile,
     )
     effective_job_description = (job_description or profile.get("jobDescription") or config.jobDescription or "").strip()
+    behavior_profile = candidate_memory.get("behaviorProfile") if isinstance(candidate_memory.get("behaviorProfile"), dict) else None
+    culture_fit_profile = (
+        candidate_memory.get("cultureFitSignals") if isinstance(candidate_memory.get("cultureFitSignals"), dict) else None
+    )
     job = job_agent.run(job_description=effective_job_description)
     match = match_agent.run(
         resume_skills=candidate.get("skills") or [],
         job_description=effective_job_description,
+        interview_signals={
+            "behaviorProfile": behavior_profile,
+            "cultureFitSignals": culture_fit_profile,
+        },
     )
     return {
         "profile": profile,
@@ -77,6 +88,8 @@ def build_context(
         "candidate": candidate,
         "job": job,
         "match": match,
+        "behaviorProfile": behavior_profile,
+        "cultureFitProfile": culture_fit_profile,
     }
 
 
@@ -113,6 +126,9 @@ def run_turn(
     remaining_seconds: int,
     difficulty_level: int | None = None,
     confirmed_name: str | None = None,
+    answer_id: str | None = None,
+    interview_mode: str | None = "candidate_coaching_mode",
+    speech_metrics: dict[str, Any] | None = None,
     audio_base64: str | None = None,
     mime_type: str = "audio/webm",
     session_id: str | None = None,
@@ -141,7 +157,59 @@ def run_turn(
     else:
         raise ValueError("Either transcript or audio input is required")
 
-    coach = coach_agent.run(evaluation=evaluation)
+    effective_transcript = str(evaluation.get("transcript") or transcript_text).strip()
+    normalized_speech_metrics = communication_analysis_service.normalize_speech_metrics(speech_metrics)
+    communication_signals = communication_analysis_service.derive_communication_signals(
+        transcript=effective_transcript,
+        speech_metrics=normalized_speech_metrics,
+    )
+    behavioral_speech_signals = communication_analysis_service.derive_behavioral_speech_signals(
+        transcript=effective_transcript,
+        speech_metrics=normalized_speech_metrics,
+        communication_signals=communication_signals,
+    )
+
+    profile = candidate_profile_service.get_candidate_profile(user).model_dump()
+    effective_job_description = (config.jobDescription or profile.get("jobDescription") or "").strip()
+    job_context = job_agent.run(job_description=effective_job_description)
+    match_context = match_agent.run(
+        resume_skills=profile.get("primarySkills") or config.stacks or [],
+        job_description=effective_job_description,
+        interview_signals={"communicationSignals": communication_signals.model_dump()},
+    )
+    behavior_profile = behavior_agent.run(
+        transcript=effective_transcript,
+        communication_signals=communication_signals,
+        behavioral_speech_signals=behavioral_speech_signals,
+        evaluation=evaluation,
+    )
+    culture_fit_signals = culture_fit_agent.run(
+        transcript=effective_transcript,
+        communication_signals=communication_signals,
+        behavioral_speech_signals=behavioral_speech_signals,
+        behavior_profile=behavior_profile,
+        evaluation=evaluation,
+        job_context=job_context,
+        match_context=match_context,
+    )
+
+    coach = (
+        coach_agent.run(evaluation=evaluation)
+        if str(interview_mode or "candidate_coaching_mode") == "candidate_coaching_mode"
+        else {"tips": [], "reinforce": [], "idealAnswerOutline": []}
+    )
+
+    communication_analysis = None
+    if answer_id:
+        communication_analysis = {
+            "answerId": answer_id,
+            "mode": str(interview_mode or "candidate_coaching_mode"),
+            "speechMetrics": normalized_speech_metrics.model_dump() if normalized_speech_metrics else None,
+            "communicationSignals": communication_signals.model_dump(),
+            "behavioralSpeechSignals": behavioral_speech_signals.model_dump(),
+            "behaviorProfile": behavior_profile.model_dump(),
+            "cultureFitSignals": culture_fit_signals.model_dump(),
+        }
 
     normalized_history = [item for item in (history or []) if isinstance(item, dict)]
     next_history = [
@@ -149,6 +217,7 @@ def run_turn(
         {
             "question": question,
             "evaluation": evaluation,
+            "communicationAnalysis": communication_analysis,
         },
     ]
 
@@ -161,11 +230,20 @@ def run_turn(
         session_id=session_id,
     )
     avatar = _avatar_for_question(question_payload=next_question, config=config)
+
+    if answer_id:
+        if session_id:
+            try:
+                session_service.store_answer_communication_analysis(session_id, answer_id, communication_analysis, user)
+            except Exception:
+                logger.exception("Failed to persist communication analysis sessionId=%s", session_id)
+
     return {
         "evaluation": evaluation,
         "coach": coach,
         "nextQuestion": next_question,
         "avatar": avatar,
+        "communicationAnalysis": communication_analysis,
     }
 
 
@@ -250,6 +328,9 @@ def run_orchestrated_turn(*, payload: OrchestratorTurnRequest, user: dict) -> di
                 remaining_seconds=int(payload.remainingSeconds or 0),
                 difficulty_level=payload.difficultyLevel,
                 confirmed_name=payload.confirmedName,
+                answer_id=payload.answerId,
+                interview_mode=payload.interviewMode,
+                speech_metrics=payload.speechMetrics.model_dump() if payload.speechMetrics else None,
                 audio_base64=audio_base64 or None,
                 mime_type=payload.mimeType,
                 session_id=payload.sessionId,

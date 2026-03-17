@@ -3,13 +3,22 @@ import os
 from typing import Optional, Dict, Any
 
 import firebase_admin
-from firebase_admin import auth, credentials, firestore
+from firebase_admin import auth, credentials, firestore, storage
 from fastapi import Depends, Header, HTTPException, Request
 
 from .request_context import set_context
 
 _app = None
 _db = None
+
+
+def _resolve_storage_bucket_name() -> Optional[str]:
+    value = (
+        os.environ.get("FIREBASE_STORAGE_BUCKET")
+        or os.environ.get("VITE_FIREBASE_STORAGE_BUCKET")
+        or ""
+    ).strip()
+    return value or None
 
 def init_firebase():
     global _app, _db
@@ -46,7 +55,12 @@ def init_firebase():
                 "ou FIREBASE_SERVICE_ACCOUNT_JSON."
             )
 
-    _app = firebase_admin.initialize_app(cred)
+    options = {}
+    storage_bucket = _resolve_storage_bucket_name()
+    if storage_bucket:
+        options["storageBucket"] = storage_bucket
+
+    _app = firebase_admin.initialize_app(cred, options or None)
     _db = firestore.client()
     return _app, _db
 
@@ -55,6 +69,13 @@ def get_firestore_client():
     if _db is None:
         init_firebase()
     return _db
+
+
+def get_storage_bucket():
+    init_firebase()
+    if not _resolve_storage_bucket_name():
+        return None
+    return storage.bucket()
 
 def verify_bearer_token(authorization: Optional[str]) -> Dict[str, Any]:
     # Ensure Firebase Admin app is initialized before verifying tokens

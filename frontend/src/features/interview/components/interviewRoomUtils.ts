@@ -1,4 +1,4 @@
-import type { AnswerEvaluation, FinalReport, InterviewConfig, InterviewPlan } from '../../../shared/types';
+import type { AnswerEvaluation, CommunicationAnalysis, FinalReport, InterviewConfig, InterviewPlan } from '../../../shared/types';
 import type { DifficultyLevel, InterviewQuestion } from '../../../shared/types/interview';
 
 export type UiQuestion = InterviewQuestion & {
@@ -12,6 +12,7 @@ export type HistoryItem = {
   section?: string;
   difficulty?: number;
   evaluation: AnswerEvaluation;
+  communicationAnalysis?: CommunicationAnalysis | null;
 };
 
 const mapDifficultyToLevel = (value?: number): DifficultyLevel => {
@@ -417,6 +418,16 @@ export const buildFallbackReport = (
     plan7Days: [],
     scoresSummary: summary,
     criteriaSummary,
+    communicationScore: {
+      clarity: criteriaSummary?.clarity ?? summary?.communication ?? 0,
+      fluency: criteriaSummary?.communication ?? summary?.communication ?? 0,
+      confidence: criteriaSummary?.communication ?? summary?.communication ?? 0,
+      conciseness: criteriaSummary?.structure ?? summary?.problemSolving ?? 0,
+      structure: criteriaSummary?.structure ?? summary?.problemSolving ?? 0,
+      overall,
+    },
+    communicationStrengths: strengths.slice(0, 3),
+    communicationImprovements: improvements.slice(0, 3),
   };
 };
 

@@ -4,11 +4,19 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
+from .analysis import BehavioralSpeechSignals, HiringCommunicationSignals, PartialFeedback, SpeechMetrics
+
 
 class LiveCoachAudioChunk(BaseModel):
     chunkIndex: int
     audio: str
-    timestamp: str
+    timestamp: str = ""
+    chunkId: Optional[str] = None
+    startedAt: Optional[str] = None
+    endedAt: Optional[str] = None
+    durationMs: Optional[int] = None
+    sessionId: Optional[str] = None
+    questionId: Optional[str] = None
 
 
 class LiveCoachProcessRequest(BaseModel):
@@ -44,3 +52,9 @@ class LiveCoachProcessResponse(BaseModel):
     transcriptionError: Optional[str] = None
     contextUsed: bool = False
     audioReceived: bool = False
+    mode: Optional[str] = None
+    partialFeedbackTriggered: bool = False
+    partialFeedback: Optional[PartialFeedback] = None
+    speechMetrics: Optional[SpeechMetrics] = None
+    communicationSignals: Optional[HiringCommunicationSignals] = None
+    behavioralSpeechSignals: Optional[BehavioralSpeechSignals] = None

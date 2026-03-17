@@ -1,0 +1,29 @@
+.wrap {
+  width: 100%;
+  display: grid;
+  gap: 6px;
+}
+
+.label {
+  color: #dbeafe;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(125, 211, 252, 0.3);
+  background: rgba(10, 16, 38, 0.9);
+  color: #eff6ff;
+  font-size: 12px;
+}
+
+.hint {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 11px;
+}

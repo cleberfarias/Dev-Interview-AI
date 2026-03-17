@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
+from .analysis import BehaviorProfile, CommunicationAnalysisPayload, CultureFitSignals, SpeechMetrics
 from .avatar import AvatarResponse
 from .interview import InterviewConfig, NextQuestionResponse, SessionStartResponse
 from .report import AnswerEvaluation, FinalReport
@@ -21,6 +22,8 @@ class OrchestratorContextResponse(BaseModel):
     candidate: Dict[str, Any] = Field(default_factory=dict)
     job: Dict[str, Any] = Field(default_factory=dict)
     match: Dict[str, Any] = Field(default_factory=dict)
+    behaviorProfile: Optional[BehaviorProfile] = None
+    cultureFitProfile: Optional[CultureFitSignals] = None
 
 
 class OrchestratorStartRequest(BaseModel):
@@ -46,6 +49,9 @@ class OrchestratorTurnRequest(BaseModel):
     remainingSeconds: int = 0
     difficultyLevel: Optional[int] = None
     confirmedName: Optional[str] = None
+    answerId: Optional[str] = None
+    interviewMode: Optional[str] = "candidate_coaching_mode"
+    speechMetrics: Optional[SpeechMetrics] = None
     transcript: Optional[str] = None
     audioBase64: Optional[str] = None
     mimeType: str = "audio/webm"
@@ -56,6 +62,7 @@ class OrchestratorTurnResponse(BaseModel):
     coach: Dict[str, Any] = Field(default_factory=dict)
     nextQuestion: NextQuestionResponse
     avatar: Optional[AvatarResponse] = None
+    communicationAnalysis: Optional[CommunicationAnalysisPayload] = None
 
 
 class OrchestratorFinalizeRequest(BaseModel):
