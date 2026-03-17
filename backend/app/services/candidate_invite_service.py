@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from uuid import uuid4
+import secrets
 
 from fastapi import HTTPException
 
@@ -26,11 +27,24 @@ def _new_token() -> str:
     return uuid4().hex
 
 
+def _gen_credentials() -> tuple[str, str]:
+    login = f"cand_{uuid4().hex[:8]}"
+    # generate a short password
+    pwd = secrets.token_urlsafe(10)
+    return login, pwd
+
+
 def create_invite(*, user: dict, company_id: str, payload: CandidateInviteCreateRequest) -> CandidateInvite:
     company_service.get_company_access_context(user=user, company_id=company_id, required_roles={"admin", "recruiter"})
     ts = _now_iso()
     invite_id = _new_invite_id()
     token = _new_token()
+    # optionally generate candidate credentials for RH-managed access
+    candidate_login = None
+    candidate_password = None
+    if getattr(payload, "generateCredentials", False):
+        candidate_login, candidate_password = _gen_credentials()
+
     saved = candidate_invite_repository.upsert_invite(
         invite_id,
         {
@@ -41,6 +55,9 @@ def create_invite(*, user: dict, company_id: str, payload: CandidateInviteCreate
             "candidateEmail": str(payload.candidateEmail),
             "status": "sent",
             "token": token,
+            "interviewMode": getattr(payload, "interviewMode", "ai"),
+            "candidateLogin": candidate_login,
+            "candidatePassword": candidate_password,
             "createdAt": ts,
             "updatedAt": ts,
         },

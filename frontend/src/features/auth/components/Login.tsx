@@ -10,6 +10,7 @@ import {
   sendPasswordResetEmail,
 } from 'firebase/auth';
 import styles from './Login.module.css';
+import { BackendApi } from '../../../shared/services/backendApi';
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -20,6 +21,8 @@ const Login: React.FC<LoginProps> = ({ onLogin: _onLogin }) => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [role, setRole] = useState<'dev' | 'rh'>('dev');
+  const [companyName, setCompanyName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -60,6 +63,15 @@ const Login: React.FC<LoginProps> = ({ onLogin: _onLogin }) => {
         await signInWithEmailAndPassword(auth, email, password);
       } else {
         await createUserWithEmailAndPassword(auth, email, password);
+        // if registering as RH, create company automatically
+        if (role === 'rh') {
+          try {
+            await BackendApi.createCompany({ name: companyName || `${email.split('@')[0]} company`, plan: 'business' });
+            setInfo('Conta criada e empresa registrada. Voce ja pode fazer login.');
+          } catch (e: any) {
+            setError(`Conta criada, porem falha ao criar empresa: ${e?.message || e}`);
+          }
+        }
       }
       success = true;
     } catch (e: any) {
@@ -161,6 +173,32 @@ const Login: React.FC<LoginProps> = ({ onLogin: _onLogin }) => {
                 </svg>
               </button>
             </div>
+
+            <div style={{ marginTop: 12 }}>
+              <label className={styles.label}>Acessar como</label>
+              <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+                <button type="button" onClick={() => setRole('dev')} className={`${styles.primaryButton} ${role === 'dev' ? '' : ''}`}>
+                  Dev
+                </button>
+                <button type="button" onClick={() => setRole('rh')} className={`${styles.primaryButton} ${role === 'rh' ? '' : ''}`}>
+                  RH
+                </button>
+              </div>
+            </div>
+
+            {mode === 'register' && role === 'rh' && (
+              <>
+                <label className={styles.label}>Nome da Empresa</label>
+                <div className={styles.inputWrap}>
+                  <input
+                    className={styles.input}
+                    placeholder="Nome da sua empresa"
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                  />
+                </div>
+              </>
+            )}
 
             {mode === 'login' && (
               <button className={styles.forgot} type="button" onClick={handleForgotPassword} disabled={loading}>

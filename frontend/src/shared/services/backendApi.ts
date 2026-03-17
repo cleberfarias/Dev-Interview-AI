@@ -447,6 +447,12 @@ export const BackendApi = {
       body: JSON.stringify(payload),
     }),
 
+  createCompany: (payload: { name: string; plan?: string }) =>
+    apiFetch<{ company: any; membership: any }>("/company", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
   tts: (text: string, language = "pt-BR", voice?: string) =>
     apiFetch<{ audioBase64: string; mimeType: string }>("/ai/tts", {
       method: "POST",

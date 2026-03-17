@@ -38,6 +38,7 @@ from .api import (
     routes_resume,
     routes_sessions,
     routes_telemetry,
+    routes_public,
 )
 from .logging_config import configure_logging
 from .request_context import reset_context, set_context
@@ -180,6 +181,7 @@ app.include_router(routes_avatar.router)
 app.include_router(routes_orchestrator.router)
 app.include_router(routes_telemetry.router)
 app.include_router(kiwify_webhook_router)
+app.include_router(routes_public.router)
 
 
 # Compatibility exports for tests/legacy imports from app.main
