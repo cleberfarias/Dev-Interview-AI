@@ -109,6 +109,7 @@ def upload_chunk(payload: AudioChunkUploadRequest, user: dict | None = None) -> 
         chunk_id,
         {
             "sessionId": payload.sessionId,
+            "answerId": payload.answerId,
             "questionId": payload.questionId,
             "chunkIndex": int(payload.chunkIndex),
             "startedAt": payload.startedAt,

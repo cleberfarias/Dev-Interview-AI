@@ -11,6 +11,7 @@ import type { AudioCaptureState, AudioChunkMeta, AudioUploadState } from './type
 
 type UseAudioCaptureOptions = {
   autoRequest?: boolean;
+  answerId?: string;
   sessionId?: string;
   questionId?: string;
   userId?: string;
@@ -166,6 +167,7 @@ export const useAudioCapture = (options: UseAudioCaptureOptions = {}): UseAudioC
 
     setError(null);
     const recorder = new ChunkRecorder(currentStream, {
+      answerId: options.answerId,
       timesliceMs: options.chunkTimesliceMs,
       sessionId: options.sessionId,
       questionId: options.questionId,
@@ -178,6 +180,7 @@ export const useAudioCapture = (options: UseAudioCaptureOptions = {}): UseAudioC
     setState('recording');
   }, [
     handleChunk,
+    options.answerId,
     options.chunkTimesliceMs,
     options.questionId,
     options.sessionId,

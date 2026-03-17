@@ -1,5 +1,13 @@
 import React, { useState } from 'react';
-import type { InterviewConfig, InterviewStyle, LanguageCode, PlanType, Seniority, Track } from '../../../shared/types';
+import type {
+  InterviewConfig,
+  InterviewMode,
+  InterviewStyle,
+  LanguageCode,
+  PlanType,
+  Seniority,
+  Track,
+} from '../../../shared/types';
 import { I18N, TRACKS, SENIORITIES, STACKS, STYLES, clampDuration, INTERVIEW_LIMITS } from '../../../shared/constants';
 import styles from './Onboarding.module.css';
 
@@ -29,6 +37,11 @@ const STYLE_LABELS: Record<InterviewStyle, string> = {
   friendly: 'Amigavel',
   neutral: 'Neutro',
   strict: 'Rigoroso',
+};
+
+const MODE_LABELS: Record<InterviewMode, string> = {
+  candidate_coaching_mode: 'Coaching do candidato',
+  hiring_assessment_mode: 'Avaliacao de contratacao',
 };
 
 const STEP_TITLES = [
@@ -202,6 +215,27 @@ const Onboarding: React.FC<Props> = ({ onComplete, initialConfig }) => {
                   </span>
                   {isKeySelecting && <span className={styles.loadingChip}>Conectando...</span>}
                 </button>
+
+                <div className={styles.fieldBlock}>
+                  <label className={styles.fieldLabel}>Modo da entrevista</label>
+                  <div className={styles.stackBlock}>
+                    {(['candidate_coaching_mode', 'hiring_assessment_mode'] as InterviewMode[]).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setConfig({ ...config, interviewMode: mode })}
+                        className={`${styles.planCard} ${config.interviewMode === mode ? styles.planCardActive : ''}`}
+                      >
+                        <span className={styles.planTitle}>{MODE_LABELS[mode]}</span>
+                        <span className={styles.planDescription}>
+                          {mode === 'candidate_coaching_mode'
+                            ? 'Mostra insights parciais, feedback de comunicacao e sugestoes durante a resposta.'
+                            : 'Mantem a entrevista em modo avaliativo, sem dicas ao vivo, para simular um processo seletivo.'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
 

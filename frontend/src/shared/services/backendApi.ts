@@ -223,6 +223,7 @@ export const BackendApi = {
 
   uploadAudioChunk: (payload: {
     sessionId: string;
+    answerId?: string;
     questionId?: string;
     chunkId?: string;
     chunkIndex: number;
@@ -236,6 +237,7 @@ export const BackendApi = {
     (async () => {
       const form = new FormData();
       form.set("sessionId", payload.sessionId);
+      if (payload.answerId) form.set("answerId", payload.answerId);
       if (payload.questionId) form.set("questionId", payload.questionId);
       if (payload.chunkId) form.set("chunkId", payload.chunkId);
       form.set("chunkIndex", String(payload.chunkIndex));
@@ -412,6 +414,9 @@ export const BackendApi = {
     remainingSeconds: number;
     difficultyLevel?: number;
     confirmedName?: string;
+    answerId?: string;
+    interviewMode?: string;
+    speechMetrics?: Record<string, unknown>;
     transcript?: string;
     audioBase64?: string;
     mimeType?: string;

@@ -31,6 +31,7 @@ async def _request_payload(request: Request) -> AudioChunkUploadRequest:
 
         return AudioChunkUploadRequest(
             sessionId=str(form.get("sessionId") or "").strip(),
+            answerId=str(form.get("answerId") or "").strip() or None,
             questionId=str(form.get("questionId") or "").strip() or None,
             chunkId=str(form.get("chunkId") or "").strip() or None,
             chunkIndex=int(form.get("chunkIndex") or 0),

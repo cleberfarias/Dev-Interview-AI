@@ -2,6 +2,7 @@ export { default as AudioPermissionCard } from './components/AudioPermissionCard
 export { default as MicrophoneSelector } from './components/MicrophoneSelector';
 export { default as RecordingStatusBadge } from './components/RecordingStatusBadge';
 export { retryPendingAudioChunks } from './chunkUploadService';
+export { analyzeSpeechMetrics } from './speechMetricsAnalyzer';
 export { useAudioCapture } from './useAudioCapture';
 export type {
   AudioCaptureState,

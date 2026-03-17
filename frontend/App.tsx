@@ -85,6 +85,7 @@ const App: React.FC = () => {
     duration: clampDuration(INTERVIEW_LIMITS.free, 'free'),
     plan: 'free',
     jobDescription: '',
+    interviewMode: 'candidate_coaching_mode',
     difficultyLevel: 3,
   });
 

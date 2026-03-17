@@ -14,11 +14,17 @@ def build_next_question_prompt(
     difficulty_hint: str,
     context: str = "",
 ) -> str:
+    interview_mode = getattr(config, "interviewMode", "candidate_coaching_mode")
+    mode_guidance = (
+        "- candidate_coaching_mode: voce pode escolher perguntas que aprofundem gaps de comunicacao/comportamento de forma construtiva, mas sem dar a resposta.\n"
+        "- hiring_assessment_mode: faca perguntas para coletar evidencia objetiva. Nao ofereca coaching, alivio ou dica embutida no texto."
+    )
     return f"""
 Voce e um entrevistador de engenharia de software.
 Gere a PROXIMA pergunta com base na configuracao e no historico.
 
 Config: {config.model_dump()}
+interviewMode: {interview_mode}
 Historico (resumo): {history_summary}
 Medias de scores: {average_scores}
 remainingSeconds: {remaining_seconds}
@@ -44,6 +50,9 @@ Regras:
 - Se remainingSeconds <= 60 ou askedCount >= maxQuestions, defina shouldFinish=true e question=null.
 - Nao repita a mesma pergunta ou tema imediatamente.
 - Balanceie secoes (hr, technical, design, behavioral) conforme gaps.
+- Considere sinais de communicationAnalysis, behaviorProfile e cultureFitSignals quando estiverem no historico.
+- Use o modo abaixo como regra de conduta:
+{mode_guidance}
 - difficulty deve ficar no range {difficulty_hint}.
 - Pergunta deve ser objetiva (1-2 frases).
 """

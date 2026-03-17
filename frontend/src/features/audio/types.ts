@@ -10,6 +10,7 @@ export type AudioCaptureState =
 export type AudioUploadState = 'idle' | 'uploading' | 'retry_pending' | 'error';
 
 export type AudioChunkMeta = {
+  answerId?: string;
   chunkId: string;
   chunkIndex: number;
   startedAt: string;

@@ -292,6 +292,33 @@
   box-shadow: 0 14px 30px rgba(2, 6, 23, 0.45);
 }
 
+.partialFeedbackCard {
+  pointer-events: auto;
+  width: 100%;
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(16, 35, 42, 0.94), rgba(9, 22, 28, 0.9));
+  border: 1px solid rgba(94, 234, 212, 0.22);
+  box-shadow: 0 14px 30px rgba(2, 6, 23, 0.45);
+}
+
+.partialFeedbackLabel {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(153, 246, 228, 0.9);
+}
+
+.partialFeedbackText {
+  margin: 0;
+  color: rgba(225, 248, 255, 0.92);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
 .liveCoachHeader {
   display: flex;
   align-items: center;

@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.ai.router import AIResult
 from app.firebase_admin import get_current_user
+from app.services import interview_core
 
 
 def _config():
@@ -222,3 +223,29 @@ def test_next_question_retries_on_invalid_payload(monkeypatch):
         assert calls["count"] == 2
     finally:
         app.dependency_overrides = {}
+
+
+def test_history_summary_for_next_keeps_behavior_and_culture_signals():
+    summary = interview_core._summarize_history_for_next(
+        [
+            {
+                "question": "Fale sobre incidentes.",
+                "section": "behavioral",
+                "difficulty": 3,
+                "evaluation": {
+                    "scores": {"communication": 8, "technical": 7, "problemSolving": 7, "presence": 8},
+                    "strengths": ["clareza"],
+                    "improvements": ["mais detalhes"],
+                },
+                "communicationAnalysis": {
+                    "mode": "hiring_assessment_mode",
+                    "behaviorProfile": {"communicationStyle": "analitico-direto"},
+                    "cultureFitSignals": {"overallAlignment": 7.4},
+                },
+            }
+        ]
+    )
+
+    assert summary[0]["communicationAnalysis"]["mode"] == "hiring_assessment_mode"
+    assert summary[0]["communicationAnalysis"]["behaviorProfile"]["communicationStyle"] == "analitico-direto"
+    assert summary[0]["communicationAnalysis"]["cultureFitSignals"]["overallAlignment"] == 7.4

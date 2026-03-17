@@ -31,6 +31,7 @@ const formatScore = (value: number): string => {
 
 const Report: React.FC<Props> = ({ config, report, onBack }) => {
   const t = I18N[config.uiLanguage];
+  const isHiringMode = config.interviewMode === 'hiring_assessment_mode';
   const overallScore = Number.isFinite(report.overallScore) ? Math.min(10, Math.max(0, report.overallScore)) : 0;
   const overallPercent = Math.round((overallScore / 10) * 100);
 
@@ -63,6 +64,8 @@ const Report: React.FC<Props> = ({ config, report, onBack }) => {
   const improvements = communicationFeedback.slice(0, 3);
   const coachingTips = [...technicalFeedback, ...communicationFeedback, ...postureFeedback].slice(0, 4);
   const planSteps = (report.plan7Days || []).slice(0, 7);
+  const behaviorTraits = report.behaviorProfile?.observedTraits || [];
+  const cultureSignals = report.cultureFitSignals?.supportingSignals || [];
 
   const coveredSkills = report.jobMatch?.covered || [];
   const gapSkills = report.jobMatch?.gaps || [];
@@ -99,7 +102,11 @@ const Report: React.FC<Props> = ({ config, report, onBack }) => {
 
         <section className={styles.heroTitle}>
           <h2>Relatorio da Entrevista</h2>
-          <p>Confira sua performance, feedbacks e proximos passos.</p>
+          <p>
+            {isHiringMode
+              ? 'Confira sua performance, sinais comportamentais e evidencias da sessao avaliativa.'
+              : 'Confira sua performance, feedbacks e proximos passos.'}
+          </p>
         </section>
 
         <div className={styles.layout}>
@@ -183,11 +190,55 @@ const Report: React.FC<Props> = ({ config, report, onBack }) => {
                 </ul>
               </article>
             </div>
+
+            {(report.behaviorProfile || report.cultureFitSignals) && (
+              <div className={styles.insightGrid}>
+                <article className={styles.insightPanel}>
+                  <h4 className={styles.insightTitle}>Perfil comportamental</h4>
+                  <ul className={styles.insightList}>
+                    {report.behaviorProfile?.summary && (
+                      <li>
+                        <span className={styles.bulletOk}>OK</span>
+                        <p>{report.behaviorProfile.summary}</p>
+                      </li>
+                    )}
+                    {behaviorTraits.length === 0 && <li className={styles.emptyText}>Sem sinais suficientes.</li>}
+                    {behaviorTraits.map((trait, index) => (
+                      <li key={`behavior-${index}`}>
+                        <span className={styles.bulletOk}>OK</span>
+                        <p>{trait}</p>
+                      </li>
+                    ))}
+                  </ul>
+                </article>
+
+                <article className={styles.insightPanel}>
+                  <h4 className={styles.insightTitle}>Culture fit</h4>
+                  <ul className={styles.insightList}>
+                    {report.cultureFitSignals?.summary && (
+                      <li>
+                        <span className={styles.bulletWarn}>UP</span>
+                        <p>{report.cultureFitSignals.summary}</p>
+                      </li>
+                    )}
+                    {cultureSignals.length === 0 && <li className={styles.emptyText}>Sem sinais suficientes.</li>}
+                    {cultureSignals.map((signal, index) => (
+                      <li key={`culture-${index}`}>
+                        <span className={styles.bulletWarn}>UP</span>
+                        <p>{signal}</p>
+                      </li>
+                    ))}
+                  </ul>
+                </article>
+              </div>
+            )}
           </section>
 
           <aside className={styles.sideColumn}>
             <section className={styles.sideCard}>
-              <h3 className={styles.sideTitle}>Coaching e feedback</h3>
+              <h3 className={styles.sideTitle}>
+                {isHiringMode ? 'Avaliacao e evidencias' : 'Coaching e feedback'}
+              </h3>
               <div className={styles.sideScores}>
                 <div className={styles.scoreLine}>
                   <span>Qualidade da resposta</span>

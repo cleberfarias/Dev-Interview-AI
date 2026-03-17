@@ -409,6 +409,7 @@ def _summarize_history_for_next(history: list, limit: int = 4) -> list:
             continue
         evaluation = item.get("evaluation") or item.get("answerEvaluation") or item.get("eval") or {}
         scores = evaluation.get("scores") if isinstance(evaluation.get("scores"), dict) else evaluation
+        communication_analysis = item.get("communicationAnalysis") if isinstance(item.get("communicationAnalysis"), dict) else {}
         items.append(
             {
                 "question": item.get("question"),
@@ -419,6 +420,15 @@ def _summarize_history_for_next(history: list, limit: int = 4) -> list:
                 "improvements": evaluation.get("improvements", []),
                 "followUpNeeded": evaluation.get("followUpNeeded", False),
                 "followUpQuestion": evaluation.get("followUpQuestion"),
+                "communicationAnalysis": {
+                    "mode": communication_analysis.get("mode"),
+                    "communicationSignals": communication_analysis.get("communicationSignals"),
+                    "behavioralSpeechSignals": communication_analysis.get("behavioralSpeechSignals"),
+                    "behaviorProfile": communication_analysis.get("behaviorProfile"),
+                    "cultureFitSignals": communication_analysis.get("cultureFitSignals"),
+                }
+                if communication_analysis
+                else None,
             }
         )
     return items

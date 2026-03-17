@@ -140,6 +140,81 @@ class CandidateProfileAuditPageResponse(BaseModel):
     nextOffset: Optional[int] = None
 
 
+class SpeechMetrics(BaseModel):
+    answerId: str
+    timeToFirstSpeechMs: int = 0
+    totalDurationMs: int = 0
+    silenceDurationMs: int = 0
+    pauseCount: int = 0
+    longPauseCount: int = 0
+    fillerCount: int = 0
+    hesitationMarkers: List[str] = Field(default_factory=list)
+    wordsPerMinute: Optional[float] = None
+    interruptionRecoveryCount: Optional[int] = None
+    fluencyScore: Optional[float] = None
+    fluencyLevel: Optional[str] = None
+
+
+class HiringCommunicationSignals(BaseModel):
+    responseClarity: float = 0.0
+    responseConfidence: float = 0.0
+    hesitationLevel: float = 0.0
+    verbalObjectivity: float = 0.0
+    professionalCommunication: float = 0.0
+
+
+class BehavioralSpeechSignals(BaseModel):
+    assertiveness: float = 0.0
+    cautionLevel: float = 0.0
+    spontaneity: float = 0.0
+    consistency: float = 0.0
+    emotionalControl: float = 0.0
+
+
+class DiscReadinessSignals(BaseModel):
+    dominance: float = 0.0
+    influence: float = 0.0
+    steadiness: float = 0.0
+    conscientiousness: float = 0.0
+
+
+class BehaviorProfile(BaseModel):
+    communicationStyle: str = "balanced"
+    observedTraits: List[str] = Field(default_factory=list)
+    summary: str = ""
+    discReadiness: DiscReadinessSignals = Field(default_factory=DiscReadinessSignals)
+    guardrail: str = (
+        "Indicadores observados durante a entrevista; nao representam diagnostico psicologico ou laudo de personalidade."
+    )
+
+
+class CultureFitSignals(BaseModel):
+    collaboration: float = 0.0
+    ownership: float = 0.0
+    adaptability: float = 0.0
+    communicationFit: float = 0.0
+    overallAlignment: float = 0.0
+    supportingSignals: List[str] = Field(default_factory=list)
+    summary: str = ""
+    guardrail: str = "Sinais de apoio a decisao; nao substituem avaliacao humana."
+
+
+class PartialFeedback(BaseModel):
+    type: str = "partial_feedback"
+    severity: str = "low"
+    message: str
+
+
+class CommunicationAnalysisPayload(BaseModel):
+    answerId: str
+    mode: str = "candidate_coaching_mode"
+    speechMetrics: Optional[SpeechMetrics] = None
+    communicationSignals: Optional[HiringCommunicationSignals] = None
+    behavioralSpeechSignals: Optional[BehavioralSpeechSignals] = None
+    behaviorProfile: Optional[BehaviorProfile] = None
+    cultureFitSignals: Optional[CultureFitSignals] = None
+
+
 class ResumeAnalysisPageResponse(BaseModel):
     items: List[ResumeAnalysisRecord] = Field(default_factory=list)
     total: int = 0

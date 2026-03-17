@@ -222,6 +222,16 @@ def update_candidate_memory_after_report(
         "recurringGaps": recurring_gaps,
         "strongSkills": strong_skills,
         "communicationScore": _communication_score(report),
+        "behaviorProfile": (
+            report.behaviorProfile.model_dump()
+            if hasattr(report, "behaviorProfile") and getattr(report, "behaviorProfile", None) is not None
+            else current.get("behaviorProfile")
+        ),
+        "cultureFitSignals": (
+            report.cultureFitSignals.model_dump()
+            if hasattr(report, "cultureFitSignals") and getattr(report, "cultureFitSignals", None) is not None
+            else current.get("cultureFitSignals")
+        ),
         "gapCounts": gap_counts,
         "lastUpdated": _now_iso(),
     }

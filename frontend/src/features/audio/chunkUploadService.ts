@@ -16,6 +16,7 @@ export async function uploadAudioChunk(params: {
 }): Promise<AudioChunkUploadResult> {
   return BackendApi.uploadAudioChunk({
     sessionId: params.sessionId,
+    answerId: params.metadata.answerId,
     questionId: params.metadata.questionId,
     chunkId: params.metadata.chunkId,
     chunkIndex: params.metadata.chunkIndex,

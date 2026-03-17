@@ -3,6 +3,7 @@ import type { AudioChunkMeta } from './types';
 export type ChunkCallback = (chunk: Blob, metadata: AudioChunkMeta) => void;
 
 type ChunkRecorderOptions = {
+  answerId?: string;
   timesliceMs?: number;
   sessionId?: string;
   questionId?: string;
@@ -81,6 +82,7 @@ export class ChunkRecorder {
       this.chunks.push(event.data);
 
       const metadata: AudioChunkMeta = {
+        answerId: this.options.answerId,
         chunkId: buildChunkId(this.options.sessionId, this.options.questionId, this.chunkIndex),
         chunkIndex: this.chunkIndex,
         startedAt,

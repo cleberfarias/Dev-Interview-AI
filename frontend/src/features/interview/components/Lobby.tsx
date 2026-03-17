@@ -32,6 +32,11 @@ const TRACK_LABELS: Record<Track, string> = {
   data: 'Data',
 };
 
+const MODE_LABELS = {
+  candidate_coaching_mode: 'Coaching do candidato',
+  hiring_assessment_mode: 'Avaliacao de contratacao',
+} as const;
+
 const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number): Promise<T | null> => {
   return Promise.race([
     promise,
@@ -252,6 +257,7 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
   };
 
   const roleLabel = TRACK_LABELS[config.track as Track] || config.track || 'Entrevista tecnica';
+  const modeLabel = MODE_LABELS[config.interviewMode || 'candidate_coaching_mode'];
 
   return (
     <div className={styles.page}>
@@ -322,6 +328,12 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
               <span>Custo: 1 credito</span>
               <span>Saldo: {userCredits}</span>
               <span>Duracao aprox: {config.duration} min</span>
+            </div>
+
+            <div className={styles.metaRow}>
+              <span>Modo: {modeLabel}</span>
+              <span>Idioma: {config.interviewLanguage}</span>
+              <span>Estilo: {config.style}</span>
             </div>
 
             {candidateProfile && !profileCompleteFromCache && (
@@ -395,6 +407,7 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
               <p><strong>Trilha:</strong> {roleLabel}</p>
               <p><strong>Senioridade:</strong> {config.seniority}</p>
               <p><strong>Idioma:</strong> {config.interviewLanguage}</p>
+              <p><strong>Modo:</strong> {modeLabel}</p>
             </div>
           </aside>
         </div>

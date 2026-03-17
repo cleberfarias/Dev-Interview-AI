@@ -5,6 +5,8 @@ export type Track = 'frontend' | 'backend' | 'fullstack' | 'mobile' | 'devops' |
 export type Seniority = 'intern' | 'junior' | 'mid' | 'senior' | 'staff';
 export type InterviewStyle = 'friendly' | 'neutral' | 'strict';
 export type PlanType = 'free' | 'pro';
+export type InterviewMode = 'candidate_coaching_mode' | 'hiring_assessment_mode';
+export type FluencyLevel = 'low' | 'moderate' | 'high';
 
 export interface InterviewHistoryItem {
   id: string;
@@ -35,6 +37,7 @@ export interface InterviewConfig {
   duration: number;
   jobDescription?: string;
   plan: PlanType;
+  interviewMode: InterviewMode;
   difficultyLevel?: DifficultyLevel;
 }
 
@@ -95,6 +98,88 @@ export interface AnswerEvaluation {
   transcript: string;
 }
 
+export interface SpeechMetrics {
+  answerId: string;
+  timeToFirstSpeechMs: number;
+  totalDurationMs: number;
+  silenceDurationMs: number;
+  pauseCount: number;
+  longPauseCount: number;
+  fillerCount: number;
+  hesitationMarkers: string[];
+  wordsPerMinute?: number;
+  interruptionRecoveryCount?: number;
+  fluencyScore?: number;
+  fluencyLevel?: FluencyLevel;
+}
+
+export interface HiringCommunicationSignals {
+  responseClarity: number;
+  responseConfidence: number;
+  hesitationLevel: number;
+  verbalObjectivity: number;
+  professionalCommunication: number;
+}
+
+export interface BehavioralSpeechSignals {
+  assertiveness: number;
+  cautionLevel: number;
+  spontaneity: number;
+  consistency: number;
+  emotionalControl: number;
+}
+
+export interface DiscReadinessSignals {
+  dominance: number;
+  influence: number;
+  steadiness: number;
+  conscientiousness: number;
+}
+
+export interface BehaviorProfile {
+  communicationStyle: string;
+  observedTraits: string[];
+  summary: string;
+  discReadiness: DiscReadinessSignals;
+  guardrail: string;
+}
+
+export interface CultureFitSignals {
+  collaboration: number;
+  ownership: number;
+  adaptability: number;
+  communicationFit: number;
+  overallAlignment: number;
+  supportingSignals: string[];
+  summary: string;
+  guardrail: string;
+}
+
+export interface PartialFeedback {
+  type: 'partial_feedback';
+  severity: 'low' | 'medium' | 'high';
+  message: string;
+}
+
+export interface CommunicationScore {
+  clarity: number;
+  fluency: number;
+  confidence: number;
+  conciseness: number;
+  structure: number;
+  overall: number;
+}
+
+export interface CommunicationAnalysis {
+  answerId: string;
+  mode: InterviewMode;
+  speechMetrics?: SpeechMetrics | null;
+  communicationSignals?: HiringCommunicationSignals | null;
+  behavioralSpeechSignals?: BehavioralSpeechSignals | null;
+  behaviorProfile?: BehaviorProfile | null;
+  cultureFitSignals?: CultureFitSignals | null;
+}
+
 export interface FinalReport {
   overallScore: number;
   levelEstimate: Seniority;
@@ -125,6 +210,13 @@ export interface FinalReport {
     technicalPrecision: number;
     communication: number;
   };
+  communicationScore?: CommunicationScore;
+  communicationStrengths?: string[];
+  communicationImprovements?: string[];
+  communicationSignals?: HiringCommunicationSignals | null;
+  behavioralSpeechSignals?: BehavioralSpeechSignals | null;
+  behaviorProfile?: BehaviorProfile | null;
+  cultureFitSignals?: CultureFitSignals | null;
 }
 
 export interface NextQuestionResponse {
@@ -148,6 +240,8 @@ export interface OrchestratorContextResponse {
   candidate: Record<string, unknown>;
   job: Record<string, unknown>;
   match: Record<string, unknown>;
+  behaviorProfile?: BehaviorProfile | null;
+  cultureFitProfile?: CultureFitSignals | null;
 }
 
 export interface OrchestratorStartResponse {
@@ -167,6 +261,7 @@ export interface OrchestratorTurnResponse {
   };
   nextQuestion: NextQuestionResponse;
   avatar?: AvatarResponse | null;
+  communicationAnalysis?: CommunicationAnalysis | null;
 }
 
 export interface OrchestratorFinalizeResponse {
@@ -337,6 +432,12 @@ export interface LiveCoachProcessResponse {
   transcriptionError?: string | null;
   contextUsed: boolean;
   audioReceived: boolean;
+  mode?: InterviewMode;
+  partialFeedback?: PartialFeedback | null;
+  partialFeedbackTriggered?: boolean;
+  speechMetrics?: SpeechMetrics | null;
+  communicationSignals?: HiringCommunicationSignals | null;
+  behavioralSpeechSignals?: BehavioralSpeechSignals | null;
 }
 
 export interface AvatarVisemeFrame {

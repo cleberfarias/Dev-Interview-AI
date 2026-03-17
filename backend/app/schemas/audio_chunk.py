@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, model_validator
 
 class AudioChunkUploadRequest(BaseModel):
     sessionId: str
+    answerId: Optional[str] = None
     questionId: Optional[str] = None
     chunkId: Optional[str] = None
     chunkIndex: int
