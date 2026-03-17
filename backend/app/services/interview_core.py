@@ -5,6 +5,7 @@ import base64
 import re
 import urllib.request
 import urllib.error
+import uuid
 from typing import Optional
 from datetime import datetime, timezone
 
@@ -41,6 +42,8 @@ load_dotenv(_env_path)
 
 logger = logging.getLogger('uvicorn.error')
 ai_router = AIRouter()
+FIXED_INTERVIEW_DURATION_MINUTES = 10
+FIXED_INTERVIEW_QUESTION_COUNT = 5
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -58,19 +61,11 @@ def _initial_credits() -> int:
     return _env_int("FREE_TRIAL_CREDITS", _env_int("DEFAULT_CREDITS", 3))
 
 def _max_minutes_for_plan(plan: Optional[str]) -> int:
-    plan_value = (plan or "free").lower()
-    free_max = _env_int("INTERVIEW_MAX_MINUTES_FREE", 15)
-    pro_max = _env_int("INTERVIEW_MAX_MINUTES_PRO", 25)
-    return pro_max if plan_value == "pro" else free_max
+    return _env_int("INTERVIEW_FIXED_MINUTES", FIXED_INTERVIEW_DURATION_MINUTES)
 
 def _clamp_duration_minutes(config: InterviewConfig) -> int:
-    min_minutes = _env_int("INTERVIEW_MIN_MINUTES", 10)
-    max_minutes = _max_minutes_for_plan(config.plan)
-    try:
-        duration = int(config.duration)
-    except Exception:
-        duration = max_minutes
-    return max(min_minutes, min(duration, max_minutes))
+    del config
+    return _max_minutes_for_plan(None)
 
 def _normalize_config(config: InterviewConfig) -> InterviewConfig:
     duration = _clamp_duration_minutes(config)
@@ -81,10 +76,9 @@ def _normalize_config(config: InterviewConfig) -> InterviewConfig:
     return InterviewConfig(**data)
 
 def _plan_question_bounds(duration_min: int) -> tuple[int, int]:
-    avg = max(6, min(12, round(duration_min / 2)))
-    min_q = max(6, avg - 1)
-    max_q = min(14, avg + 1)
-    return min_q, max_q
+    del duration_min
+    fixed_count = _env_int("INTERVIEW_FIXED_QUESTION_COUNT", FIXED_INTERVIEW_QUESTION_COUNT)
+    return fixed_count, fixed_count
 
 def _mcp_context_enabled() -> bool:
     raw = (os.environ.get("MCP_CONTEXT_ENABLED") or "").strip().lower()
@@ -238,6 +232,19 @@ def _safe_json_loads(text: str):
             return json.loads(snippet)
         raise
 
+
+def _audio_filename_for_mime_type(mime_type: str) -> str:
+    normalized_mime_type = (mime_type or "audio/webm").split(";", 1)[0].strip().lower()
+    if normalized_mime_type in {"audio/mp4", "audio/x-m4a", "audio/m4a"}:
+        return "audio.m4a"
+    if normalized_mime_type in {"audio/ogg", "audio/opus"}:
+        return "audio.ogg"
+    if normalized_mime_type in {"audio/wav", "audio/x-wav", "audio/wave"}:
+        return "audio.wav"
+    if normalized_mime_type in {"audio/mpeg", "audio/mp3", "audio/mpga"}:
+        return "audio.mp3"
+    return "audio.webm"
+
 def _openai_transcribe_audio(audio_bytes: bytes, mime_type: str) -> str:
     api_key = (os.environ.get("OPENAI_API_KEY") or "").strip()
     if not api_key:
@@ -253,7 +260,7 @@ def _openai_transcribe_audio(audio_bytes: bytes, mime_type: str) -> str:
             f"{value}\r\n"
         ).encode("utf-8")
 
-    filename = "audio.webm"
+    filename = _audio_filename_for_mime_type(mime_type)
     file_header = (
         f"--{boundary}\r\n"
         f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
@@ -337,7 +344,10 @@ def _parse_plan_payload(payload: dict, config: InterviewConfig) -> Optional[Inte
                 )
             )
 
-    if len(questions) < 5:
+    fixed_count = _env_int("INTERVIEW_FIXED_QUESTION_COUNT", FIXED_INTERVIEW_QUESTION_COUNT)
+    questions = questions[:fixed_count]
+
+    if len(questions) < fixed_count:
         return None
 
     role_title = payload.get("roleTitleGuess") or payload.get("role") or config.track or "Entrevista"

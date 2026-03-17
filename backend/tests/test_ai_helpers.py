@@ -1,4 +1,6 @@
 from app import main as main_module
+from app.live_coach import pipeline as live_coach_pipeline
+from app.services import interview_core
 
 
 def test_safe_json_loads_strips_code_fence():
@@ -40,3 +42,9 @@ def test_normalize_eval_payload_uses_fallback_transcript():
     }
     normalized = main_module._normalize_eval_payload(raw, transcript_fallback="fallback transcript")
     assert normalized["transcript"] == "fallback transcript"
+
+
+def test_audio_filename_for_mime_type_supports_mp4_variants():
+    mime_type = "audio/mp4;codecs=mp4a.40.2"
+    assert interview_core._audio_filename_for_mime_type(mime_type) == "audio.m4a"
+    assert live_coach_pipeline._audio_filename_for_mime_type(mime_type) == "live_coach_audio.m4a"

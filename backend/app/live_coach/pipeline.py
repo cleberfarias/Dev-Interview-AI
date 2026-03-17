@@ -161,6 +161,19 @@ def _live_coach_stt_provider(context: Dict[str, Any] | None) -> str:
     return provider
 
 
+def _audio_filename_for_mime_type(mime_type: str) -> str:
+    normalized_mime_type = (mime_type or "audio/webm").split(";", 1)[0].strip().lower()
+    if normalized_mime_type in {"audio/mp4", "audio/x-m4a", "audio/m4a"}:
+        return "live_coach_audio.m4a"
+    if normalized_mime_type in {"audio/ogg", "audio/opus"}:
+        return "live_coach_audio.ogg"
+    if normalized_mime_type in {"audio/wav", "audio/x-wav", "audio/wave"}:
+        return "live_coach_audio.wav"
+    if normalized_mime_type in {"audio/mpeg", "audio/mp3", "audio/mpga"}:
+        return "live_coach_audio.mp3"
+    return "live_coach_audio.webm"
+
+
 def _openai_transcribe_audio(audio_bytes: bytes, mime_type: str = "audio/webm") -> str:
     api_key = (os.environ.get("OPENAI_API_KEY") or "").strip()
     if not api_key:
@@ -177,9 +190,11 @@ def _openai_transcribe_audio(audio_bytes: bytes, mime_type: str = "audio/webm") 
             f"{value}\r\n"
         ).encode("utf-8")
 
+    filename = _audio_filename_for_mime_type(mime_type)
+
     file_header = (
         f"--{boundary}\r\n"
-        f'Content-Disposition: form-data; name="file"; filename="live_coach_audio.webm"\r\n'
+        f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
         f"Content-Type: {mime_type}\r\n\r\n"
     ).encode("utf-8")
     file_footer = b"\r\n"

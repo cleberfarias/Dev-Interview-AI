@@ -17,6 +17,7 @@ from ..schemas import (
 from . import metrics_service, planning_service
 
 logger = logging.getLogger("uvicorn.error")
+FIXED_INTERVIEW_DURATION_MINUTES = 10
 
 
 def _now_iso() -> str:
@@ -35,20 +36,13 @@ def _initial_credits() -> int:
 
 
 def _max_minutes_for_plan(plan: str | None) -> int:
-    plan_value = (plan or "free").lower()
-    free_max = _env_int("INTERVIEW_MAX_MINUTES_FREE", 15)
-    pro_max = _env_int("INTERVIEW_MAX_MINUTES_PRO", 25)
-    return pro_max if plan_value == "pro" else free_max
+    del plan
+    return _env_int("INTERVIEW_FIXED_MINUTES", FIXED_INTERVIEW_DURATION_MINUTES)
 
 
 def _clamp_duration_minutes(config: InterviewConfig) -> int:
-    min_minutes = _env_int("INTERVIEW_MIN_MINUTES", 10)
-    max_minutes = _max_minutes_for_plan(config.plan)
-    try:
-        duration = int(config.duration)
-    except Exception:
-        duration = max_minutes
-    return max(min_minutes, min(duration, max_minutes))
+    del config
+    return _max_minutes_for_plan(None)
 
 
 def _normalize_config(config: InterviewConfig) -> InterviewConfig:

@@ -12,13 +12,14 @@ interface Props {
   onBack?: () => void;
 }
 
-const InterviewRoom: React.FC<Props> = ({ config, plan, sessionId, initialAvatar, onFinish, onBack }) => {
+const InterviewRoom: React.FC<Props> = ({ config, plan, sessionId, initialAvatar, user, onFinish, onBack }) => {
   return (
     <InterviewRoomLayout
       config={config}
       plan={plan}
       sessionId={sessionId}
       initialAvatar={initialAvatar}
+      user={user}
       onFinish={onFinish}
       onBack={onBack}
     />

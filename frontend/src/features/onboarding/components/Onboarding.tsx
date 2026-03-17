@@ -187,7 +187,7 @@ const Onboarding: React.FC<Props> = ({ onComplete, initialConfig }) => {
                   className={`${styles.planCard} ${config.plan === 'free' ? styles.planCardActive : ''}`}
                 >
                   <span className={styles.planTitle}>Plano Standard</span>
-                  <span className={styles.planDescription}>Gratis, limite de tempo padrao.</span>
+                  <span className={styles.planDescription}>Gratis, sessao objetiva com 10 minutos.</span>
                 </button>
 
                 <button
@@ -198,7 +198,7 @@ const Onboarding: React.FC<Props> = ({ onComplete, initialConfig }) => {
                 >
                   <span className={styles.planTitle}>Plano Elite Pro</span>
                   <span className={styles.planDescription}>
-                    Mais tempo e recursos avancados.
+                    Recursos avancados com a mesma sessao focada de 10 minutos.
                   </span>
                   {isKeySelecting && <span className={styles.loadingChip}>Conectando...</span>}
                 </button>

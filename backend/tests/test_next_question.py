@@ -52,6 +52,55 @@ def test_next_question_time_low_skips_ai(monkeypatch):
         app.dependency_overrides = {}
 
 
+def test_next_question_finishes_after_five_answers(monkeypatch):
+    monkeypatch.setenv("MCP_CONTEXT_ENABLED", "false")
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "test-user",
+        "email": "test@example.com",
+        "name": "Test User",
+        "picture": None,
+        "token": "test-token",
+    }
+
+    def _boom(*args, **kwargs):
+        raise AssertionError("AI should not be called after five answered questions")
+
+    monkeypatch.setattr("app.main.ai_router.generate", _boom)
+
+    try:
+        client = TestClient(app)
+        history = [
+            {
+                "questionId": f"q{index + 1}",
+                "question": f"Pergunta {index + 1}",
+                "section": "technical",
+                "difficulty": 3,
+                "evaluation": {
+                    "scores": {
+                        "communication": 7,
+                        "technical": 6,
+                        "problemSolving": 6,
+                        "presence": 7,
+                    }
+                },
+            }
+            for index in range(5)
+        ]
+        body = {
+            "config": _config(),
+            "history": history,
+            "remainingSeconds": 300,
+            "difficultyLevel": 2,
+        }
+        resp = client.post("/ai/next-question", json=body)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["shouldFinish"] is True
+        assert data["reason"] == "time_or_max"
+    finally:
+        app.dependency_overrides = {}
+
+
 def test_next_question_happy_path(monkeypatch):
     monkeypatch.setenv("MCP_CONTEXT_ENABLED", "false")
     app.dependency_overrides[get_current_user] = lambda: {

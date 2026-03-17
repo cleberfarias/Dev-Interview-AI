@@ -10,7 +10,7 @@ import {
   UserCameraCard,
 } from '../../../shared/components';
 import { AvatarInterview } from '../../avatar';
-import { I18N } from '../../../shared/constants';
+import { FIXED_INTERVIEW_DURATION_MINUTES, FIXED_INTERVIEW_QUESTION_COUNT, I18N } from '../../../shared/constants';
 import { BackendApi } from '../../../shared/services/backendApi';
 import type {
   AnswerEvaluation,
@@ -19,6 +19,7 @@ import type {
   InterviewConfig,
   InterviewPlan,
   LiveCoachProcessResponse,
+  User,
 } from '../../../shared/types';
 import {
   blobToBase64,
@@ -28,6 +29,7 @@ import {
   buildUiQuestions,
   deriveContextLabel,
   getLocalFallbackPrompt,
+  normalizeQuestionPrompt,
   toUiQuestion,
   type HistoryItem,
   type UiQuestion,
@@ -53,16 +55,23 @@ const NO_RESPONSE_MS = 5000;
 const SILENCE_STOP_MS = 1500;
 const SILENCE_THRESHOLD = 0.02;
 const AUTO_MODE = true;
+const MAX_RECORDING_MS = 90000;
 const LIVE_COACH_CHUNK_TIMESLICE_MS = 3000;
 const LIVE_COACH_CHUNK_INTERVAL_MS = 8000;
 const LIVE_COACH_WS_RESPONSE_TIMEOUT_MS = 7000;
 
+const getPreferredCandidateName = (name?: string): string => {
+  const raw = String(name || '').trim();
+  if (!raw) return 'Candidato';
+  return raw.split(/\s+/)[0] || 'Candidato';
+};
 
 interface InterviewRoomLayoutProps {
   config: InterviewConfig;
   plan: InterviewPlan;
   sessionId?: string;
   initialAvatar?: AvatarResponse | null;
+  user: User;
   onFinish?: (report: FinalReport) => void;
   onBack?: () => void;
 }
@@ -80,6 +89,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
   plan,
   sessionId,
   initialAvatar,
+  user,
   onFinish,
   onBack,
 }) => {
@@ -106,6 +116,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
   const timerRef = useRef<number | null>(null);
   const startTimeRef = useRef<number | null>(null);
   const noResponseTimerRef = useRef<number | null>(null);
+  const recordingFailsafeTimerRef = useRef<number | null>(null);
   const stopInProgressRef = useRef(false);
   const liveCoachChunkInFlightRef = useRef(false);
   const lastLiveCoachChunkAtRef = useRef(0);
@@ -125,6 +136,9 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
       }
     >(),
   );
+  const isRecorderActiveRef = useRef(false);
+  const stopRecordingFlowRef = useRef<((reason: 'manual' | 'auto') => Promise<void>) | null>(null);
+  const handleNoResponseRef = useRef<(() => Promise<void>) | null>(null);
   const hasSpokenRef = useRef(false);
   const lastSoundAtRef = useRef(0);
   const autoStopRef = useRef(false);
@@ -152,12 +166,18 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
 
   const { mouthOpen, isSpeaking } = useLipSync(audioEl);
 
+  useEffect(() => {
+    isRecorderActiveRef.current = isRecorderActive;
+  }, [isRecorderActive]);
+
   const selectedLevel = config.difficultyLevel ?? 3;
+  const candidateFirstName = useMemo(() => getPreferredCandidateName(user?.name), [user?.name]);
   const baseBullets = useMemo(() => (plan.mustHaveSkills ?? []).slice(0, 3), [plan]);
   const baseQuestions = useMemo(() => {
     const all = buildUiQuestions(plan);
     const filtered = all.filter((question) => question.difficulty === selectedLevel);
-    return filtered.length ? filtered : all;
+    const source = filtered.length ? filtered : all;
+    return source.slice(0, FIXED_INTERVIEW_QUESTION_COUNT);
   }, [plan, selectedLevel]);
   const initialAvatarByQuestionId = useMemo<Record<string, AvatarResponse>>(() => {
     const firstQuestion = baseQuestions[0];
@@ -174,10 +194,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     () => deriveContextLabel(currentQuestion, config.stacks),
     [currentQuestion, config.stacks],
   );
-  const fallbackMaxQuestions = useMemo(() => {
-    const duration = Math.max(10, Number(config.duration || 10));
-    return Math.max(5, Math.min(12, Math.round(duration / 2)));
-  }, [config.duration]);
+  const fallbackMaxQuestions = FIXED_INTERVIEW_QUESTION_COUNT;
   const totalSeconds = useMemo(
     () => Math.max(0, Math.round((config.duration ?? 0) * 60)),
     [config.duration],
@@ -185,12 +202,12 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
   const t = I18N[config.uiLanguage];
 
   const stageLabel = useMemo(() => {
-    const total = questions.length;
+    const total = fallbackMaxQuestions;
     if (!total) return t.introLabel ?? 'INTRODUCAO';
     const current = Math.min(currentIndex + 1, total);
     const template = t.stepLabel ?? 'Stage {current} of {total}';
     return template.replace('{current}', String(current)).replace('{total}', String(total));
-  }, [questions.length, currentIndex, t.introLabel, t.stepLabel]);
+  }, [currentIndex, fallbackMaxQuestions, t.introLabel, t.stepLabel]);
 
   const chipLabel = useMemo(() => {
     if (!questions.length) return t.introLabel ?? 'INTRODUCAO';
@@ -594,6 +611,13 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     }
   }, []);
 
+  const clearRecordingFailsafeTimer = useCallback(() => {
+    if (recordingFailsafeTimerRef.current) {
+      window.clearTimeout(recordingFailsafeTimerRef.current);
+      recordingFailsafeTimerRef.current = null;
+    }
+  }, []);
+
   const stopVoiceMonitor = useCallback(() => {
     const monitor = voiceMonitorRef.current;
     if (monitor.rafId) {
@@ -649,7 +673,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
         if (hasSpokenRef.current && !autoStopRef.current) {
           if (Date.now() - lastSoundAtRef.current > SILENCE_STOP_MS) {
             autoStopRef.current = true;
-            void stopRecordingFlow('auto');
+            void stopRecordingFlowRef.current?.('auto');
             return;
           }
         }
@@ -671,6 +695,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
       setFlowState('finished');
       setConversationState('idle');
       clearNoResponseTimer();
+      clearRecordingFailsafeTimer();
       stopVoiceMonitor();
       stopTTS();
       try {
@@ -701,7 +726,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
         finishingRef.current = false;
       }
     },
-    [config, onFinish, plan, sanitizedConfig, sessionId, showRuntimeNotice, stopTTS],
+    [clearNoResponseTimer, clearRecordingFailsafeTimer, config, onFinish, plan, sanitizedConfig, sessionId, showRuntimeNotice, stopTTS],
   );
 
   const handleFinish = useCallback(async () => {
@@ -711,9 +736,10 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
       } catch {}
     }
     clearNoResponseTimer();
+    clearRecordingFailsafeTimer();
     stopVoiceMonitor();
     await finalizeInterview(historyRef.current);
-  }, [clearNoResponseTimer, finalizeInterview, isRecorderActive, stopRecording, stopVoiceMonitor]);
+  }, [clearNoResponseTimer, clearRecordingFailsafeTimer, finalizeInterview, isRecorderActive, stopRecording, stopVoiceMonitor]);
 
   const askCurrentQuestion = useCallback(
     async (overridePrompt?: string) => {
@@ -730,6 +756,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
         currentIndex,
         config.style,
         config.interviewLanguage,
+        candidateFirstName,
       );
       const avatarPayload = await resolveAvatarForQuestion(currentQuestion.id, prompt);
       if (avatarPayload) {
@@ -753,6 +780,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
       audioEl,
       config.interviewLanguage,
       config.style,
+      candidateFirstName,
       currentIndex,
       currentQuestion,
       playAudioPayload,
@@ -763,8 +791,9 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
 
   const handleNoResponse = useCallback(async () => {
     clearNoResponseTimer();
+    clearRecordingFailsafeTimer();
     stopVoiceMonitor();
-    if (isRecorderActive) {
+    if (isRecorderActiveRef.current) {
       try {
         await stopRecording();
       } catch {}
@@ -775,7 +804,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
       await speakQuestion(buildNoResponsePrompt(config.interviewLanguage));
     } catch {}
     setConversationState('listening');
-  }, [clearNoResponseTimer, config.interviewLanguage, isRecorderActive, speakQuestion, stopRecording, stopVoiceMonitor]);
+  }, [clearNoResponseTimer, clearRecordingFailsafeTimer, config.interviewLanguage, speakQuestion, stopRecording, stopVoiceMonitor]);
 
   const startRecordingFlow = useCallback(async () => {
     if (flowState !== 'awaiting_answer') return;
@@ -790,16 +819,22 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
       noiseThresholdRef.current = SILENCE_THRESHOLD;
       startVoiceMonitor();
       clearNoResponseTimer();
+      clearRecordingFailsafeTimer();
       noResponseTimerRef.current = window.setTimeout(() => {
         if (!hasSpokenRef.current) {
-          void handleNoResponse();
+          void handleNoResponseRef.current?.();
         }
       }, NO_RESPONSE_MS);
+      recordingFailsafeTimerRef.current = window.setTimeout(() => {
+        if (!stopInProgressRef.current) {
+          void stopRecordingFlowRef.current?.('auto');
+        }
+      }, MAX_RECORDING_MS);
     } catch (error) {
       console.warn(error);
       showRuntimeNotice('Nao foi possivel iniciar a gravacao. Verifique permissoes de microfone.');
     }
-  }, [clearNoResponseTimer, flowState, handleNoResponse, showRuntimeNotice, startRecording, startVoiceMonitor]);
+  }, [clearNoResponseTimer, clearRecordingFailsafeTimer, flowState, handleNoResponse, showRuntimeNotice, startRecording, startVoiceMonitor]);
 
   const continueWithTurnResult = useCallback(
     async (turnResult: {
@@ -839,7 +874,37 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
           return;
         }
 
-        const mapped = toUiQuestion(nextRes.question, nextIndex, baseBullets);
+        let mapped = toUiQuestion(nextRes.question, nextIndex, baseBullets);
+        const repeatedPrompt =
+          normalizeQuestionPrompt(mapped.title) === normalizeQuestionPrompt(currentQuestion.title);
+        if (repeatedPrompt) {
+          const fallbackPrompt = getLocalFallbackPrompt(config.track, config.interviewLanguage, nextIndex);
+          if (
+            fallbackPrompt &&
+            normalizeQuestionPrompt(fallbackPrompt) !== normalizeQuestionPrompt(currentQuestion.title)
+          ) {
+            mapped = toUiQuestion(
+              {
+                id: `fallback-q${nextIndex + 1}`,
+                prompt: fallbackPrompt,
+                section: nextRes.question.section || currentQuestion.section || 'technical',
+                difficulty: nextRes.question.difficulty || currentQuestion.sourceDifficulty || 3,
+              },
+              nextIndex,
+              baseBullets,
+            );
+          } else {
+            mapped = {
+              ...mapped,
+              id: `${mapped.id || `q${nextIndex + 1}`}-next-${nextIndex + 1}`,
+            };
+          }
+        } else if (questions.some((question, index) => index !== nextIndex && question.id === mapped.id)) {
+          mapped = {
+            ...mapped,
+            id: `${mapped.id || `q${nextIndex + 1}`}-${nextIndex + 1}`,
+          };
+        }
         if (turnResult.avatar) {
           setAvatarByQuestionId((prev) => ({ ...prev, [mapped.id]: turnResult.avatar as AvatarResponse }));
         }
@@ -915,10 +980,11 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
 
   const stopRecordingFlow = useCallback(
     async (_reason: 'manual' | 'auto') => {
-      if (flowState !== 'recording') return;
+      if (flowState !== 'recording' && !isRecorderActiveRef.current) return;
       if (stopInProgressRef.current) return;
       stopInProgressRef.current = true;
       clearNoResponseTimer();
+      clearRecordingFailsafeTimer();
       stopVoiceMonitor();
       setFlowState('evaluating');
       setConversationState('processing');
@@ -936,6 +1002,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
           question: currentQuestion.title,
           remainingSeconds,
           difficultyLevel: selectedLevel,
+          confirmedName: candidateFirstName,
           audioBase64: base64Audio,
           mimeType: blob.type || 'audio/webm',
         });
@@ -951,6 +1018,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     },
     [
       clearNoResponseTimer,
+      clearRecordingFailsafeTimer,
       continueWithTurnResult,
       flowState,
       remainingSeconds,
@@ -959,6 +1027,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
       showRuntimeNotice,
       stopRecording,
       stopVoiceMonitor,
+      candidateFirstName,
       requestLiveCoachInsight,
       currentQuestion.title,
       sessionId,
@@ -992,6 +1061,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
         question: currentQuestion.title,
         remainingSeconds,
         difficultyLevel: selectedLevel,
+        confirmedName: candidateFirstName,
         transcript,
       });
       setTextAnswer('');
@@ -1013,9 +1083,18 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     showRuntimeNotice,
     stopVoiceMonitor,
     textAnswer,
+    candidateFirstName,
     requestLiveCoachInsight,
     sessionId,
   ]);
+
+  useEffect(() => {
+    stopRecordingFlowRef.current = stopRecordingFlow;
+  }, [stopRecordingFlow]);
+
+  useEffect(() => {
+    handleNoResponseRef.current = handleNoResponse;
+  }, [handleNoResponse]);
 
   useEffect(() => {
     liveCoachWsDisabledRef.current = false;
@@ -1052,12 +1131,14 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
         timerRef.current = null;
       }
       clearNoResponseTimer();
+      clearRecordingFailsafeTimer();
       stopVoiceMonitor();
       closeLiveCoachSocket('session_cleanup');
     };
   }, [
     baseQuestions,
     clearNoResponseTimer,
+    clearRecordingFailsafeTimer,
     closeLiveCoachSocket,
     initialAvatarByQuestionId,
     stopVoiceMonitor,
@@ -1119,7 +1200,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     return () => {
       stopTTS();
     };
-  }, [askCurrentQuestion, currentQuestion?.id, stopTTS]);
+  }, [askCurrentQuestion, currentIndex, currentQuestion?.id, currentQuestion?.title, stopTTS]);
 
   useEffect(() => {
     if (flowState !== 'next_question') return;
@@ -1203,15 +1284,15 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     conversationState === 'processing'
       ? 'IA analisando sua resposta...'
       : conversationState === 'ai_speaking'
-        ? 'IA conduzindo a pergunta atual.'
+        ? `Entrevistadora conduzindo a pergunta para ${candidateFirstName}.`
         : conversationState === 'candidate_speaking'
-          ? 'Voce esta respondendo. Continue com exemplos concretos.'
+          ? `${candidateFirstName}, voce esta respondendo. Continue com exemplos concretos.`
           : conversationState === 'listening'
-            ? 'Escute com atencao e prepare sua resposta.'
+            ? `${candidateFirstName}, pode responder quando estiver pronto.`
             : flowState === 'next_question'
         ? 'Proxima pergunta em instantes.'
         : flowState === 'awaiting_answer' || flowState === 'recording'
-          ? 'Responda quando estiver pronto.'
+          ? `${candidateFirstName}, responda quando estiver pronto.`
           : flowState === 'asking'
             ? 'Escute a pergunta e prepare sua resposta.'
             : isFinished
@@ -1219,7 +1300,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
               : 'Preparando entrevista...';
 
   const topStacks = (config.stacks || []).slice(0, 3);
-  const roleSummary = `${plan.roleTitleGuess || config.track || 'Entrevista'} | Nivel: ${config.seniority} | Stack: ${topStacks.length ? topStacks.join(', ') : 'Nao informado'}`;
+  const roleSummary = `Candidato: ${candidateFirstName} | ${plan.roleTitleGuess || config.track || 'Entrevista'} | ${FIXED_INTERVIEW_QUESTION_COUNT} perguntas | ${FIXED_INTERVIEW_DURATION_MINUTES} min | Stack: ${topStacks.length ? topStacks.join(', ') : 'Nao informado'}`;
 
   const handlePrimaryAction = async () => {
     if (!currentQuestion) return;
@@ -1278,7 +1359,11 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
       <section className={styles.content} aria-label="Sala de entrevista">
         <div className={styles.grid}>
           <div className={styles.leftColumn}>
-            <AvatarInterview avatar={currentAvatar} state={avatarInterviewState} />
+            <AvatarInterview
+              avatar={currentAvatar}
+              state={avatarInterviewState}
+              mouthOpen={isAvatarSpeaking ? mouthOpen : 0}
+            />
           </div>
           <div className={styles.centerColumn}>
             <div className={styles.presentationChip} aria-label="Tela de apresentacao">

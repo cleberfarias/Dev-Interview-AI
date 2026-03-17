@@ -1,14 +1,13 @@
 import { LanguageCode, PlanType } from '../types';
 
 const ENV = (import.meta as any).env || {};
-const MIN_MINUTES = Number(ENV.VITE_INTERVIEW_MIN_MINUTES || 10);
-const FREE_MAX = Number(ENV.VITE_INTERVIEW_MAX_MINUTES_FREE || 15);
-const PRO_MAX = Number(ENV.VITE_INTERVIEW_MAX_MINUTES_PRO || 25);
+export const FIXED_INTERVIEW_DURATION_MINUTES = Number(ENV.VITE_INTERVIEW_FIXED_MINUTES || 10);
+export const FIXED_INTERVIEW_QUESTION_COUNT = Number(ENV.VITE_INTERVIEW_FIXED_QUESTION_COUNT || 5);
 
 export const INTERVIEW_LIMITS = {
-  min: MIN_MINUTES,
-  free: FREE_MAX,
-  pro: PRO_MAX,
+  min: FIXED_INTERVIEW_DURATION_MINUTES,
+  free: FIXED_INTERVIEW_DURATION_MINUTES,
+  pro: FIXED_INTERVIEW_DURATION_MINUTES,
 };
 
 export const clampDuration = (duration: number, plan: PlanType): number => {

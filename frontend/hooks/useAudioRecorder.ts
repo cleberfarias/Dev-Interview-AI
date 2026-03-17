@@ -12,13 +12,21 @@ interface AudioRecorderOptions {
   onChunk?: (chunk: Blob) => void;
 }
 
+const MIME_TYPE_CANDIDATES = [
+  'audio/webm;codecs=opus',
+  'audio/webm',
+  'audio/mp4;codecs=mp4a.40.2',
+  'audio/mp4',
+  'audio/ogg;codecs=opus',
+  'audio/ogg',
+];
+
 const getRecorderOptions = (): MediaRecorderOptions | undefined => {
   if (typeof MediaRecorder === 'undefined') return undefined;
-  if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
-    return { mimeType: 'audio/webm;codecs=opus' };
-  }
-  if (MediaRecorder.isTypeSupported('audio/webm')) {
-    return { mimeType: 'audio/webm' };
+  for (const candidate of MIME_TYPE_CANDIDATES) {
+    if (MediaRecorder.isTypeSupported(candidate)) {
+      return { mimeType: candidate };
+    }
   }
   return undefined;
 };
@@ -29,6 +37,7 @@ export const useAudioRecorder = (
 ): AudioRecorderState => {
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const recordedMimeTypeRef = useRef<string>('');
   const [isRecording, setIsRecording] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,8 +64,12 @@ export const useAudioRecorder = (
     const recorder = new MediaRecorder(audioStream, getRecorderOptions());
 
     chunksRef.current = [];
+    recordedMimeTypeRef.current = recorder.mimeType || '';
     recorder.ondataavailable = (event) => {
       if (event.data.size > 0) {
+        if (event.data.type) {
+          recordedMimeTypeRef.current = event.data.type;
+        }
         chunksRef.current.push(event.data);
         options.onChunk?.(event.data);
       }
@@ -86,10 +99,20 @@ export const useAudioRecorder = (
 
       recorder.onstop = () => {
         setIsRecording(false);
+        const resolvedMimeType =
+          recordedMimeTypeRef.current ||
+          chunksRef.current.find((chunk) => chunk.type)?.type ||
+          recorder.mimeType ||
+          'audio/webm';
+        if (chunksRef.current.length === 0) {
+          reject(new Error('Recorder returned empty audio'));
+          return;
+        }
         const blob = new Blob(chunksRef.current, {
-          type: recorder.mimeType || 'audio/webm',
+          type: resolvedMimeType,
         });
         chunksRef.current = [];
+        recordedMimeTypeRef.current = '';
         resolve(blob);
       };
 
@@ -97,7 +120,9 @@ export const useAudioRecorder = (
         setIsRecording(false);
         reject(new Error('Recorder stop failed'));
       };
-
+      try {
+        recorder.requestData();
+      } catch {}
       recorder.stop();
     });
   }, []);

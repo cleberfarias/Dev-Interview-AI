@@ -10,16 +10,34 @@ from typing import Any
 from .. import tts as legacy_tts
 
 
-def _provider_name(provider: str | None = None) -> str:
-    raw = str(provider or os.environ.get("AVATAR_TTS_PROVIDER") or os.environ.get("TTS_PROVIDER") or "openai")
-    value = raw.strip().lower()
+def _normalize_provider_name(raw: str | None) -> str | None:
+    value = str(raw or "").strip().lower()
+    if not value:
+        return None
     if value in {"eleven", "11labs", "eleven_labs"}:
         return "elevenlabs"
     if value in {"azure-speech", "microsoft", "azure_tts"}:
         return "azure"
     if value in {"google", "openai", "elevenlabs", "azure"}:
         return value
-    return "openai"
+    return None
+
+
+def _provider_name(provider: str | None = None) -> str:
+    explicit = _normalize_provider_name(provider)
+    if explicit:
+        return explicit
+
+    avatar_provider = _normalize_provider_name(os.environ.get("AVATAR_TTS_PROVIDER"))
+    if avatar_provider:
+        return avatar_provider
+
+    # Prefer ElevenLabs for the avatar when its credentials are available,
+    # without changing the generic /ai/tts provider for the rest of the app.
+    if str(os.environ.get("ELEVENLABS_API_KEY") or "").strip():
+        return "elevenlabs"
+
+    return _normalize_provider_name(os.environ.get("TTS_PROVIDER")) or "openai"
 
 
 def _synthesize_openai(text: str, language: str, voice: str | None) -> bytes:

@@ -151,57 +151,114 @@ export const buildSpokenPrompt = (
   index: number,
   style: string,
   language: string,
+  candidateName?: string,
 ): string => {
+  const safeCandidateName = String(candidateName || '').trim();
+  const withName = (value: string) => value.replace(/\{name\}/g, safeCandidateName);
   const script: Record<string, any> = {
     'pt-BR': {
       friendly: {
+        introNamed: [
+          '{name}, seja bem-vindo. Vamos comecar nossa entrevista.',
+          '{name}, vamos iniciar com a primeira pergunta.',
+        ],
         intro: ['Oi! Vamos comecar.', 'Tudo certo? Vamos iniciar.'],
-        next: ['Legal, vamos para a proxima.', 'Beleza, proxima pergunta.'],
-        suffix: ['Pode ficar a vontade.', 'Sem pressa.'],
+        nextNamed: [
+          'Perfeito, {name}. Posso fazer a proxima pergunta?',
+          'Muito bom, {name}. Vamos seguir para a proxima pergunta?',
+        ],
+        next: ['Perfeito, posso fazer a proxima pergunta?', 'Certo, vamos para a proxima pergunta.'],
+        suffix: ['Pode responder com tranquilidade.', 'Use exemplos concretos se fizer sentido.'],
       },
       neutral: {
+        introNamed: ['{name}, vamos iniciar a entrevista.', '{name}, comecando agora.'],
         intro: ['Vamos iniciar a entrevista.', 'Comecando agora.'],
-        next: ['Proxima pergunta.', 'Seguinte.'],
-        suffix: [''],
+        nextNamed: [
+          'Perfeito, {name}. Posso seguir para a proxima pergunta?',
+          'Obrigado, {name}. Vamos para a proxima pergunta.',
+        ],
+        next: ['Perfeito, posso seguir para a proxima pergunta?', 'Proxima pergunta.'],
+        suffix: ['Fique a vontade para pensar alguns segundos.', ''],
       },
       strict: {
+        introNamed: ['{name}, vamos direto ao ponto.', '{name}, comecemos agora.'],
         intro: ['Vamos direto ao ponto.', 'Comecemos sem rodeios.'],
-        next: ['Responda objetivamente.', 'Proxima pergunta.'],
-        suffix: ['Seja direto.'],
+        nextNamed: [
+          'Certo, {name}. Posso avancar para a proxima pergunta?',
+          'Obrigado, {name}. Proxima pergunta.',
+        ],
+        next: ['Posso avancar para a proxima pergunta?', 'Proxima pergunta.'],
+        suffix: ['Seja direto, mas traga contexto.', ''],
       },
     },
     en: {
       friendly: {
+        introNamed: [
+          '{name}, welcome. Let us start the interview.',
+          '{name}, let us begin with the first question.',
+        ],
         intro: ['Hi! Let us get started.', 'Ready? Let us begin.'],
-        next: ['Great, onto the next one.', 'Awesome, next question.'],
-        suffix: ['Take your time.', 'No rush.'],
+        nextNamed: [
+          'Perfect, {name}. May I ask the next question?',
+          'Great, {name}. Let us move to the next question.',
+        ],
+        next: ['Perfect, may I ask the next question?', 'Great, next question.'],
+        suffix: ['Take your time.', 'Use a concrete example if it helps.'],
       },
       neutral: {
+        introNamed: ['{name}, starting the interview now.', '{name}, let us begin.'],
         intro: ['Starting the interview now.', 'Let us begin.'],
-        next: ['Next question.', 'Moving on.'],
-        suffix: [''],
+        nextNamed: [
+          'Perfect, {name}. May I continue with the next question?',
+          'Thank you, {name}. Moving to the next question.',
+        ],
+        next: ['Perfect, may I continue with the next question?', 'Next question.'],
+        suffix: ['', 'Take a brief moment to think if needed.'],
       },
       strict: {
+        introNamed: ['{name}, let us go straight to it.', '{name}, we will begin now.'],
         intro: ['Let us go straight to it.', 'We will begin now.'],
-        next: ['Answer directly.', 'Next question.'],
-        suffix: ['Be concise.'],
+        nextNamed: [
+          'All right, {name}. May I move to the next question?',
+          'Thank you, {name}. Next question.',
+        ],
+        next: ['May I move to the next question?', 'Next question.'],
+        suffix: ['Be concise, but keep it grounded in your experience.', ''],
       },
     },
     es: {
       friendly: {
+        introNamed: [
+          '{name}, bienvenido. Vamos a empezar la entrevista.',
+          '{name}, empecemos con la primera pregunta.',
+        ],
         intro: ['Hola, vamos a empezar.', 'Todo listo? Comencemos.'],
-        next: ['Bien, vamos a la siguiente.', 'Perfecto, siguiente pregunta.'],
-        suffix: ['Toma tu tiempo.', 'Sin prisa.'],
+        nextNamed: [
+          'Perfecto, {name}. Puedo hacer la siguiente pregunta?',
+          'Muy bien, {name}. Vamos con la siguiente pregunta.',
+        ],
+        next: ['Perfecto, puedo hacer la siguiente pregunta?', 'Vamos con la siguiente pregunta.'],
+        suffix: ['Toma tu tiempo.', 'Usa un ejemplo concreto si ayuda.'],
       },
       neutral: {
+        introNamed: ['{name}, iniciamos la entrevista.', '{name}, empecemos ahora.'],
         intro: ['Iniciamos la entrevista.', 'Empecemos ahora.'],
-        next: ['Siguiente pregunta.', 'Continuamos.'],
-        suffix: [''],
+        nextNamed: [
+          'Perfecto, {name}. Puedo seguir con la siguiente pregunta?',
+          'Gracias, {name}. Seguimos con la siguiente pregunta.',
+        ],
+        next: ['Perfecto, puedo seguir con la siguiente pregunta?', 'Siguiente pregunta.'],
+        suffix: ['', 'Puedes pensar unos segundos si hace falta.'],
       },
       strict: {
+        introNamed: ['{name}, vamos directo al punto.', '{name}, comencemos sin rodeos.'],
         intro: ['Vamos directo al punto.', 'Comencemos sin rodeos.'],
-        next: ['Responde de forma objetiva.', 'Siguiente pregunta.'],
-        suffix: ['Se conciso.'],
+        nextNamed: [
+          'Bien, {name}. Puedo avanzar a la siguiente pregunta?',
+          'Gracias, {name}. Siguiente pregunta.',
+        ],
+        next: ['Puedo avanzar a la siguiente pregunta?', 'Siguiente pregunta.'],
+        suffix: ['Se conciso, pero con contexto real.', ''],
       },
     },
   };
@@ -209,8 +266,12 @@ export const buildSpokenPrompt = (
   const langKey = script[language] ? language : 'pt-BR';
   const styleKey = script[langKey][style] ? style : 'neutral';
   const variants = script[langKey][styleKey];
-  const intro = pickVariant(variants.intro, index);
-  const next = pickVariant(variants.next, index);
+  const intro = safeCandidateName && Array.isArray(variants.introNamed)
+    ? withName(pickVariant(variants.introNamed, index))
+    : pickVariant(variants.intro, index);
+  const next = safeCandidateName && Array.isArray(variants.nextNamed)
+    ? withName(pickVariant(variants.nextNamed, index))
+    : pickVariant(variants.next, index);
   const suffix = pickVariant(variants.suffix, index);
   const opener = index === 0 ? intro : next;
   const spacer = opener ? `${opener} ` : '';
@@ -267,6 +328,12 @@ export const deriveContextLabel = (
 
   return undefined;
 };
+
+export const normalizeQuestionPrompt = (value?: string | null): string =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
 
 const summarizeScores = (history: HistoryItem[]) => {
   if (!history.length) return { overall: 0, summary: undefined, criteriaSummary: undefined };
