@@ -66,6 +66,31 @@ const Login: React.FC<LoginProps> = ({ onLogin: _onLogin }) => {
         // if registering as RH, create company automatically
         if (role === 'rh') {
           try {
+            // ensure firebase auth is fully available and token can be retrieved
+            let attempts = 0;
+            let tokenAvailable = false;
+            while (attempts < 6 && !tokenAvailable) {
+              if (auth.currentUser) {
+                try {
+                  // force refresh once
+                  // @ts-ignore
+                  await auth.currentUser.getIdToken(true);
+                  tokenAvailable = true;
+                  break;
+                } catch (err) {
+                  // wait and retry
+                }
+              }
+              attempts += 1;
+              // small delay
+              // eslint-disable-next-line no-await-in-loop
+              await new Promise((r) => setTimeout(r, 300));
+            }
+
+            if (!tokenAvailable) {
+              throw new Error('Falha ao autenticar usuario para criar empresa');
+            }
+
             await BackendApi.createCompany({ name: companyName || `${email.split('@')[0]} company`, plan: 'business' });
             setInfo('Conta criada e empresa registrada. Voce ja pode fazer login.');
           } catch (e: any) {
