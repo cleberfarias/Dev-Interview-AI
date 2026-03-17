@@ -27,6 +27,8 @@ import type {
 const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || "/api";
 const TOKEN_SKEW_MS = 60_000;
 const LIVE_COACH_WS_CONNECT_TIMEOUT_MS = 7000;
+const LIVE_COACH_WS_SUBPROTOCOL = "live-coach.v1";
+const LIVE_COACH_WS_TOKEN_PREFIX = "firebase-id-token.";
 
 let cachedToken: string | null = null;
 let cachedTokenExpMs = 0;
@@ -288,10 +290,11 @@ export const BackendApi = {
       throw new Error("Sessao expirada. Faca login novamente.");
     }
 
-    const wsUrl = buildWebSocketUrl("/live-coach/ws", { token });
+    const wsUrl = buildWebSocketUrl("/live-coach/ws");
+    const protocols = [LIVE_COACH_WS_SUBPROTOCOL, `${LIVE_COACH_WS_TOKEN_PREFIX}${token}`];
 
     return new Promise<WebSocket>((resolve, reject) => {
-      const ws = new WebSocket(wsUrl);
+      const ws = new WebSocket(wsUrl, protocols);
       let settled = false;
 
       const cleanup = () => {

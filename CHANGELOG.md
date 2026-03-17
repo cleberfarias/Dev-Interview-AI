@@ -6,7 +6,10 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 
-- TODO: add upcoming changes here.
+### Changed
+- Secured live coach websocket auth flow without passing Firebase tokens in query strings.
+- Added frontend typecheck and production build validation to CI.
+- Updated Android release version to 1.0.1 (`versionCode` 20260317).
 
 ## [0.1.0] - 2026-01-29
 

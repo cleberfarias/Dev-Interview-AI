@@ -1108,11 +1108,24 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
           return;
         }
 
-        let mapped = toUiQuestion(nextRes.question, nextIndex, baseBullets);
+        const fallbackPrompt = getLocalFallbackPrompt(config.track, config.interviewLanguage, nextIndex);
+        const nextPrompt = String(nextRes.question.prompt || fallbackPrompt || '').trim();
+        if (!nextPrompt) {
+          await finalizeInterview(nextHistory);
+          return;
+        }
+
+        let mapped = toUiQuestion(
+          {
+            ...nextRes.question,
+            prompt: nextPrompt,
+          },
+          nextIndex,
+          baseBullets,
+        );
         const repeatedPrompt =
           normalizeQuestionPrompt(mapped.title) === normalizeQuestionPrompt(currentQuestion.title);
         if (repeatedPrompt) {
-          const fallbackPrompt = getLocalFallbackPrompt(config.track, config.interviewLanguage, nextIndex);
           if (
             fallbackPrompt &&
             normalizeQuestionPrompt(fallbackPrompt) !== normalizeQuestionPrompt(currentQuestion.title)

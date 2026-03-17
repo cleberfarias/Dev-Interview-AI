@@ -14,6 +14,8 @@ export class GlobalErrorBoundary extends React.Component<
   GlobalErrorBoundaryProps,
   GlobalErrorBoundaryState
 > {
+  declare props: Readonly<GlobalErrorBoundaryProps>;
+
   state: GlobalErrorBoundaryState = {
     hasError: false,
   };

@@ -1,10 +1,10 @@
 import json
 import os
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 import firebase_admin
+from fastapi import Header, HTTPException, Request
 from firebase_admin import auth, credentials, firestore, storage
-from fastapi import Depends, Header, HTTPException, Request
 
 from .request_context import set_context
 
@@ -20,18 +20,17 @@ def _resolve_storage_bucket_name() -> Optional[str]:
     ).strip()
     return value or None
 
+
 def init_firebase():
     global _app, _db
     if _app and _db:
         return _app, _db
 
-    # Option A: point to a service account json file
     sa_path = os.environ.get("FIREBASE_SERVICE_ACCOUNT_PATH") or os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     if sa_path and not os.path.isabs(sa_path):
         sa_path = os.path.abspath(os.path.join(base_dir, sa_path))
 
-    # Option B: service account JSON string in env
     sa_json = os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON")
 
     cred = None
@@ -39,18 +38,17 @@ def init_firebase():
         try:
             info = json.loads(sa_json)
             cred = credentials.Certificate(info)
-        except Exception as e:
-            raise RuntimeError("FIREBASE_SERVICE_ACCOUNT_JSON inválido") from e
+        except Exception as exc:
+            raise RuntimeError("FIREBASE_SERVICE_ACCOUNT_JSON invalido") from exc
     elif sa_path and os.path.exists(sa_path):
         cred = credentials.Certificate(sa_path)
     else:
-        # Fallback: look for a service-account.json file in the backend folder
         default_path = os.path.join(base_dir, "service-account.json")
         if os.path.exists(default_path):
             cred = credentials.Certificate(default_path)
         else:
             raise RuntimeError(
-                "Credenciais do Firebase Admin não configuradas. "
+                "Credenciais do Firebase Admin nao configuradas. "
                 "Defina FIREBASE_SERVICE_ACCOUNT_PATH (ou GOOGLE_APPLICATION_CREDENTIALS) "
                 "ou FIREBASE_SERVICE_ACCOUNT_JSON."
             )
@@ -63,6 +61,7 @@ def init_firebase():
     _app = firebase_admin.initialize_app(cred, options or None)
     _db = firestore.client()
     return _app, _db
+
 
 def get_firestore_client():
     global _db
@@ -77,8 +76,8 @@ def get_storage_bucket():
         return None
     return storage.bucket()
 
+
 def verify_bearer_token(authorization: Optional[str]) -> Dict[str, Any]:
-    # Ensure Firebase Admin app is initialized before verifying tokens
     init_firebase()
     if not authorization:
         raise HTTPException(status_code=401, detail="Missing Authorization header")
@@ -91,21 +90,17 @@ def verify_bearer_token(authorization: Optional[str]) -> Dict[str, Any]:
     try:
         decoded = auth.verify_id_token(token)
         return decoded
-    except Exception as e:
-        # Log exception for debugging in dev
-        print(f"verify_bearer_token error: {e}")
-        raise HTTPException(status_code=401, detail=f"Invalid or expired token: {str(e)}")
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
 
 def get_current_user(request: Request, authorization: Optional[str] = Header(default=None)):
     decoded = verify_bearer_token(authorization)
-    # best-effort extra fields (frontend can send as claims or we can enrich from Firebase)
     uid = decoded.get("uid") or decoded.get("user_id") or decoded.get("sub")
     if not uid:
         raise HTTPException(status_code=401, detail="Invalid token payload: missing uid")
     email = decoded.get("email", "")
-    name = decoded.get("name") or decoded.get("firebase", {}).get("sign_in_provider")
     picture = decoded.get("picture")
-    # Provide common web sdk field names too
     token = None
     if authorization and authorization.lower().startswith("bearer "):
         token = authorization.split(" ", 1)[1].strip() or None

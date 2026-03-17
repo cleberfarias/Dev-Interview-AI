@@ -4,7 +4,6 @@ const config: CapacitorConfig = {
   appId: 'com.cleberfarias.devinterviewai',
   appName: 'Dev Interview AI',
   webDir: 'dist',
-  bundledWebRuntime: false,
   server: {
     url: 'https://dev-interview-ai.web.app',
     cleartext: false,

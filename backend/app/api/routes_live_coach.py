@@ -13,6 +13,8 @@ from ..services import live_coach_service
 
 router = APIRouter()
 logger = logging.getLogger("uvicorn.error")
+LIVE_COACH_WS_SUBPROTOCOL = "live-coach.v1"
+LIVE_COACH_WS_TOKEN_PREFIX = "firebase-id-token."
 
 
 @router.post("/live-coach/process", response_model=LiveCoachProcessResponse)
@@ -25,11 +27,23 @@ def process_live_coach(payload: LiveCoachProcessRequest, user=Depends(get_curren
 
 def _websocket_user(websocket: WebSocket) -> dict[str, Any]:
     auth_header = (websocket.headers.get("authorization") or "").strip()
-    token_qs = (websocket.query_params.get("token") or "").strip()
+    requested_protocols = [
+        value.strip()
+        for value in (websocket.headers.get("sec-websocket-protocol") or "").split(",")
+        if value.strip()
+    ]
+    token_protocol = next(
+        (
+            protocol[len(LIVE_COACH_WS_TOKEN_PREFIX) :].strip()
+            for protocol in requested_protocols
+            if protocol.startswith(LIVE_COACH_WS_TOKEN_PREFIX)
+        ),
+        "",
+    )
 
     authorization = auth_header
-    if not authorization and token_qs:
-        authorization = f"Bearer {token_qs}"
+    if not authorization and token_protocol:
+        authorization = f"Bearer {token_protocol}"
 
     decoded = verify_bearer_token(authorization)
     uid = decoded.get("uid") or decoded.get("user_id") or decoded.get("sub")
@@ -43,7 +57,7 @@ def _websocket_user(websocket: WebSocket) -> dict[str, Any]:
         "picture": decoded.get("picture"),
         "displayName": decoded.get("name"),
         "photoURL": decoded.get("picture"),
-        "token": token_qs or None,
+        "token": token_protocol or None,
     }
 
 
@@ -59,7 +73,13 @@ async def live_coach_ws(websocket: WebSocket):
         await websocket.close(code=1011)
         return
 
-    await websocket.accept()
+    requested_protocols = {
+        value.strip()
+        for value in (websocket.headers.get("sec-websocket-protocol") or "").split(",")
+        if value.strip()
+    }
+    accepted_subprotocol = LIVE_COACH_WS_SUBPROTOCOL if LIVE_COACH_WS_SUBPROTOCOL in requested_protocols else None
+    await websocket.accept(subprotocol=accepted_subprotocol)
     await websocket.send_json({"type": "ready"})
 
     while True:

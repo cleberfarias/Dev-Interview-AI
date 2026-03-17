@@ -59,7 +59,11 @@ const STATE_TEXT: Record<AvatarInterviewState, string> = {
   avatar_speaking: 'Conduzindo a pergunta atual com resposta por voz.',
 };
 
-const AvatarRenderer: React.FC<AvatarRendererProps> = ({ avatar, state = 'idle', liveMouthOpen = 0 }) => {
+const AvatarRenderer: React.FC<AvatarRendererProps> = ({
+  avatar,
+  state = 'idle' as AvatarInterviewState,
+  liveMouthOpen = 0,
+}) => {
   const frames = avatar?.lipsync?.frames || [];
   const [frameIndex, setFrameIndex] = useState(0);
   const [imageError, setImageError] = useState(false);

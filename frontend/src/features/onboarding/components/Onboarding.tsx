@@ -93,8 +93,7 @@ const Onboarding: React.FC<Props> = ({ onComplete, initialConfig }) => {
   const handleProSelection = async () => {
     setIsKeySelecting(true);
     try {
-      // @ts-ignore
-      if (window.aistudio) {
+      if (window.aistudio?.openSelectKey) {
         await window.aistudio.openSelectKey();
         applyPlan('pro');
       }

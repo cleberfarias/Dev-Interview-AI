@@ -79,6 +79,10 @@ app.add_middleware(StripApiPrefixMiddleware)
 logger = logging.getLogger('uvicorn.error')
 
 
+def _sanitized_request_url(request: Request) -> str:
+    return f'{request.url.scheme}://{request.url.netloc}{request.url.path}'
+
+
 @app.middleware('http')
 async def log_requests(request: Request, call_next):
     request_id = str(uuid.uuid4())
@@ -97,7 +101,7 @@ async def log_requests(request: Request, call_next):
                 'request_id': request_id,
                 'httpRequest': {
                     'requestMethod': request.method,
-                    'requestUrl': str(request.url),
+                    'requestUrl': _sanitized_request_url(request),
                     'status': status_code,
                     'userAgent': request.headers.get('user-agent'),
                     'remoteIp': getattr(request.client, 'host', None),
@@ -113,7 +117,7 @@ async def log_requests(request: Request, call_next):
                 'request_id': request_id,
                 'httpRequest': {
                     'requestMethod': request.method,
-                    'requestUrl': str(request.url),
+                    'requestUrl': _sanitized_request_url(request),
                     'status': status_code,
                     'userAgent': request.headers.get('user-agent'),
                     'remoteIp': getattr(request.client, 'host', None),

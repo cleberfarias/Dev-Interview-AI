@@ -11,22 +11,20 @@ com foco em boas praticas, custo e experiencia do usuario.
 
 ## 2) Decisoes de Produto (aplicadas)
 - Teste gratuito: 1 credito por usuario (FREE_TRIAL_CREDITS=1).
-- Duracao maxima por entrevista:
-  - Free: 15 minutos
-  - Pro: 25 minutos
-  - Minimo tecnico: 10 minutos
-- Quantidade de perguntas passa a depender da duracao (media ~ duracao/2).
+- Duracao da entrevista padronizada em 10 minutos.
+- Quantidade fixa de 5 perguntas por entrevista.
 
 Motivo: a maior parte do custo esta em chamadas de avaliacao por resposta.
 Limitar tempo + perguntas corta chamadas e evita bursts de custo.
 
 ## 3) Ajustes feitos no codigo (Full Stack)
 - Backend
-  - Clamp de duracao no inicio da sessao com limites por plano.
-  - Prompt de plano ajustado com duracao e faixa dinamica de perguntas.
+  - Normalizacao da sessao para 10 minutos.
+  - Quantidade fixa de 5 perguntas.
   - Creditos iniciais agora usam FREE_TRIAL_CREDITS (fallback em DEFAULT_CREDITS).
 - Frontend
-  - Duracao limitada por plano (clamp local) antes de iniciar sessao.
+  - Duracao fixa alinhada ao backend.
+  - Quantidade fixa de perguntas alinhada ao backend.
   - Entrevista encerra automaticamente ao atingir o limite de tempo.
   - Mensagem de tempo limite no UI.
 
@@ -48,19 +46,17 @@ P2 (melhoria):
 ## 5) Parametros recomendados (.env)
 Backend:
 - FREE_TRIAL_CREDITS=1
-- INTERVIEW_MIN_MINUTES=10
-- INTERVIEW_MAX_MINUTES_FREE=15
-- INTERVIEW_MAX_MINUTES_PRO=25
+- INTERVIEW_FIXED_MINUTES=10
+- INTERVIEW_FIXED_QUESTION_COUNT=5
 
 Frontend (.env.example):
-- VITE_INTERVIEW_MIN_MINUTES=10
-- VITE_INTERVIEW_MAX_MINUTES_FREE=15
-- VITE_INTERVIEW_MAX_MINUTES_PRO=25
+- VITE_INTERVIEW_FIXED_MINUTES=10
+- VITE_INTERVIEW_FIXED_QUESTION_COUNT=5
 
 ## 6) QA - checklist rapido
 - Login (Google + email/senha)
-- Start session -> plano gera 8-10 perguntas (free)
-- Time limit: entrevista termina aos 15 min
+- Start session -> entrevista configurada para 5 perguntas
+- Time limit: entrevista termina aos 10 min
 - Name extract com audio curto
 - Evaluate audio com resposta curta e longa
 - Final report gerado e salvo
@@ -74,7 +70,7 @@ Custo cresce com:
 
 Formula simples (estimativa):
 - chamadas IA por sessao = 1 (plano) + N (avaliacoes) + 1 (relatorio) + N (tts)
-- manter N entre 8 e 10 para free
+- manter N em 5 por sessao
 
 ## 8) Proximos passos sugeridos
 1) Aplicar P0 e rodar smoke tests

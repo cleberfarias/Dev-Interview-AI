@@ -4,6 +4,9 @@ import app.api.routes_live_coach as routes_live_coach
 from app.firebase_admin import get_current_user
 from app.main import app
 
+LIVE_COACH_WS_SUBPROTOCOL = "live-coach.v1"
+LIVE_COACH_WS_TOKEN_PROTOCOL = "firebase-id-token.fake-token"
+
 
 def _auth_user():
     return {
@@ -151,7 +154,10 @@ def test_live_coach_websocket_process_message(monkeypatch):
     )
 
     client = TestClient(app)
-    with client.websocket_connect("/live-coach/ws?token=fake-token") as websocket:
+    with client.websocket_connect(
+        "/live-coach/ws",
+        subprotocols=[LIVE_COACH_WS_SUBPROTOCOL, LIVE_COACH_WS_TOKEN_PROTOCOL],
+    ) as websocket:
         ready = websocket.receive_json()
         assert ready["type"] == "ready"
 
@@ -192,7 +198,10 @@ def test_live_coach_websocket_audio_chunk_streaming_events(monkeypatch):
     )
 
     client = TestClient(app)
-    with client.websocket_connect("/live-coach/ws?token=fake-token") as websocket:
+    with client.websocket_connect(
+        "/live-coach/ws",
+        subprotocols=[LIVE_COACH_WS_SUBPROTOCOL, LIVE_COACH_WS_TOKEN_PROTOCOL],
+    ) as websocket:
         ready = websocket.receive_json()
         assert ready["type"] == "ready"
 
@@ -244,6 +253,9 @@ def test_live_coach_websocket_accepts_api_prefix(monkeypatch):
     )
 
     client = TestClient(app)
-    with client.websocket_connect("/api/live-coach/ws?token=fake-token") as websocket:
+    with client.websocket_connect(
+        "/api/live-coach/ws",
+        subprotocols=[LIVE_COACH_WS_SUBPROTOCOL, LIVE_COACH_WS_TOKEN_PROTOCOL],
+    ) as websocket:
         ready = websocket.receive_json()
         assert ready["type"] == "ready"
