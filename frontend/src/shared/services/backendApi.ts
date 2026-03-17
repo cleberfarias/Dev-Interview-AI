@@ -447,7 +447,16 @@ export const BackendApi = {
       body: JSON.stringify(payload),
     }),
 
-  createCompany: (payload: { name: string; plan?: string }) =>
+  createCompany: (payload: {
+    name: string;
+    plan?: string;
+    cnpj?: string;
+    phone?: string;
+    financeName?: string;
+    financeEmail?: string;
+    hrName?: string;
+    hrEmail?: string;
+  }) =>
     apiFetch<{ company: any; membership: any }>("/company", {
       method: "POST",
       body: JSON.stringify(payload),

@@ -23,6 +23,12 @@ const Login: React.FC<LoginProps> = ({ onLogin: _onLogin }) => {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [role, setRole] = useState<'dev' | 'rh'>('dev');
   const [companyName, setCompanyName] = useState('');
+  const [companyCnpj, setCompanyCnpj] = useState('');
+  const [companyPhone, setCompanyPhone] = useState('');
+  const [financeName, setFinanceName] = useState('');
+  const [financeEmail, setFinanceEmail] = useState('');
+  const [hrName, setHrName] = useState('');
+  const [hrEmail, setHrEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -64,7 +70,7 @@ const Login: React.FC<LoginProps> = ({ onLogin: _onLogin }) => {
       } else {
         await createUserWithEmailAndPassword(auth, email, password);
         // if registering as RH, create company automatically
-        if (role === 'rh') {
+            if (role === 'rh') {
           try {
             // ensure firebase auth is fully available and token can be retrieved
             let attempts = 0;
@@ -91,7 +97,16 @@ const Login: React.FC<LoginProps> = ({ onLogin: _onLogin }) => {
               throw new Error('Falha ao autenticar usuario para criar empresa');
             }
 
-            await BackendApi.createCompany({ name: companyName || `${email.split('@')[0]} company`, plan: 'business' });
+            await BackendApi.createCompany({
+              name: companyName || `${email.split('@')[0]} company`,
+              plan: 'business',
+              cnpj: companyCnpj || undefined,
+              phone: companyPhone || undefined,
+              financeName: financeName || undefined,
+              financeEmail: financeEmail || undefined,
+              hrName: hrName || undefined,
+              hrEmail: hrEmail || undefined,
+            });
             setInfo('Conta criada e empresa registrada. Voce ja pode fazer login.');
           } catch (e: any) {
             setError(`Conta criada, porem falha ao criar empresa: ${e?.message || e}`);
@@ -221,6 +236,36 @@ const Login: React.FC<LoginProps> = ({ onLogin: _onLogin }) => {
                     value={companyName}
                     onChange={(e) => setCompanyName(e.target.value)}
                   />
+                </div>
+
+                <label className={styles.label}>CNPJ</label>
+                <div className={styles.inputWrap}>
+                  <input className={styles.input} placeholder="00.000.000/0000-00" value={companyCnpj} onChange={(e) => setCompanyCnpj(e.target.value)} />
+                </div>
+
+                <label className={styles.label}>Telefone</label>
+                <div className={styles.inputWrap}>
+                  <input className={styles.input} placeholder="(11) 99999-9999" value={companyPhone} onChange={(e) => setCompanyPhone(e.target.value)} />
+                </div>
+
+                <label className={styles.label}>Responsável Financeiro (nome)</label>
+                <div className={styles.inputWrap}>
+                  <input className={styles.input} placeholder="Nome do responsável" value={financeName} onChange={(e) => setFinanceName(e.target.value)} />
+                </div>
+
+                <label className={styles.label}>Responsável Financeiro (email)</label>
+                <div className={styles.inputWrap}>
+                  <input className={styles.input} placeholder="email@financeiro.com" value={financeEmail} onChange={(e) => setFinanceEmail(e.target.value)} />
+                </div>
+
+                <label className={styles.label}>Responsável RH (nome)</label>
+                <div className={styles.inputWrap}>
+                  <input className={styles.input} placeholder="Nome do responsável RH" value={hrName} onChange={(e) => setHrName(e.target.value)} />
+                </div>
+
+                <label className={styles.label}>Responsável RH (email)</label>
+                <div className={styles.inputWrap}>
+                  <input className={styles.input} placeholder="email@rh.com" value={hrEmail} onChange={(e) => setHrEmail(e.target.value)} />
                 </div>
               </>
             )}

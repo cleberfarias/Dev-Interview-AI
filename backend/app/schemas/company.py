@@ -12,6 +12,12 @@ class Company(BaseModel):
     id: str
     name: str
     plan: CompanyPlan = "business"
+    cnpj: Optional[str] = None
+    phone: Optional[str] = None
+    financeName: Optional[str] = None
+    financeEmail: Optional[str] = None
+    hrName: Optional[str] = None
+    hrEmail: Optional[str] = None
     createdAt: str
     updatedAt: Optional[str] = None
 
@@ -27,6 +33,12 @@ class CompanyMembership(BaseModel):
 class CompanyCreateRequest(BaseModel):
     name: str = Field(min_length=2, max_length=120)
     plan: CompanyPlan = "business"
+    cnpj: Optional[str] = None
+    phone: Optional[str] = None
+    financeName: Optional[str] = None
+    financeEmail: Optional[str] = None
+    hrName: Optional[str] = None
+    hrEmail: Optional[str] = None
 
 
 class CompanyMembershipUpsertRequest(BaseModel):
