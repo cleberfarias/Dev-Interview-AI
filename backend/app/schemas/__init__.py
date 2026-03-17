@@ -70,6 +70,7 @@ from .report import (
     FinalReportRequest,
     SessionFinishRequest,
 )
+from .telemetry import ClientErrorLogRequest
 from .user import InterviewHistoryItem, UserProfile
 
 __all__ = [
@@ -140,4 +141,5 @@ __all__ = [
     "OrchestratorTurnResponse",
     "OrchestratorFinalizeRequest",
     "OrchestratorFinalizeResponse",
+    "ClientErrorLogRequest",
 ]

@@ -88,6 +88,25 @@ const appendPartialTranscript = (currentValue: string, nextValue?: string | null
   return `${current} ${incoming}`.replace(/\s+/g, ' ').trim();
 };
 
+const countTranscriptWords = (value?: string | null): number =>
+  String(value || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
+
+const hasMeaningfulAudioAnswer = (transcript: string, speechMetrics?: SpeechMetrics | null): boolean => {
+  const wordCount = countTranscriptWords(transcript);
+  if (wordCount >= 4) return true;
+
+  if (!speechMetrics) return false;
+  const totalDurationMs = Math.max(0, Number(speechMetrics.totalDurationMs) || 0);
+  const silenceDurationMs = Math.max(0, Number(speechMetrics.silenceDurationMs) || 0);
+  const silenceRatio = totalDurationMs > 0 ? silenceDurationMs / totalDurationMs : 1;
+  const startedSpeaking = Number(speechMetrics.timeToFirstSpeechMs || 0) > 0;
+
+  return wordCount >= 2 && startedSpeaking && silenceRatio < 0.9;
+};
+
 interface InterviewRoomLayoutProps {
   config: InterviewConfig;
   plan: InterviewPlan;
@@ -196,10 +215,6 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
 
   const { mouthOpen, isSpeaking } = useLipSync(audioEl);
 
-  useEffect(() => {
-    isRecorderActiveRef.current = isRecorderActive;
-  }, [isRecorderActive]);
-
   const selectedLevel = config.difficultyLevel ?? 3;
   const candidateFirstName = useMemo(() => getPreferredCandidateName(user?.name), [user?.name]);
   const interviewMode: InterviewMode = config.interviewMode || 'candidate_coaching_mode';
@@ -237,6 +252,11 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
   });
   const isRecorderActive = audioCapture.isRecordingSessionActive;
   const recorderError = audioCapture.error;
+
+  useEffect(() => {
+    isRecorderActiveRef.current = isRecorderActive;
+  }, [isRecorderActive]);
+
   const contextLabel = useMemo(
     () => deriveContextLabel(currentQuestion, config.stacks),
     [currentQuestion, config.stacks],
@@ -1210,6 +1230,16 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
           transcript,
           answerMetricsRef.current ? Date.now() - answerMetricsRef.current.startedAtMs : undefined,
         );
+        if (!hasMeaningfulAudioAnswer(transcript, speechMetrics)) {
+          resetCurrentAnswerAnalysis(null);
+          setFlowState('no_response');
+          setConversationState('ai_speaking');
+          try {
+            await speakQuestion(buildNoResponsePrompt(config.interviewLanguage));
+          } catch {}
+          setConversationState('listening');
+          return;
+        }
         void requestLiveCoachInsight({
           audioBase64: base64Audio,
           answerId: activeAnswerId || undefined,
@@ -1255,10 +1285,13 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
       computeSpeechMetrics,
       stopVoiceMonitor,
       candidateFirstName,
+      config.interviewLanguage,
       requestLiveCoachInsight,
       currentQuestion.title,
       interviewMode,
+      resetCurrentAnswerAnalysis,
       sessionId,
+      speakQuestion,
     ],
   );
 
@@ -1504,7 +1537,11 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
           ? 'PARAR GRAVACAO'
           : 'COMECAR RESPOSTA';
 
-  const latestEvaluation = historyRef.current[historyRef.current.length - 1]?.evaluation;
+  const latestHistoryItem = historyRef.current[historyRef.current.length - 1];
+  const latestEvaluation =
+    latestHistoryItem?.questionId && latestHistoryItem.questionId === currentQuestion?.id
+      ? latestHistoryItem.evaluation
+      : null;
   const responseQuality =
     latestEvaluation?.criteriaScores?.technicalPrecision ??
     latestEvaluation?.scores?.technical ??

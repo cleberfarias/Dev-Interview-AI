@@ -6,10 +6,12 @@
 Este projeto foi ajustado para um fluxo real de producao:
 
 - Frontend (Vite + React) usando Firebase Auth
-- Backend (FastAPI) para chamadas de IA e regras de negocio
-- Banco: Firebase Firestore (usuarios, creditos e historico)
-- Creditos: consumidos no backend durante a sessao (gerar plano, avaliar respostas, relatorio e TTS)
-- Limites: duracao e perguntas ajustadas por plano (free/pro)
+- Backend (FastAPI) para chamadas de IA, orquestracao da entrevista e telemetria
+- Banco: Firebase Firestore (usuarios, creditos, historico e metadata dos chunks)
+- Storage: Firebase Storage para chunks de audio grandes
+- Entrevista oficial via `/interview/*`, com avatar falante, lipsync e live coach
+- Dois modos de sessao: `candidate_coaching_mode` e `hiring_assessment_mode`
+- Relatorio final com score tecnico, comunicacao, sinais comportamentais e culture fit
 - Politica de uso/creditos centralizada em `backend/app/services/usage_policy_service.py`
 
 ---
@@ -19,7 +21,14 @@ Este projeto foi ajustado para um fluxo real de producao:
 1. Crie um projeto no Firebase
 2. Ative Authentication (Google + Email/Password)
 3. Crie o Firestore Database
-4. Gere uma Service Account (para o backend):
+4. Ative Firebase Storage
+5. Registre o app Web em Project settings -> General -> Your apps
+6. Se for usar Android/Capacitor, registre tambem o app Android e baixe `google-services.json`
+   - Salve em `frontend/android/app/google-services.json`
+7. Para monitoramento:
+   - Web: habilite Analytics/Performance Monitoring
+   - Android: habilite Crashlytics e Performance Monitoring
+8. Gere uma Service Account (para o backend):
    - Project settings -> Service accounts -> Generate new private key
    - Salve como backend/service-account.json (nao commitar)
 
@@ -30,7 +39,9 @@ Este projeto foi ajustado para um fluxo real de producao:
 ```bash
 cd backend
 cp .env.example .env
-# coloque GEMINI_API_KEY/OPENAI_API_KEY e FIREBASE_SERVICE_ACCOUNT_PATH=./service-account.json
+# configure FIREBASE_SERVICE_ACCOUNT_PATH=./service-account.json
+# configure pelo menos um provider de IA: OPENAI_API_KEY, GEMINI_API_KEY ou GROQ_API_KEY
+# opcional para avatar com voz natural: AVATAR_TTS_PROVIDER=elevenlabs + ELEVENLABS_API_KEY
 python -m venv .venv
 # Windows: .venv\Scripts\activate
 source .venv/bin/activate
@@ -46,36 +57,84 @@ Backend: http://localhost:8000
 
 ```bash
 cp .env.example .env.local
-# preencha VITE_FIREBASE_* e VITE_API_BASE_URL=http://localhost:8000
+# preencha VITE_FIREBASE_* , VITE_FIREBASE_MEASUREMENT_ID
+# em dev local use VITE_API_BASE_URL=http://localhost:8000
 npm install
 npm run dev
 ```
 
 Frontend: http://localhost:5000
 
+Variaveis uteis do frontend:
+
+- `VITE_ENABLE_FIREBASE_MONITORING_IN_DEV=true` para testar Performance Monitoring localmente
+- `VITE_CLIENT_TELEMETRY_ENABLED=true` para enviar erros do navegador ao backend
+- `VITE_INTERVIEW_FIXED_MINUTES=10`
+- `VITE_INTERVIEW_FIXED_QUESTION_COUNT=5`
+
 ---
 
-## 4) Endpoints principais
+## 4) Fluxo Atual da Sessao
+
+- A sessao oficial roda em `/interview/context`, `/interview/start`, `/interview/turn` e `/interview/finalize`
+- O entrevistador chama o candidato pelo nome e fala a pergunta com avatar + TTS
+- A sessao atual usa limite fixo de `10 minutos` e `5 perguntas` por entrevista
+- O audio do candidato pode ser enviado por resposta completa ou por chunks incrementais
+- O live coach processa STT/sinais de fala em tempo real e pode devolver insight parcial
+- Em `candidate_coaching_mode`, a UI mostra ajuda parcial e feedback orientado a desenvolvimento
+- Em `hiring_assessment_mode`, o fluxo fica mais silencioso e orientado a coleta de evidencia
+- O relatorio final agrega:
+  - `scoresSummary` e `criteriaSummary`
+  - `communicationScore`
+  - `communicationSignals` e `behavioralSpeechSignals`
+  - `behaviorProfile` com `discReadiness`
+  - `cultureFitSignals`
+  - `jobMatch` e `plan7Days`
+
+---
+
+## 5) Endpoints Principais
+
+### Perfil, curriculo e vaga
 
 - GET /me -> retorna perfil (cria automaticamente no primeiro login)
-- POST /sessions/start -> cria sessao e retorna { sessionId, plan, credits }
-- POST /sessions/{id}/plan/generate -> gera plano e consome 1 credito
-- POST /interview/context -> gera contexto multiagente (candidate/job/match)
-- POST /interview/start -> rota oficial para iniciar a entrevista multiagente
-- POST /interview/turn -> rota oficial para processar turnos (audio/texto + coaching + proxima pergunta)
-- POST /interview/finalize -> rota oficial para finalizar entrevista (relatorio + plano de estudo)
-- POST /orchestrator/interview/* -> legado compativel (deprecated)
-- POST /ai/name-extract -> utilitario de IA para extrair nome do audio
-- POST /ai/evaluate-audio, /ai/evaluate-text, /ai/next-question, /ai/final-report -> utilitarios/legado (nao fluxo oficial)
-- POST /live-coach/process -> processa chunk de audio para coaching em tempo real (STT + classificacao + sugestao)
-- WS /live-coach/ws -> canal de baixa latencia para live coach em streaming (com fallback HTTP no frontend)
-- POST /sessions/{id}/finish -> salva relatorio e historico
-- GET /sessions/{id}/analysis-trace -> retorna snapshot de traces (perfil) capturado ao iniciar a sessao
-- POST /credits/dev-add?amount=3 -> DEV ONLY (habilite apenas em dev com ALLOW_DEV_CREDITS=true)
-- POST /resume/analyze e /jobs/analyze -> retornam trace da origem da analise (heuristic|ai|hybrid)
+- GET /auth/me -> alias autenticado de perfil
+- GET /profile/candidate -> perfil consolidado do candidato
+- PUT /profile/candidate -> atualiza perfil consolidado
 - GET /profile/candidate/audit -> historico paginado de traces de analise
 - GET /profile/candidate/resume-analyses -> historico paginado de analises completas de curriculo
 - GET /profile/candidate/job-analyses -> historico paginado de analises completas de vaga
+- POST /resume/analyze -> extrai e analisa curriculo
+- POST /jobs/analyze -> analisa descricao de vaga
+
+### Sessao e entrevista
+
+- POST /sessions/start -> cria sessao e retorna { sessionId, plan, credits }
+- POST /sessions/{id}/plan/generate -> gera plano e consome 1 credito
+- GET /sessions/{id}/analysis-trace -> retorna snapshot de traces capturado ao iniciar a sessao
+- POST /sessions/{id}/finish -> salva relatorio e historico
+- DELETE /sessions/{id} -> remove sessao/historico associado
+- POST /interview/context -> gera contexto multiagente (candidate/job/match)
+- POST /interview/start -> inicia a entrevista oficial e pode retornar pergunta/avatar iniciais
+- POST /interview/turn -> processa turno oficial (audio ou transcript + avaliacao + coach + proxima pergunta)
+- POST /interview/finalize -> gera relatorio final + plano de estudo
+- POST /orchestrator/interview/* -> legado compativel (deprecated)
+
+### Audio, avatar e coaching em tempo real
+
+- POST /audio/chunk -> upload multipart de chunk com idempotencia por `chunkId`
+- POST /live-coach/process -> processa chunk de audio para coaching em tempo real (HTTP)
+- WS /live-coach/ws -> canal de baixa latencia para live coach em streaming
+- POST /avatar/respond -> gera audio + lipsync do avatar para a fala do entrevistador
+- POST /ai/tts -> TTS generico/legado da aplicacao
+- POST /ai/name-extract -> extrai nome a partir do audio
+
+### Relatorio, utilitarios e observabilidade
+
+- POST /reports/final -> gera relatorio final direto
+- POST /telemetry/client-error -> recebe erros do frontend para Cloud Logging
+- POST /ai/evaluate-audio, /ai/evaluate-text, /ai/next-question, /ai/final-report -> utilitarios/legado
+- POST /credits/dev-add?amount=3 -> DEV ONLY (habilite apenas em dev com ALLOW_DEV_CREDITS=true)
 
 ---
 
@@ -93,18 +152,21 @@ Frontend: http://localhost:5000
 
 ## Limites e teste gratuito
 
-Backend:
-- FREE_TRIAL_CREDITS (ex: 1)
-- INTERVIEW_MIN_MINUTES (ex: 10)
-- INTERVIEW_MAX_MINUTES_FREE (ex: 15)
-- INTERVIEW_MAX_MINUTES_PRO (ex: 25)
+Sessao atual:
 
-Frontend (build):
-- VITE_INTERVIEW_MIN_MINUTES
-- VITE_INTERVIEW_MAX_MINUTES_FREE
-- VITE_INTERVIEW_MAX_MINUTES_PRO
+- Limite padrao: `10 minutos`
+- Quantidade padrao: `5 perguntas`
+- O frontend e o backend normalizam a duracao para esse formato fixo
 
-O relatorio final inclui scoresSummary com a media real das respostas.
+Overrides atuais:
+
+- Backend: `INTERVIEW_FIXED_MINUTES`, `INTERVIEW_FIXED_QUESTION_COUNT`
+- Frontend: `VITE_INTERVIEW_FIXED_MINUTES`, `VITE_INTERVIEW_FIXED_QUESTION_COUNT`
+- Creditos: `FREE_TRIAL_CREDITS`, `DEFAULT_CREDITS`
+
+Observacao:
+
+- Os envs antigos de min/max ainda existem em alguns arquivos de configuracao, mas o fluxo atual da entrevista esta fixado em `5 perguntas / 10 minutos` por padrao.
 
 ---
 
@@ -119,32 +181,63 @@ Frontend:
 ```bash
 cd frontend
 npm test
+npm run build
+```
+
+Android (opcional):
+```bash
+cd frontend
+npm run build:android
 ```
 
 ---
 
 ## Deploy (visao geral)
 
-- Frontend: Vercel/Netlify (variaveis VITE_*)
-- Backend: Render/Fly.io/Cloud Run
-  - configure GEMINI_API_KEY
-  - configure FIREBASE_SERVICE_ACCOUNT_JSON ou GOOGLE_APPLICATION_CREDENTIALS
+- Frontend web: Firebase Hosting
+- Backend API: Cloud Run
+- Android app: Capacitor/Gradle
+- Observabilidade:
+  - Web: Firebase Performance Monitoring
+  - Android: Firebase Crashlytics + Performance Monitoring
+  - Backend: Cloud Logging estruturado
 
 ---
 
 ## Observacoes importantes
 
 - Nenhuma API Key fica no frontend. Todas as chamadas de IA ficam no backend.
-- A voz do entrevistador usa backend TTS em /ai/tts.
-- Defina TTS_PROVIDER=openai para usar OpenAI TTS.
+- O avatar usa `/avatar/respond` e prefere ElevenLabs quando `AVATAR_TTS_PROVIDER=elevenlabs` e `ELEVENLABS_API_KEY` estao configurados.
+- `/ai/tts` continua como TTS generico/legado e pode usar `TTS_PROVIDER`.
+- O audio por chunk usa metadata no Firestore e, quando o payload fica grande demais, faz spillover para Firebase Storage.
+- O frontend evita avaliar silencio: se nao houver resposta significativa, a entrevista entra no fluxo de `no_response`.
+- Em `hiring_assessment_mode`, o live coach nao mostra coaching parcial ao candidato.
+- Em `candidate_coaching_mode`, o live coach pode mostrar transcricao parcial e insight leve durante a resposta.
+- `behaviorProfile`, `discReadiness` e `cultureFitSignals` sao sinais de apoio a decisao, nao diagnostico psicologico.
 - Pagamento real de creditos: ideal implementar Stripe/Mercado Pago + webhook substituindo /credits/dev-add.
 - Em producao, mantenha ALLOW_DEV_CREDITS=false.
+- Para Android, veja tambem `docs/PLAY_STORE_ANDROID.md`.
 
 ---
 
 ## Documentacao de correcoes
 
 Veja o plano tecnico em: docs/PLANO_CORRECOES.md
+
+## Documentacao do Projeto
+
+- Visao de arquitetura: `docs/PROJECT_ARCHITECTURE.md`
+- Stack tecnica: `docs/TECH_STACK.md`
+- Observabilidade: `docs/OBSERVABILITY.md`
+- Publicacao Android: `docs/PLAY_STORE_ANDROID.md`
+
+## Observabilidade
+
+- Firebase Performance Monitoring no frontend web
+- Firebase Crashlytics + Performance Monitoring no app Android (Capacitor)
+- Cloud Logging estruturado no backend/Cloud Run
+
+Guia de ativacao: `docs/OBSERVABILITY.md`
 
 
 ## Deploy (Firebase Hosting + Cloud Run)

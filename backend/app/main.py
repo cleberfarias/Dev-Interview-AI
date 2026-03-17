@@ -1,5 +1,6 @@
 import os
 import logging
+import time
 import uuid
 from contextlib import asynccontextmanager
 
@@ -35,13 +36,16 @@ from .api import (
     routes_reports,
     routes_resume,
     routes_sessions,
+    routes_telemetry,
 )
+from .logging_config import configure_logging
 from .request_context import reset_context, set_context
 from .services import interview_core
 
 # Load backend/.env when present (local dev)
 _env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.env'))
 load_dotenv(_env_path)
+configure_logging()
 
 
 class StripApiPrefixMiddleware:
@@ -80,14 +84,47 @@ async def log_requests(request: Request, call_next):
     request_id = str(uuid.uuid4())
     request.state.request_id = request_id
     context_tokens = set_context(request_id=request_id, user_id=None, session_id=None)
-    logger.info('[%s] HTTP %s %s', request_id, request.method, request.url.path)
+    started_at = time.perf_counter()
+    response = None
+    status_code = 500
     try:
         response = await call_next(request)
+        status_code = response.status_code
     except Exception:
-        logger.exception('[%s] Unhandled error', request_id)
+        logger.exception(
+            'Unhandled error',
+            extra={
+                'request_id': request_id,
+                'httpRequest': {
+                    'requestMethod': request.method,
+                    'requestUrl': str(request.url),
+                    'status': status_code,
+                    'userAgent': request.headers.get('user-agent'),
+                    'remoteIp': getattr(request.client, 'host', None),
+                },
+            },
+        )
         raise
     finally:
+        duration_seconds = time.perf_counter() - started_at
+        logger.info(
+            'http_request',
+            extra={
+                'request_id': request_id,
+                'httpRequest': {
+                    'requestMethod': request.method,
+                    'requestUrl': str(request.url),
+                    'status': status_code,
+                    'userAgent': request.headers.get('user-agent'),
+                    'remoteIp': getattr(request.client, 'host', None),
+                    'latency': f'{duration_seconds:.3f}s',
+                },
+                'path': request.url.path,
+            },
+        )
         reset_context(context_tokens)
+    if response is None:
+        raise RuntimeError('response_not_available')
     response.headers['x-request-id'] = request_id
     return response
 
@@ -95,7 +132,14 @@ async def log_requests(request: Request, call_next):
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
     request_id = getattr(request.state, 'request_id', 'unknown')
-    logger.exception('[%s] Unhandled exception for %s %s', request_id, request.method, request.url.path)
+    logger.exception(
+        'Unhandled exception',
+        extra={
+            'request_id': request_id,
+            'path': request.url.path,
+            'method': request.method,
+        },
+    )
     return PlainTextResponse(f'Internal Server Error (request_id={request_id})', status_code=500)
 
 
@@ -128,6 +172,7 @@ app.include_router(routes_live_coach.router)
 app.include_router(routes_audio.router)
 app.include_router(routes_avatar.router)
 app.include_router(routes_orchestrator.router)
+app.include_router(routes_telemetry.router)
 app.include_router(kiwify_webhook_router)
 
 
