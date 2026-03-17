@@ -115,7 +115,13 @@ const Login: React.FC<LoginProps> = ({ onLogin: _onLogin }) => {
       }
       success = true;
     } catch (e: any) {
-      setError(e?.message || 'Falha no login');
+      // Handle common Firebase auth errors
+      if (e?.code === 'auth/email-already-in-use') {
+        setError('E-mail ja cadastrado. Troquei para o modo de login — utilize "Esqueceu a senha?" se necessario.');
+        setMode('login');
+      } else {
+        setError(e?.message || 'Falha no login');
+      }
     } finally {
       if (!success) setLoading(false);
     }
