@@ -130,21 +130,21 @@ const Dashboard: React.FC<DashboardProps> = ({
         </section>
 
         <section className={styles.quickGrid}>
-          <button type="button" onClick={onOpenProfile} className={styles.quickCard}>
+          <button type="button" onClick={onOpenProfile} data-tour-id="dashboard-resume-card" className={styles.quickCard}>
             <span className={styles.quickIcon}>CV</span>
             <h3>Analisar curriculo</h3>
             <p>Otimize seu perfil tecnico para entrevistas.</p>
             <span className={styles.quickAction}>Abrir perfil</span>
           </button>
 
-          <button type="button" onClick={onOpenProfile} className={styles.quickCard}>
+          <button type="button" onClick={onOpenProfile} data-tour-id="dashboard-job-card" className={styles.quickCard}>
             <span className={styles.quickIcon}>JD</span>
             <h3>Analisar vaga</h3>
             <p>Conecte seu perfil com os requisitos da vaga.</p>
             <span className={styles.quickAction}>Editar vaga</span>
           </button>
 
-          <button type="button" onClick={onStartInterview} className={styles.quickCard}>
+          <button type="button" onClick={onStartInterview} data-tour-id="dashboard-start-card" className={styles.quickCard}>
             <span className={styles.quickIcon}>AI</span>
             <h3>Iniciar entrevista</h3>
             <p>Pratique com perguntas personalizadas.</p>
@@ -232,7 +232,7 @@ const Dashboard: React.FC<DashboardProps> = ({
             </div>
           </article>
 
-          <aside className={styles.sidePanel}>
+          <aside className={styles.sidePanel} data-tour-id="dashboard-history-panel">
             <h3 className={styles.panelTitle}>Atividade recente</h3>
 
             {interviews.length === 0 && (

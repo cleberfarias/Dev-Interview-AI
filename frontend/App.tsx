@@ -5,6 +5,8 @@ import { LandingPage, Login } from './src/features/auth';
 import { auth } from './src/lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { BackendApi } from './src/shared/services/backendApi';
+import { getMissingCandidateProfileFields } from './src/shared/utils/candidateProfile';
+import { ProductTour, buildTourStorageKey, getTourSteps, type ProductTourId } from './src/features/tour';
 
 const SplashScreen: React.FC = () => (
   <div className="fixed inset-0 z-[100] bg-slate-950 flex flex-col items-center justify-center animate-in fade-in duration-500">
@@ -63,6 +65,24 @@ const defaultRoleFromTrack = (track: string): string => {
   return map[track] || 'Software Engineer';
 };
 
+const AUTO_TOUR_BY_STATE: Partial<Record<AppState, ProductTourId>> = {
+  [AppState.DASHBOARD]: 'dashboard',
+  [AppState.PROFILE]: 'profile',
+  [AppState.ONBOARDING]: 'onboarding',
+  [AppState.LOBBY]: 'lobby',
+  [AppState.REPORT]: 'report',
+};
+
+const readCompletedTour = (tourId: ProductTourId): boolean => {
+  if (typeof window === 'undefined') return false;
+  return window.localStorage.getItem(buildTourStorageKey(tourId)) === 'true';
+};
+
+const writeCompletedTour = (tourId: ProductTourId): void => {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(buildTourStorageKey(tourId), 'true');
+};
+
 const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [state, setState] = useState<AppState>(AppState.LOGIN);
@@ -73,6 +93,7 @@ const App: React.FC = () => {
   const [report, setReport] = useState<FinalReport | null>(null);
   const [candidateProfile, setCandidateProfile] = useState<CandidateProfile | null>(null);
   const [globalNotice, setGlobalNotice] = useState<string | null>(null);
+  const [activeTourId, setActiveTourId] = useState<ProductTourId | null>(null);
   const noticeTimerRef = useRef<number | null>(null);
 
   const [config, setConfig] = useState<InterviewConfig>({
@@ -198,6 +219,52 @@ const App: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (!user) {
+      setActiveTourId(null);
+      return;
+    }
+
+    const nextTourId = AUTO_TOUR_BY_STATE[state];
+    if (!nextTourId) {
+      setActiveTourId(null);
+      return;
+    }
+
+    if (nextTourId === 'report' && !report) {
+      return;
+    }
+
+    if (readCompletedTour(nextTourId)) {
+      return;
+    }
+
+    const timerId = window.setTimeout(() => {
+      setActiveTourId((current) => current || nextTourId);
+    }, 350);
+
+    return () => {
+      window.clearTimeout(timerId);
+    };
+  }, [report, state, user]);
+
+  useEffect(() => {
+    if (!activeTourId) return;
+    const currentTourForState = AUTO_TOUR_BY_STATE[state];
+    if (!currentTourForState) {
+      setActiveTourId(null);
+      return;
+    }
+
+    if (activeTourId === 'report' && state === AppState.REPORT && report) {
+      return;
+    }
+
+    if (currentTourForState !== activeTourId) {
+      setActiveTourId(null);
+    }
+  }, [activeTourId, report, state]);
+
   const handleLogin = (newUser: User) => {
     setUser(newUser);
     setCandidateProfile(null);
@@ -266,6 +333,18 @@ const App: React.FC = () => {
     showGlobalNotice('Entrevista interrompida.');
   };
 
+  const handleStartInterview = () => {
+    const missingProfileFields = getMissingCandidateProfileFields(candidateProfile);
+    if (missingProfileFields.length > 0) {
+      setState(AppState.PROFILE);
+      showGlobalNotice(
+        `Antes de iniciar a entrevista, complete o perfil do candidato. Faltando: ${missingProfileFields.join(', ')}.`,
+      );
+      return;
+    }
+    setState(AppState.ONBOARDING);
+  };
+
   const syncCandidateProfileFromOnboarding = async (nextConfig: InterviewConfig) => {
     try {
       const existing = await BackendApi.getCandidateProfile().catch(() => null);
@@ -325,6 +404,19 @@ const App: React.FC = () => {
     }
   };
 
+  const currentTourId = AUTO_TOUR_BY_STATE[state] || null;
+  const activeTourSteps =
+    activeTourId && user
+      ? getTourSteps(activeTourId, config.uiLanguage)
+      : [];
+
+  const closeActiveTour = () => {
+    if (activeTourId) {
+      writeCompletedTour(activeTourId);
+    }
+    setActiveTourId(null);
+  };
+
   const wideStates = [
     AppState.DASHBOARD,
     AppState.INTERVIEWING,
@@ -381,12 +473,25 @@ const App: React.FC = () => {
               <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">{user?.name?.split(' ')[0] || ''}</p>
             </div>
           </div>
-          <button
-            onClick={() => setState(AppState.PROFILE)}
-            className="w-10 h-10 rounded-full bg-slate-800 border border-white/5 flex items-center justify-center text-sm overflow-hidden"
-          >
-            {user?.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : (user?.name?.charAt(0) || 'U')}
-          </button>
+          <div className="flex items-center gap-2">
+            {currentTourId && (
+              <button
+                type="button"
+                onClick={() => setActiveTourId(currentTourId)}
+                className="rounded-lg bg-slate-800 border border-white/5 px-3 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-200 hover:scale-95"
+                title="Tour guiado"
+              >
+                Tour
+              </button>
+            )}
+            <button
+              onClick={() => setState(AppState.PROFILE)}
+              data-tour-id="app-header-profile"
+              className="w-10 h-10 rounded-full bg-slate-800 border border-white/5 flex items-center justify-center text-sm overflow-hidden"
+            >
+              {user?.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : (user?.name?.charAt(0) || 'U')}
+            </button>
+          </div>
         </header>
       )}
 
@@ -400,7 +505,7 @@ const App: React.FC = () => {
                 user={user}
                 candidateProfile={candidateProfile}
                 onOpenProfile={() => setState(AppState.PROFILE)}
-                onStartInterview={() => setState(AppState.ONBOARDING)}
+                onStartInterview={handleStartInterview}
                 onDeleteInterview={handleDeleteInterview}
               />
             )}
@@ -410,6 +515,7 @@ const App: React.FC = () => {
                 user={user}
                 config={config}
                 onBack={() => setState(AppState.DASHBOARD)}
+                onOpenTour={() => setActiveTourId('profile')}
                 onLogout={handleLogout}
                 onAddCredits={addCredits}
                 onDeleteInterview={handleDeleteInterview}
@@ -485,6 +591,14 @@ const App: React.FC = () => {
           </Suspense>
         </div>
       </main>
+
+      <ProductTour
+        open={Boolean(activeTourId && activeTourSteps.length > 0)}
+        steps={activeTourSteps}
+        locale={config.uiLanguage}
+        onClose={closeActiveTour}
+        onComplete={closeActiveTour}
+      />
     </div>
   );
 };

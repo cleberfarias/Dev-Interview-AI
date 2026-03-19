@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 from typing import Any, Dict, Optional
 
@@ -10,12 +11,23 @@ from .request_context import set_context
 
 _app = None
 _db = None
+logger = logging.getLogger("uvicorn.error")
 
 
 def _resolve_storage_bucket_name() -> Optional[str]:
     value = (
         os.environ.get("FIREBASE_STORAGE_BUCKET")
         or os.environ.get("VITE_FIREBASE_STORAGE_BUCKET")
+        or ""
+    ).strip()
+    return value or None
+
+
+def _resolve_project_id() -> Optional[str]:
+    value = (
+        os.environ.get("FIREBASE_PROJECT_ID")
+        or os.environ.get("GOOGLE_CLOUD_PROJECT")
+        or os.environ.get("GCLOUD_PROJECT")
         or ""
     ).strip()
     return value or None
@@ -34,32 +46,52 @@ def init_firebase():
     sa_json = os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON")
 
     cred = None
+    credential_source = None
     if sa_json:
         try:
             info = json.loads(sa_json)
             cred = credentials.Certificate(info)
+            credential_source = "env_json"
         except Exception as exc:
             raise RuntimeError("FIREBASE_SERVICE_ACCOUNT_JSON invalido") from exc
     elif sa_path and os.path.exists(sa_path):
         cred = credentials.Certificate(sa_path)
+        credential_source = "env_path"
     else:
         default_path = os.path.join(base_dir, "service-account.json")
         if os.path.exists(default_path):
             cred = credentials.Certificate(default_path)
+            credential_source = "local_file"
         else:
-            raise RuntimeError(
-                "Credenciais do Firebase Admin nao configuradas. "
-                "Defina FIREBASE_SERVICE_ACCOUNT_PATH (ou GOOGLE_APPLICATION_CREDENTIALS) "
-                "ou FIREBASE_SERVICE_ACCOUNT_JSON."
-            )
+            try:
+                # Cloud Run and other GCP runtimes expose ADC for the attached service account.
+                cred = credentials.ApplicationDefault()
+                credential_source = "application_default"
+            except Exception as exc:
+                raise RuntimeError(
+                    "Credenciais do Firebase Admin nao configuradas. "
+                    "Defina FIREBASE_SERVICE_ACCOUNT_PATH (ou GOOGLE_APPLICATION_CREDENTIALS) "
+                    "ou FIREBASE_SERVICE_ACCOUNT_JSON, ou execute em um runtime com ADC habilitado."
+                ) from exc
 
     options = {}
+    project_id = _resolve_project_id()
+    if project_id:
+        options["projectId"] = project_id
     storage_bucket = _resolve_storage_bucket_name()
     if storage_bucket:
         options["storageBucket"] = storage_bucket
 
     _app = firebase_admin.initialize_app(cred, options or None)
     _db = firestore.client()
+    logger.info(
+        "Firebase Admin initialized",
+        extra={
+            "firebase_credential_source": credential_source,
+            "firebase_project_id": project_id,
+            "firebase_storage_bucket": storage_bucket,
+        },
+    )
     return _app, _db
 
 

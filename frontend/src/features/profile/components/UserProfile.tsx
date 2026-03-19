@@ -9,6 +9,7 @@ interface Props {
   user: User;
   config: InterviewConfig;
   onBack: () => void;
+  onOpenTour?: () => void;
   onLogout: () => void;
   onAddCredits: (amount: number) => void;
   onDeleteInterview: (sessionId: string) => void;
@@ -19,6 +20,7 @@ const UserProfile: React.FC<Props> = ({
   user,
   config,
   onBack,
+  onOpenTour,
   onLogout,
   onAddCredits: _onAddCredits,
   onDeleteInterview,
@@ -134,9 +136,16 @@ const UserProfile: React.FC<Props> = ({
             </h1>
           </div>
 
-          <button type="button" onClick={onBack} className={styles.backTopButton}>
-            Voltar
-          </button>
+          <div className="flex items-center gap-2">
+            {onOpenTour && (
+              <button type="button" onClick={onOpenTour} className={styles.backTopButton}>
+                Tour
+              </button>
+            )}
+            <button type="button" onClick={onBack} className={styles.backTopButton}>
+              Voltar
+            </button>
+          </div>
         </header>
 
         <section className={styles.heroCard}>
@@ -162,7 +171,7 @@ const UserProfile: React.FC<Props> = ({
 
         <section className={styles.contentGrid}>
           <div className={styles.leftColumn}>
-            <div className={styles.neonBlock}>
+            <div className={styles.neonBlock} data-tour-id="profile-candidate-panel">
               <CandidateProfilePanel
                 initialJobDescription={config.jobDescription || ''}
                 onProfileUpdated={onCandidateProfileUpdated}

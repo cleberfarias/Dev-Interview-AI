@@ -8,6 +8,7 @@ import type {
   ResumeMatchResult,
 } from '../../../shared/types';
 import { BackendApi } from '../../../shared/services/backendApi';
+import { getMissingCandidateProfileDraftFields } from '../../../shared/utils/candidateProfile';
 import { ResumeAnalyzerCard } from '../../resume';
 import { JobAnalyzerCard } from '../../jobs';
 
@@ -165,6 +166,17 @@ const CandidateProfilePanel: React.FC<Props> = ({ initialJobDescription, onProfi
 
   const currentPrimarySkills = useMemo(() => splitCsv(primarySkillsInput), [primarySkillsInput]);
   const currentWeakSkills = useMemo(() => splitCsv(weakSkillsInput), [weakSkillsInput]);
+  const missingProfileFields = useMemo(
+    () =>
+      getMissingCandidateProfileDraftFields({
+        targetRole,
+        experienceLevel,
+        primarySkills: currentPrimarySkills,
+        resumeSummary,
+      }),
+    [currentPrimarySkills, experienceLevel, resumeSummary, targetRole],
+  );
+  const profileReadyForInterview = missingProfileFields.length === 0;
 
   const buildPayload = useCallback(
     (override: Partial<CandidateProfileUpsertRequest> = {}): CandidateProfileUpsertRequest => ({
@@ -312,7 +324,19 @@ const CandidateProfilePanel: React.FC<Props> = ({ initialJobDescription, onProfi
         </div>
       )}
 
-      <div className="native-glass rounded-3xl border border-white/5 p-4 space-y-3">
+      <div
+        className={`rounded-2xl border px-4 py-3 text-[10px] font-bold ${
+          profileReadyForInterview
+            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+            : 'border-amber-500/30 bg-amber-500/10 text-amber-100'
+        }`}
+      >
+        {profileReadyForInterview
+          ? 'Perfil do candidato pronto para iniciar a entrevista.'
+          : `Antes de iniciar a entrevista, complete: ${missingProfileFields.join(', ')}.`}
+      </div>
+
+      <div className="native-glass rounded-3xl border border-white/5 p-4 space-y-3" data-tour-id="profile-candidate-form">
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="space-y-1">
             <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Cargo alvo</span>
@@ -369,23 +393,28 @@ const CandidateProfilePanel: React.FC<Props> = ({ initialJobDescription, onProfi
           type="button"
           onClick={() => saveProfile()}
           disabled={saving || loadingProfile}
+          data-tour-id="profile-save"
           className="w-full rounded-xl bg-indigo-600 px-4 py-3 text-[10px] font-black uppercase tracking-[0.2em] text-white disabled:opacity-60"
         >
           {saving ? 'Salvando...' : 'Salvar Perfil'}
         </button>
       </div>
 
-      <ResumeAnalyzerCard analyzing={analyzingResume} onAnalyze={handleAnalyzeResume} trace={resumeTrace} />
+      <div data-tour-id="profile-resume-analyzer">
+        <ResumeAnalyzerCard analyzing={analyzingResume} onAnalyze={handleAnalyzeResume} trace={resumeTrace} />
+      </div>
 
-      <JobAnalyzerCard
-        jobDescription={jobDescription}
-        onJobDescriptionChange={setJobDescription}
-        analyzing={analyzingJob}
-        onAnalyze={handleAnalyzeJob}
-        jobAnalysis={jobAnalysis}
-        resumeMatch={resumeMatch}
-        trace={jobTrace}
-      />
+      <div data-tour-id="profile-job-analyzer">
+        <JobAnalyzerCard
+          jobDescription={jobDescription}
+          onJobDescriptionChange={setJobDescription}
+          analyzing={analyzingJob}
+          onAnalyze={handleAnalyzeJob}
+          jobAnalysis={jobAnalysis}
+          resumeMatch={resumeMatch}
+          trace={jobTrace}
+        />
+      </div>
 
       {analysisAudit.length > 0 && (
         <div className="native-glass rounded-3xl border border-white/5 p-4 space-y-3">

@@ -4,6 +4,11 @@ import type { DifficultyLevel } from '../../../shared/types/interview';
 import type { Track } from '../../../shared/types';
 import { clampDuration } from '../../../shared/constants';
 import { BackendApi } from '../../../shared/services/backendApi';
+import {
+  getMissingCandidateProfileFields,
+  hasCandidateJobProfileAnalysis,
+  isCandidateProfileComplete,
+} from '../../../shared/utils/candidateProfile';
 import styles from './Lobby.module.css';
 
 interface Props {
@@ -77,30 +82,6 @@ const buildStarterPlan = (config: InterviewConfig, level: DifficultyLevel): Inte
   ],
 });
 
-const normalizeText = (value?: string | null): string => (value || '').trim();
-
-const getMissingProfileFields = (profile?: CandidateProfile | null): string[] => {
-  if (!profile) {
-    return ['cargo alvo', 'nivel de experiencia', 'skills principais', 'resumo do curriculo'];
-  }
-
-  const missing: string[] = [];
-  if (!normalizeText(profile.targetRole)) missing.push('cargo alvo');
-  if (!normalizeText(profile.experienceLevel)) missing.push('nivel de experiencia');
-  if ((profile.primarySkills || []).length === 0) missing.push('skills principais');
-  if (!normalizeText(profile.resumeSummary)) missing.push('resumo do curriculo');
-  return missing;
-};
-
-const hasJobProfileAnalysis = (profile?: CandidateProfile | null): boolean => {
-  if (!profile) return false;
-  if (profile.lastJobAnalysisId) return true;
-  if ((profile.recentJobAnalysisIds || []).length > 0) return true;
-  if (profile.lastJobAnalysisTrace?.source) return true;
-  if ((profile.analysisAudit || []).some((item) => item.kind === 'job')) return true;
-  return false;
-};
-
 const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenProfile, onStart, onBack }) => {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [loading, setLoading] = useState(false);
@@ -113,9 +94,9 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const hasCredits = userCredits > 0;
-  const profileMissingFields = getMissingProfileFields(candidateProfile);
-  const profileCompleteFromCache = candidateProfile ? profileMissingFields.length === 0 : false;
-  const hasJobAnalysisFromCache = hasJobProfileAnalysis(candidateProfile);
+  const profileMissingFields = getMissingCandidateProfileFields(candidateProfile);
+  const profileCompleteFromCache = candidateProfile ? isCandidateProfileComplete(candidateProfile) : false;
+  const hasJobAnalysisFromCache = hasCandidateJobProfileAnalysis(candidateProfile);
   const startBlockedByProfile = Boolean(candidateProfile && !profileCompleteFromCache);
 
   useEffect(() => {
@@ -235,7 +216,7 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
       candidateProfile ||
       (await BackendApi.getCandidateProfile().catch(() => null));
 
-    const missingProfileFields = getMissingProfileFields(resolvedProfile);
+    const missingProfileFields = getMissingCandidateProfileFields(resolvedProfile);
     if (missingProfileFields.length > 0) {
       setError(
         `Antes de iniciar a entrevista, complete o perfil do candidato. Faltando: ${missingProfileFields.join(', ')}.`,
@@ -243,7 +224,7 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
       return;
     }
 
-    if (!hasJobProfileAnalysis(resolvedProfile)) {
+    if (!hasCandidateJobProfileAnalysis(resolvedProfile)) {
       setShowNoJobModal(true);
       return;
     }
@@ -275,7 +256,7 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
 
         <div className={styles.grid}>
           <section className={styles.mainCard}>
-            <div className={styles.previewFrame}>
+            <div className={styles.previewFrame} data-tour-id="lobby-preview">
               <video ref={videoRef} autoPlay muted playsInline className={styles.video} />
               <div className={styles.videoShade} />
 
@@ -319,6 +300,7 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
                 type="button"
                 className={styles.settingsButton}
                 onClick={() => setError('Ajuste permissoes de camera e microfone nas configuracoes do navegador.')}
+                data-tour-id="lobby-settings"
               >
                 Configuracoes
               </button>
@@ -362,7 +344,7 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
               </div>
             )}
 
-            <div className={styles.levelBlock}>
+            <div className={styles.levelBlock} data-tour-id="lobby-level">
               <p>Nivel da entrevista</p>
               <div className={styles.levelButtons}>
                 {([1, 2, 3] as DifficultyLevel[]).map((level) => (
@@ -387,6 +369,7 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
                 type="button"
                 onClick={handleEnter}
                 disabled={loading || !stream || !hasCredits || startBlockedByProfile}
+                data-tour-id="lobby-start"
                 className={styles.startButton}
               >
                 {loading ? 'Iniciando...' : 'Iniciar entrevista'}

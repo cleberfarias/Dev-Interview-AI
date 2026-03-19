@@ -111,7 +111,7 @@ const Report: React.FC<Props> = ({ config, report, onBack }) => {
 
         <div className={styles.layout}>
           <section className={styles.mainCard}>
-            <div className={styles.scoreHeader}>
+            <div className={styles.scoreHeader} data-tour-id="report-score">
               <div className={styles.scoreIntro}>
                 <p className={styles.kicker}>{t.overall}</p>
                 <h3>{scoreLabel(overallScore)}</h3>
@@ -163,7 +163,7 @@ const Report: React.FC<Props> = ({ config, report, onBack }) => {
               </article>
             </div>
 
-            <div className={styles.insightGrid}>
+            <div className={styles.insightGrid} data-tour-id="report-feedback">
               <article className={styles.insightPanel}>
                 <h4 className={styles.insightTitle}>{t.strengths}</h4>
                 <ul className={styles.insightList}>
@@ -285,13 +285,13 @@ const Report: React.FC<Props> = ({ config, report, onBack }) => {
               </div>
             </section>
 
-            <button type="button" className={styles.retryButton} onClick={handleBack}>
+            <button type="button" className={styles.retryButton} onClick={handleBack} data-tour-id="report-retry">
               Praticar novamente
             </button>
           </aside>
         </div>
 
-        <section id="study-plan" className={styles.planCard}>
+        <section id="study-plan" className={styles.planCard} data-tour-id="report-study-plan">
           <div className={styles.planHeader}>
             <h3>{t.trainingPlan}</h3>
             <p>Roteiro objetivo para evoluir no proximo ciclo.</p>

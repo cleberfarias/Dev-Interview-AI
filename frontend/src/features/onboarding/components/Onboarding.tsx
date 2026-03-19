@@ -137,7 +137,7 @@ const Onboarding: React.FC<Props> = ({ onComplete, initialConfig }) => {
         </header>
 
         <section className={styles.card}>
-          <div className={styles.progressRow}>
+          <div className={styles.progressRow} data-tour-id="onboarding-progress">
             <div className={styles.progressDots}>
               {[0, 1, 2, 3, 4].map((index) => (
                 <span
@@ -149,7 +149,7 @@ const Onboarding: React.FC<Props> = ({ onComplete, initialConfig }) => {
             <span className={styles.progressText}>{step + 1}/5</span>
           </div>
 
-          <div className={styles.content}>
+          <div className={styles.content} data-tour-id="onboarding-content">
             <h3 className={styles.sectionTitle}>{STEP_TITLES[step]}</h3>
             <p className={styles.sectionHint}>{STEP_HINTS[step]}</p>
 
@@ -333,6 +333,7 @@ const Onboarding: React.FC<Props> = ({ onComplete, initialConfig }) => {
             <button
               type="button"
               onClick={isLastStep ? () => onComplete(config) : nextStep}
+              data-tour-id="onboarding-next"
               className={styles.nextButton}
             >
               {isLastStep ? t.start : 'Continuar'}
