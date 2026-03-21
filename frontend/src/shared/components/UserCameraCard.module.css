@@ -1,9 +1,11 @@
 .card {
-  background: rgba(10, 14, 34, 0.7);
-  border: 1px solid rgba(140, 160, 255, 0.2);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
+    rgba(18, 24, 38, 0.74);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 22px;
   padding: 12px;
-  box-shadow: 0 24px 55px rgba(2, 6, 23, 0.6);
+  box-shadow: var(--fd-shadow-soft);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -20,7 +22,7 @@
 .label {
   font-size: 9px;
   font-weight: 700;
-  letter-spacing: 0.3em;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
   color: var(--text-muted);
 }
@@ -37,28 +39,30 @@
 .overlayBadge {
   font-size: 8px;
   font-weight: 700;
-  letter-spacing: 0.24em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  padding: 3px 8px;
+  padding: 4px 8px;
   border-radius: 999px;
-  background: rgba(94, 231, 255, 0.12);
-  border: 1px solid rgba(94, 231, 255, 0.35);
-  color: #c9f6ff;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--fd-text-primary);
 }
 
 .recordingBadge {
-  background: rgba(255, 77, 109, 0.2);
-  border-color: rgba(255, 77, 109, 0.65);
-  color: #ffd1da;
+  background: rgba(239, 68, 68, 0.16);
+  border-color: rgba(239, 68, 68, 0.22);
+  color: #fecaca;
 }
 
 .preview {
   position: relative;
   height: var(--camera-height, 200px);
   border-radius: 18px;
-  background: linear-gradient(135deg, rgba(94, 231, 255, 0.12), rgba(143, 91, 255, 0.14));
-  border: 1px solid rgba(94, 231, 255, 0.35);
-  box-shadow: 0 0 25px rgba(94, 231, 255, 0.18);
+  background:
+    radial-gradient(circle at top, rgba(79, 140, 255, 0.16), transparent 35%),
+    rgba(11, 15, 26, 0.84);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 25px rgba(34, 211, 238, 0.1);
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -77,9 +81,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(196, 209, 255, 0.7);
+  color: var(--text-soft);
   font-size: 10px;
-  letter-spacing: 0.28em;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
 }
 
@@ -95,9 +99,9 @@
 .overlayLabel {
   font-size: 8px;
   font-weight: 700;
-  letter-spacing: 0.3em;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: rgba(226, 235, 255, 0.85);
+  color: rgba(255, 255, 255, 0.88);
 }
 
 .overlayBadges {
@@ -108,7 +112,7 @@
 
 .errorText {
   font-size: 11px;
-  color: #ff9db1;
+  color: #fca5a5;
 }
 
 .compact {

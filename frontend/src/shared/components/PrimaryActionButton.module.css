@@ -1,27 +1,25 @@
 .button {
   width: min(460px, 100%);
-  padding: 20px 32px;
+  padding: 18px 30px;
   border-radius: 999px;
-  border: none;
-  background: linear-gradient(120deg, #5ee7ff, #8f5bff);
-  color: #05070f;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: var(--fd-gradient);
+  color: var(--fd-text-primary);
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.38em;
+  letter-spacing: 0.32em;
   text-transform: uppercase;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 12px;
-  cursor: pointer;
-  box-shadow: 0 22px 55px rgba(94, 231, 255, 0.28);
+  box-shadow: var(--fd-shadow-glow);
   transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
 }
 
 .button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 26px 65px rgba(94, 231, 255, 0.38);
-  filter: brightness(1.05);
+  transform: translateY(-2px);
+  filter: brightness(1.04);
 }
 
 .button:active {
@@ -29,20 +27,17 @@
 }
 
 .button:focus-visible {
-  outline: 2px solid var(--neon-blue);
+  outline: 2px solid rgba(79, 140, 255, 0.7);
   outline-offset: 4px;
 }
 
 .button:disabled {
   opacity: 0.5;
-  cursor: not-allowed;
   box-shadow: none;
 }
 
 .recording {
-  background: linear-gradient(120deg, #ff5d8f, #ff4d6d);
-  color: #fff;
-  box-shadow: 0 22px 55px rgba(255, 77, 109, 0.35);
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.95), rgba(245, 158, 11, 0.9));
 }
 
 .dot {
@@ -69,8 +64,7 @@
 @media (min-width: 1024px) {
   .button {
     width: min(560px, 100%);
-    padding: 24px 44px;
+    padding: 22px 44px;
     font-size: 13px;
-    letter-spacing: 0.32em;
   }
 }

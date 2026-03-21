@@ -309,82 +309,78 @@ const CandidateProfilePanel: React.FC<Props> = ({ initialJobDescription, onProfi
   return (
     <section className="space-y-4">
       <div className="flex items-center justify-between px-1">
-        <h3 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Perfil do Candidato</h3>
-        {loadingProfile && <span className="text-[9px] text-slate-500">Carregando...</span>}
+        <h3 className="fd-kicker text-[10px] text-fd-accent">Perfil do Candidato</h3>
+        {loadingProfile && <span className="text-[9px] text-fd-text-muted">Carregando...</span>}
       </div>
 
       {message && (
-        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-[10px] font-bold text-emerald-200">
+        <div className="fd-status-success text-[10px] font-bold">
           {message}
         </div>
       )}
       {error && (
-        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-[10px] font-bold text-red-200">
+        <div className="fd-status-error text-[10px] font-bold">
           {error}
         </div>
       )}
 
       <div
-        className={`rounded-2xl border px-4 py-3 text-[10px] font-bold ${
-          profileReadyForInterview
-            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
-            : 'border-amber-500/30 bg-amber-500/10 text-amber-100'
-        }`}
+        className={`${profileReadyForInterview ? 'fd-status-success' : 'fd-status-warning'} text-[10px] font-bold`}
       >
         {profileReadyForInterview
           ? 'Perfil do candidato pronto para iniciar a entrevista.'
           : `Antes de iniciar a entrevista, complete: ${missingProfileFields.join(', ')}.`}
       </div>
 
-      <div className="native-glass rounded-3xl border border-white/5 p-4 space-y-3" data-tour-id="profile-candidate-form">
+      <div className="fd-card-shell p-4 space-y-3" data-tour-id="profile-candidate-form">
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="space-y-1">
-            <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Cargo alvo</span>
+            <span className="fd-form-label text-[9px]">Cargo alvo</span>
             <input
               value={targetRole}
               onChange={(e) => setTargetRole(e.target.value)}
-              className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-xs text-white outline-none focus:border-indigo-400"
+              className="fd-input text-xs"
               placeholder="Backend Engineer"
             />
           </label>
           <label className="space-y-1">
-            <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Nivel</span>
+            <span className="fd-form-label text-[9px]">Nivel</span>
             <input
               value={experienceLevel}
               onChange={(e) => setExperienceLevel(e.target.value)}
-              className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-xs text-white outline-none focus:border-indigo-400"
+              className="fd-input text-xs"
               placeholder="junior | mid | senior"
             />
           </label>
         </div>
 
         <label className="space-y-1 block">
-          <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Skills principais (CSV)</span>
+          <span className="fd-form-label text-[9px]">Skills principais (CSV)</span>
           <input
             value={primarySkillsInput}
             onChange={(e) => setPrimarySkillsInput(e.target.value)}
-            className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-xs text-white outline-none focus:border-indigo-400"
+            className="fd-input text-xs"
             placeholder="python, fastapi, docker"
           />
         </label>
 
         <label className="space-y-1 block">
-          <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Skills para evoluir (CSV)</span>
+          <span className="fd-form-label text-[9px]">Skills para evoluir (CSV)</span>
           <input
             value={weakSkillsInput}
             onChange={(e) => setWeakSkillsInput(e.target.value)}
-            className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-xs text-white outline-none focus:border-indigo-400"
+            className="fd-input text-xs"
             placeholder="kubernetes, system design"
           />
         </label>
 
         <label className="space-y-1 block">
-          <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Resumo do curriculo</span>
+          <span className="fd-form-label text-[9px]">Resumo do curriculo</span>
           <textarea
             value={resumeSummary}
             onChange={(e) => setResumeSummary(e.target.value)}
             rows={4}
-            className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-xs text-white outline-none focus:border-indigo-400"
+            className="fd-textarea text-xs"
             placeholder="Resumo tecnico principal..."
           />
         </label>
@@ -394,7 +390,7 @@ const CandidateProfilePanel: React.FC<Props> = ({ initialJobDescription, onProfi
           onClick={() => saveProfile()}
           disabled={saving || loadingProfile}
           data-tour-id="profile-save"
-          className="w-full rounded-xl bg-indigo-600 px-4 py-3 text-[10px] font-black uppercase tracking-[0.2em] text-white disabled:opacity-60"
+          className="fd-btn-primary w-full"
         >
           {saving ? 'Salvando...' : 'Salvar Perfil'}
         </button>
@@ -417,8 +413,8 @@ const CandidateProfilePanel: React.FC<Props> = ({ initialJobDescription, onProfi
       </div>
 
       {analysisAudit.length > 0 && (
-        <div className="native-glass rounded-3xl border border-white/5 p-4 space-y-3">
-          <h4 className="text-[9px] font-black uppercase tracking-widest text-slate-400">Auditoria de Analises</h4>
+        <div className="fd-card-shell p-4 space-y-3">
+          <h4 className="fd-kicker text-[9px]">Auditoria de Analises</h4>
           <div className="space-y-2">
             {analysisAudit.map((event, index) => {
               const timestamp = event.createdAt
@@ -427,15 +423,15 @@ const CandidateProfilePanel: React.FC<Props> = ({ initialJobDescription, onProfi
               return (
                 <div
                   key={`${event.kind}-${event.createdAt}-${index}`}
-                  className="rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2"
+                  className="fd-list-item"
                 >
-                  <p className="text-[10px] text-slate-200">
+                  <p className="text-[10px] text-fd-text-primary">
                     <span className="font-black uppercase">{event.kind}</span> | {sourceLabel(event.source)}
                   </p>
-                  <p className="text-[10px] text-slate-400">
+                  <p className="text-[10px] text-fd-text-secondary">
                     {event.aiProvider ? `${event.aiProvider}${event.aiModel ? ` / ${event.aiModel}` : ''}` : 'sem provider'}
                   </p>
-                  <p className="text-[10px] text-slate-500">{timestamp}</p>
+                  <p className="text-[10px] text-fd-text-muted">{timestamp}</p>
                 </div>
               );
             })}
@@ -447,7 +443,7 @@ const CandidateProfilePanel: React.FC<Props> = ({ initialJobDescription, onProfi
                 void loadMoreAudit();
               }}
               disabled={auditLoading}
-              className="w-full rounded-xl border border-white/10 bg-slate-800 px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-white disabled:opacity-50"
+              className="fd-btn-secondary w-full"
             >
               {auditLoading ? 'Carregando...' : 'Carregar mais'}
             </button>

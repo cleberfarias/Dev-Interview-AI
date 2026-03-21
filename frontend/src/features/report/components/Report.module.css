@@ -1,29 +1,24 @@
-@import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@400;600;700;800&family=Orbitron:wght@600;700;800&display=swap');
-
 .page {
   position: relative;
   min-height: 100dvh;
   padding: 20px 18px 30px;
   overflow: hidden;
-  color: #eef5ff;
-  background:
-    linear-gradient(155deg, rgba(3, 10, 34, 0.82), rgba(4, 15, 50, 0.76) 50%, rgba(22, 20, 68, 0.84)),
-    url('/img/fundo.png');
+  color: var(--fd-text-primary);
+  background: var(--fd-page-backdrop), url('/img/fundo.png');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  font-family: 'Exo 2', sans-serif;
 }
 
 .overlay {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background-image:
-    linear-gradient(rgba(88, 156, 255, 0.12) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(88, 156, 255, 0.12) 1px, transparent 1px);
-  background-size: 48px 48px;
   opacity: 0.12;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 52px 52px;
 }
 
 .shell {
@@ -42,53 +37,66 @@
   gap: 12px;
 }
 
+.brandRow,
+.profileChip,
+.mainCard,
+.sideCard,
+.planCard,
+.matchCard {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
+    rgba(18, 24, 38, 0.74);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: var(--fd-shadow-soft);
+}
+
 .brandRow {
   display: inline-flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 16px;
-  border-radius: 16px;
-  border: 1px solid rgba(119, 212, 255, 0.3);
-  background: rgba(10, 24, 68, 0.46);
-  box-shadow:
-    inset 0 0 0 1px rgba(91, 227, 255, 0.18),
-    0 14px 35px rgba(3, 10, 38, 0.55);
+  padding: 12px 18px;
+  border-radius: 20px;
 }
 
 .logoBadge {
-  width: 42px;
-  height: 42px;
-  border-radius: 13px;
+  width: 46px;
+  height: 46px;
+  border-radius: 16px;
   display: grid;
   place-items: center;
-  overflow: hidden;
-  background: transparent;
-  box-shadow: none;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .brandTitle {
   margin: 0;
-  font-family: 'Orbitron', sans-serif;
-  font-size: clamp(1.3rem, 2.2vw, 2.2rem);
-  letter-spacing: 0.01em;
+  font-family: var(--fd-font-heading);
+  font-size: clamp(1.3rem, 2vw, 2.1rem);
+  font-weight: 700;
 }
 
-.brandTitle strong {
-  color: #6be7ff;
+.brandTitle strong,
+.heroTitle h2,
+.scoreIntro h3,
+.sideTitle,
+.planHeader h3,
+.matchCard h3 {
+  background: var(--fd-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .profileChip {
-  height: 52px;
+  min-height: 52px;
+  padding: 0 16px 0 10px;
   border-radius: 999px;
-  border: 1px solid rgba(117, 205, 255, 0.36);
-  background: rgba(8, 24, 68, 0.56);
-  color: #e8f5ff;
+  color: var(--fd-text-primary);
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  padding: 0 16px 0 8px;
-  font-size: 1rem;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .profileDot {
@@ -97,75 +105,75 @@
   border-radius: 999px;
   display: grid;
   place-items: center;
-  font-family: 'Orbitron', sans-serif;
-  font-size: 0.92rem;
-  border: 1px solid rgba(158, 224, 255, 0.34);
-  background: rgba(111, 196, 255, 0.22);
+  background: var(--fd-gradient-soft);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-family: var(--fd-font-heading);
+  font-size: 0.86rem;
+  font-weight: 700;
 }
 
 .heroTitle {
-  text-align: center;
+  text-align: left;
   margin-top: 4px;
 }
 
 .heroTitle h2 {
   margin: 0;
-  font-family: 'Orbitron', sans-serif;
-  font-size: clamp(1.56rem, 2.8vw, 2.7rem);
-  color: #7feeff;
+  font-family: var(--fd-font-heading);
+  font-size: clamp(2rem, 4vw, 3rem);
+  font-weight: 700;
+  letter-spacing: -0.05em;
 }
 
 .heroTitle p {
-  margin: 8px 0 0;
-  color: #b2d7ff;
-  font-size: 1.05rem;
+  margin: 10px 0 0;
+  max-width: 720px;
+  color: var(--fd-text-secondary);
+  line-height: 1.6;
 }
 
 .layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(280px, 0.75fr);
+  grid-template-columns: minmax(0, 1.6fr) minmax(280px, 0.78fr);
   gap: 14px;
   align-items: start;
 }
 
-.mainCard {
-  border: 1px solid rgba(118, 198, 255, 0.56);
-  border-radius: 24px;
-  padding: 16px;
-  background:
-    linear-gradient(180deg, rgba(10, 25, 76, 0.88), rgba(6, 16, 54, 0.76));
-  box-shadow:
-    inset 0 0 0 1px rgba(121, 221, 255, 0.14),
-    0 16px 36px rgba(3, 9, 35, 0.58);
+.mainCard,
+.sideCard,
+.planCard,
+.matchCard {
+  border-radius: 28px;
+  padding: 18px;
 }
 
 .scoreHeader {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 240px;
-  gap: 16px;
+  gap: 18px;
   align-items: center;
-}
-
-.scoreIntro h3 {
-  margin: 6px 0 0;
-  font-family: 'Orbitron', sans-serif;
-  font-size: clamp(1.35rem, 2.1vw, 2.25rem);
 }
 
 .kicker {
   margin: 0;
-  font-size: 0.74rem;
-  font-weight: 800;
-  letter-spacing: 0.14em;
+  color: var(--fd-text-secondary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: #8ed3ff;
+}
+
+.scoreIntro h3 {
+  margin: 8px 0 0;
+  font-family: var(--fd-font-heading);
+  font-size: clamp(1.5rem, 2.4vw, 2.4rem);
+  font-weight: 700;
 }
 
 .scoreText {
   margin: 10px 0 0;
-  color: #cee5ff;
-  font-size: 1rem;
-  line-height: 1.44;
+  color: var(--fd-text-secondary);
+  line-height: 1.6;
 }
 
 .scoreVisual {
@@ -174,13 +182,13 @@
 }
 
 .scoreRing {
-  width: 202px;
-  height: 202px;
+  width: 204px;
+  height: 204px;
   border-radius: 999px;
   padding: 12px;
   box-shadow:
-    0 0 24px rgba(76, 221, 255, 0.45),
-    inset 0 0 0 1px rgba(134, 225, 255, 0.44);
+    0 0 24px rgba(34, 211, 238, 0.22),
+    0 0 40px rgba(139, 92, 246, 0.18);
 }
 
 .scoreCore {
@@ -190,90 +198,97 @@
   display: grid;
   place-content: center;
   background:
-    radial-gradient(circle at 50% 38%, rgba(35, 121, 185, 0.35), rgba(7, 19, 63, 0.92) 70%);
-  border: 1px solid rgba(117, 206, 255, 0.42);
+    radial-gradient(circle at 50% 40%, rgba(79, 140, 255, 0.16), transparent 35%),
+    rgba(11, 15, 26, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .scoreCore strong {
-  font-family: 'Orbitron', sans-serif;
-  font-size: 3.1rem;
-  letter-spacing: 0.01em;
+  font-family: var(--fd-font-heading);
+  font-size: 3rem;
+  font-weight: 700;
 }
 
 .scoreCore span {
   text-align: center;
-  font-size: 0.82rem;
-  font-weight: 700;
-  color: #a9d2ff;
+  color: var(--fd-text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
 }
 
 .actionRow {
-  margin-top: 10px;
+  margin-top: 12px;
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
+}
+
+.studyButton,
+.retryButton {
+  min-height: 48px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: var(--fd-gradient);
+  color: var(--fd-text-primary);
+  font-family: var(--fd-font-heading);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  box-shadow: var(--fd-shadow-glow);
 }
 
 .studyButton {
   width: min(420px, 100%);
-  height: 48px;
-  border-radius: 12px;
-  border: 1px solid rgba(117, 232, 255, 0.7);
-  background:
-    linear-gradient(100deg, rgba(60, 223, 255, 0.94), rgba(68, 138, 255, 0.9) 50%, rgba(179, 92, 255, 0.9));
-  color: #f2f9ff;
-  font-family: 'Orbitron', sans-serif;
-  font-size: 0.96rem;
-  font-weight: 700;
-  box-shadow:
-    inset 0 0 0 1px rgba(232, 248, 255, 0.45),
-    0 0 16px rgba(84, 206, 255, 0.6);
+  padding: 0 18px;
 }
 
 .breakdownGrid {
-  margin-top: 14px;
+  margin-top: 16px;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 12px;
 }
 
 .metricCard {
-  border-radius: 16px;
-  border: 1px solid rgba(106, 193, 248, 0.35);
-  padding: 12px;
-  background: rgba(7, 27, 78, 0.58);
+  padding: 14px;
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(34, 211, 238, 0.08), rgba(139, 92, 246, 0.08));
+  border: 1px solid rgba(255, 255, 255, 0.1);
   display: grid;
-  gap: 4px;
+  gap: 6px;
 }
 
 .metricCard strong {
-  font-family: 'Orbitron', sans-serif;
-  font-size: 1.66rem;
+  font-family: var(--fd-font-heading);
+  font-size: 1.6rem;
+  font-weight: 700;
 }
 
 .metricCard span {
+  color: var(--fd-text-secondary);
   font-size: 0.84rem;
-  color: #a6d0ff;
 }
 
 .insightGrid {
   margin-top: 12px;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 12px;
 }
 
 .insightPanel {
-  border-radius: 16px;
-  border: 1px solid rgba(108, 193, 246, 0.46);
-  padding: 12px;
-  background: rgba(7, 24, 72, 0.58);
+  padding: 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(11, 15, 26, 0.58);
 }
 
 .insightTitle {
   margin: 0 0 10px;
-  font-family: 'Orbitron', sans-serif;
-  font-size: 0.93rem;
-  color: #d8efff;
+  font-family: var(--fd-font-heading);
+  font-size: 0.94rem;
+  font-weight: 700;
+  color: var(--fd-text-primary);
 }
 
 .insightList {
@@ -293,9 +308,9 @@
 
 .insightList p {
   margin: 0;
-  color: #d2e8ff;
+  color: var(--fd-text-secondary);
   font-size: 0.86rem;
-  line-height: 1.42;
+  line-height: 1.5;
 }
 
 .bulletOk,
@@ -306,200 +321,155 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-family: 'Orbitron', sans-serif;
-  font-size: 0.68rem;
+  font-size: 0.66rem;
   font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .bulletOk {
-  border: 1px solid rgba(97, 235, 188, 0.5);
-  color: #92ffd7;
-  background: rgba(25, 99, 83, 0.4);
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
 }
 
 .bulletWarn {
-  border: 1px solid rgba(246, 148, 120, 0.56);
-  color: #ffd8c9;
-  background: rgba(122, 60, 34, 0.4);
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
 }
 
 .sideColumn {
   display: grid;
-  gap: 10px;
-}
-
-.sideCard {
-  border: 1px solid rgba(118, 198, 255, 0.56);
-  border-radius: 22px;
-  padding: 14px;
-  background:
-    linear-gradient(180deg, rgba(10, 25, 76, 0.88), rgba(6, 16, 54, 0.76));
-  box-shadow:
-    inset 0 0 0 1px rgba(121, 221, 255, 0.14),
-    0 14px 34px rgba(3, 9, 35, 0.56);
+  gap: 12px;
 }
 
 .sideTitle {
   margin: 0;
-  font-family: 'Orbitron', sans-serif;
-  font-size: 1.02rem;
+  font-family: var(--fd-font-heading);
+  font-size: 1rem;
+  font-weight: 700;
 }
 
 .sideScores {
-  margin-top: 10px;
+  margin-top: 12px;
   display: grid;
   gap: 8px;
 }
 
 .scoreLine {
-  border-top: 1px solid rgba(111, 195, 245, 0.28);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
   padding-top: 8px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 0.84rem;
-  color: #b9dbff;
+  color: var(--fd-text-secondary);
+  font-size: 0.82rem;
 }
 
 .scoreLine strong {
-  color: #80edff;
-  font-family: 'Orbitron', sans-serif;
-  font-size: 1.02rem;
+  color: var(--fd-text-primary);
+  font-family: var(--fd-font-heading);
+  font-size: 0.98rem;
 }
 
 .tipsList {
-  margin: 10px 0 0;
+  margin: 12px 0 0;
   padding-left: 18px;
   display: grid;
   gap: 8px;
-  color: #d2e8ff;
-  font-size: 0.88rem;
-  line-height: 1.4;
+  color: var(--fd-text-secondary);
+  font-size: 0.86rem;
+  line-height: 1.5;
 }
 
 .radarWrap {
-  margin-top: 10px;
+  margin-top: 12px;
   height: 220px;
-  border-radius: 14px;
-  border: 1px solid rgba(109, 193, 248, 0.38);
-  background: rgba(7, 25, 72, 0.58);
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(11, 15, 26, 0.58);
   padding: 10px;
 }
 
-.tagRow {
+.tagRow,
+.chipsRow {
   margin-top: 10px;
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
 
-.tagOk {
-  border: 1px solid rgba(97, 235, 188, 0.45);
-  color: #8cffd6;
-  background: rgba(25, 99, 83, 0.34);
+.tagOk,
+.chipPositive,
+.chipNegative,
+.tagWarn {
   border-radius: 999px;
-  padding: 6px 10px;
-  font-size: 0.74rem;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.72rem;
   font-weight: 700;
 }
 
-.tagWarn {
-  border: 1px solid rgba(246, 148, 120, 0.56);
-  color: #ffd8c9;
-  background: rgba(122, 60, 34, 0.4);
-  border-radius: 999px;
-  padding: 6px 10px;
-  font-size: 0.74rem;
-  font-weight: 700;
+.tagOk,
+.chipPositive {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+}
+
+.tagWarn,
+.chipNegative {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
 }
 
 .retryButton {
   width: 100%;
-  height: 52px;
-  border-radius: 14px;
-  border: 1px solid rgba(248, 150, 255, 0.5);
-  background:
-    linear-gradient(95deg, rgba(56, 201, 241, 0.88), rgba(87, 108, 244, 0.9) 50%, rgba(188, 91, 245, 0.88));
-  color: #f7fbff;
-  font-family: 'Orbitron', sans-serif;
-  font-size: 0.96rem;
-  font-weight: 700;
-  box-shadow:
-    inset 0 0 0 1px rgba(236, 248, 255, 0.4),
-    0 0 16px rgba(193, 117, 255, 0.4);
 }
 
-.planCard {
-  border: 1px solid rgba(118, 198, 255, 0.56);
-  border-radius: 24px;
-  padding: 16px;
-  background:
-    linear-gradient(180deg, rgba(10, 25, 76, 0.88), rgba(6, 16, 54, 0.76));
-  box-shadow:
-    inset 0 0 0 1px rgba(121, 221, 255, 0.14),
-    0 16px 36px rgba(3, 9, 35, 0.58);
-}
-
-.planHeader h3 {
+.planHeader h3,
+.matchCard h3 {
   margin: 0;
-  font-family: 'Orbitron', sans-serif;
-  font-size: 1.06rem;
+  font-family: var(--fd-font-heading);
+  font-size: 1.05rem;
+  font-weight: 700;
 }
 
 .planHeader p {
   margin: 8px 0 0;
-  color: #b4d9ff;
+  color: var(--fd-text-secondary);
   font-size: 0.9rem;
 }
 
 .planList {
   margin-top: 12px;
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 .planItem {
-  border: 1px solid rgba(106, 193, 248, 0.35);
-  border-radius: 14px;
-  padding: 10px;
-  background: rgba(7, 27, 78, 0.58);
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(11, 15, 26, 0.58);
+  padding: 12px;
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
 
 .dayBadge {
   width: fit-content;
   border-radius: 999px;
-  border: 1px solid rgba(109, 224, 255, 0.58);
-  color: #b8f4ff;
-  font-family: 'Orbitron', sans-serif;
-  font-size: 0.72rem;
-  padding: 4px 10px;
+  background: rgba(59, 130, 246, 0.16);
+  border: 1px solid rgba(59, 130, 246, 0.24);
+  color: #bfdbfe;
+  font-family: var(--fd-font-heading);
+  font-size: 0.7rem;
+  padding: 0.35rem 0.75rem;
 }
 
 .planItem p {
   margin: 0;
-  color: #d2e8ff;
-  line-height: 1.42;
-  font-size: 0.88rem;
-}
-
-.matchCard {
-  border: 1px solid rgba(118, 198, 255, 0.56);
-  border-radius: 24px;
-  padding: 16px;
-  background:
-    linear-gradient(180deg, rgba(10, 25, 76, 0.88), rgba(6, 16, 54, 0.76));
-  box-shadow:
-    inset 0 0 0 1px rgba(121, 221, 255, 0.14),
-    0 16px 36px rgba(3, 9, 35, 0.58);
-}
-
-.matchCard h3 {
-  margin: 0;
-  font-family: 'Orbitron', sans-serif;
-  font-size: 1.02rem;
+  color: var(--fd-text-secondary);
+  line-height: 1.5;
+  font-size: 0.86rem;
 }
 
 .matchGrid {
@@ -510,72 +480,36 @@
 }
 
 .matchBlock {
-  border: 1px solid rgba(109, 193, 248, 0.38);
-  border-radius: 14px;
-  padding: 10px;
-  background: rgba(7, 25, 72, 0.58);
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(11, 15, 26, 0.58);
+  padding: 12px;
 }
 
 .blockLabel {
   margin: 0;
-  font-size: 0.76rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #96ccff;
-  font-weight: 800;
-}
-
-.chipsRow {
-  margin-top: 8px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.chipPositive,
-.chipNegative {
-  border-radius: 999px;
-  padding: 6px 10px;
-  font-size: 0.74rem;
+  color: var(--fd-text-secondary);
+  font-size: 0.72rem;
   font-weight: 700;
-}
-
-.chipPositive {
-  border: 1px solid rgba(97, 235, 188, 0.45);
-  color: #8cffd6;
-  background: rgba(25, 99, 83, 0.34);
-}
-
-.chipNegative {
-  border: 1px solid rgba(246, 148, 120, 0.56);
-  color: #ffd8c9;
-  background: rgba(122, 60, 34, 0.4);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .emptyText {
-  color: #9fc5f0;
-  font-size: 0.84rem;
+  color: var(--fd-text-muted);
+  font-size: 0.82rem;
 }
 
 @media (max-width: 1100px) {
-  .layout {
-    grid-template-columns: 1fr;
-  }
-
+  .layout,
   .scoreHeader {
     grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 760px) {
-  .breakdownGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .insightGrid {
-    grid-template-columns: 1fr;
-  }
-
+  .breakdownGrid,
+  .insightGrid,
   .matchGrid {
     grid-template-columns: 1fr;
   }
@@ -584,37 +518,24 @@
 @media (max-width: 640px) {
   .page {
     padding: 12px;
-    background:
-      linear-gradient(165deg, rgba(3, 8, 30, 0.86), rgba(5, 14, 44, 0.8) 52%, rgba(20, 18, 62, 0.86)),
-      url('/img/fundo_mob.png');
+    background: var(--fd-page-backdrop), url('/img/fundo_mob.png');
     background-size: cover;
     background-position: center top;
     background-repeat: no-repeat;
   }
 
-  .brandTitle {
-    font-size: 1.16rem;
+  .topBar {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .profileChip {
-    height: 44px;
-    padding-right: 10px;
-    font-size: 0.86rem;
-  }
-
-  .profileDot {
-    width: 28px;
-    height: 28px;
-    font-size: 0.76rem;
-  }
-
-  .heroTitle p {
-    font-size: 0.92rem;
+    justify-content: center;
   }
 
   .scoreRing {
-    width: 170px;
-    height: 170px;
+    width: 172px;
+    height: 172px;
   }
 
   .scoreCore strong {

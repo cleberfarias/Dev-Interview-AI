@@ -9,16 +9,17 @@ import { getMissingCandidateProfileFields } from './src/shared/utils/candidatePr
 import { ProductTour, buildTourStorageKey, getTourSteps, type ProductTourId } from './src/features/tour';
 
 const SplashScreen: React.FC = () => (
-  <div className="fixed inset-0 z-[100] bg-slate-950 flex flex-col items-center justify-center animate-in fade-in duration-500">
-    <div className="w-24 h-24 rounded-[2rem] flex items-center justify-center overflow-hidden animate-float">
+  <div className="fd-splash-screen fixed inset-0 z-[100] flex flex-col items-center justify-center animate-in fade-in duration-500">
+    <div className="fd-splash-logo flex items-center justify-center overflow-hidden animate-float">
       <img src="/img/logo.png" alt="Dev Interview AI" className="w-full h-full object-contain rounded-xl" />
     </div>
-    <div className="mt-8 space-y-2 text-center">
-      <h1 className="text-xl font-extrabold tracking-tighter text-white uppercase">Dev Interview</h1>
-      <div className="flex gap-1 justify-center">
-        <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse" />
-        <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse [animation-delay:0.2s]" />
-        <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse [animation-delay:0.4s]" />
+    <div className="mt-8 space-y-3 text-center">
+      <h1 className="font-display text-2xl font-bold uppercase tracking-[0.22em] text-fd-text-primary">Dev Interview</h1>
+      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-fd-text-secondary">Future Driven AI Interview Coach</p>
+      <div className="fd-loading-dots justify-center">
+        <span />
+        <span />
+        <span />
       </div>
     </div>
   </div>
@@ -26,7 +27,7 @@ const SplashScreen: React.FC = () => (
 
 const RouteLoading: React.FC = () => (
   <div className="h-full flex items-center justify-center">
-    <div className="w-10 h-10 border-4 border-indigo-500/40 border-t-indigo-300 rounded-full animate-spin" />
+    <div className="fd-route-loading" />
   </div>
 );
 
@@ -433,15 +434,15 @@ const App: React.FC = () => {
         : 'max-w-md mx-auto h-full';
 
   return (
-    <div className="h-full flex flex-col bg-[#020617] overflow-hidden">
+    <div className="fd-app-shell h-full flex flex-col overflow-hidden">
       {globalNotice && (
-        <div className="mx-4 mt-3 rounded-2xl border border-red-500/40 bg-red-500/15 px-4 py-3 text-xs font-semibold text-red-100 shadow-lg z-[90]">
+        <div className="fd-global-notice z-[90]">
           <div className="flex items-center justify-between gap-3">
             <span>{globalNotice}</span>
             <button
               type="button"
               onClick={clearGlobalNotice}
-              className="rounded-lg px-2 py-1 text-[10px] font-black uppercase tracking-wider text-red-100/90 hover:bg-red-500/20"
+              className="fd-small-action"
             >
               Fechar
             </button>
@@ -450,13 +451,13 @@ const App: React.FC = () => {
       )}
 
       {showHeader && (
-        <header className="px-6 py-4 flex items-center justify-between shrink-0 native-glass z-50">
+        <header className="fd-app-header flex items-center justify-between shrink-0 z-50">
           <div className="flex items-center gap-3">
             {canHeaderBack && (
               <button
                 type="button"
                 onClick={handleHeaderBack}
-                className="w-8 h-8 rounded-lg bg-slate-800 border border-white/10 text-slate-200 font-black flex items-center justify-center active:scale-95"
+                className="fd-icon-button flex items-center justify-center active:scale-95"
                 aria-label="Voltar"
               >
                 {'<'}
@@ -467,10 +468,10 @@ const App: React.FC = () => {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-xs font-black text-white uppercase">{t.title}</h1>
-                <span className="text-[7px] text-amber-400 font-black bg-slate-800 px-1.5 py-0.5 rounded-full">{user?.credits || 0}</span>
+                <h1 className="fd-brand-title">{t.title}</h1>
+                <span className="fd-credit-pill">{user?.credits || 0} credits</span>
               </div>
-              <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">{user?.name?.split(' ')[0] || ''}</p>
+              <p className="fd-brand-caption">{user?.name?.split(' ')[0] || ''}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -478,7 +479,7 @@ const App: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setActiveTourId(currentTourId)}
-                className="rounded-lg bg-slate-800 border border-white/5 px-3 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-200 hover:scale-95"
+                className="fd-small-action hover:scale-95"
                 title="Tour guiado"
               >
                 Tour
@@ -487,7 +488,7 @@ const App: React.FC = () => {
             <button
               onClick={() => setState(AppState.PROFILE)}
               data-tour-id="app-header-profile"
-              className="w-10 h-10 rounded-full bg-slate-800 border border-white/5 flex items-center justify-center text-sm overflow-hidden"
+              className="fd-avatar-button text-sm"
             >
               {user?.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : (user?.name?.charAt(0) || 'U')}
             </button>

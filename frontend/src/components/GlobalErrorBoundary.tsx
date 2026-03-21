@@ -43,21 +43,21 @@ export class GlobalErrorBoundary extends React.Component<
   render(): React.ReactNode {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center px-6">
-          <div className="w-full max-w-lg rounded-3xl border border-slate-800 bg-slate-900/80 p-8 shadow-2xl shadow-slate-950/60">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-cyan-300">
+        <div className="min-h-screen fd-app-shell flex items-center justify-center px-6 text-fd-text-primary">
+          <div className="fd-card-shell w-full max-w-lg p-8">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-fd-accent">
               Monitoramento ativo
             </p>
-            <h1 className="mt-4 text-3xl font-black tracking-tight text-white">
+            <h1 className="mt-4 font-display text-3xl font-black tracking-tight text-fd-text-primary">
               O app encontrou um erro inesperado.
             </h1>
-            <p className="mt-3 text-sm leading-6 text-slate-300">
+            <p className="mt-3 text-sm leading-6 text-fd-text-secondary">
               O erro foi registrado para analise. Recarregue a pagina para tentar novamente.
             </p>
             <button
               type="button"
               onClick={this.handleReload}
-              className="mt-6 inline-flex items-center justify-center rounded-xl border border-cyan-400/40 bg-cyan-400/10 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/20"
+              className="fd-btn-primary mt-6 inline-flex text-sm"
             >
               Recarregar agora
             </button>

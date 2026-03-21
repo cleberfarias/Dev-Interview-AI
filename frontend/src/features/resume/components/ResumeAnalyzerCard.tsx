@@ -22,24 +22,24 @@ const ResumeAnalyzerCard: React.FC<ResumeAnalyzerCardProps> = ({ analyzing, onAn
   };
 
   return (
-    <div className="native-glass rounded-3xl border border-white/5 p-4 space-y-3">
-      <h4 className="text-[9px] font-black uppercase tracking-widest text-slate-400">Analisar Curriculo</h4>
+    <div className="fd-card-shell p-4 space-y-3">
+      <h4 className="fd-kicker text-[9px]">Analisar Curriculo</h4>
       <input
         type="file"
         accept=".txt,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         onChange={(e) => setResumeFile(e.target.files?.[0] || null)}
-        className="w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-[10px] text-slate-300"
+        className="fd-input text-[10px]"
       />
-      <p className="text-[10px] text-slate-500">
+      <p className="text-[10px] text-fd-text-muted">
         O arquivo selecionado atualiza automaticamente skills, nivel e resumo no perfil.
       </p>
       {trace && (
-        <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/10 px-3 py-2 text-[10px] text-indigo-100">
+        <div className="fd-status-info text-[10px]">
           <p>
             <span className="font-black">Fonte da analise:</span> {sourceLabel[trace.source] || trace.source}
           </p>
           {trace.aiProvider && (
-            <p className="text-indigo-200/80">
+            <p className="text-fd-text-secondary">
               provider: {trace.aiProvider}
               {trace.aiModel ? ` | model: ${trace.aiModel}` : ''}
             </p>
@@ -50,7 +50,7 @@ const ResumeAnalyzerCard: React.FC<ResumeAnalyzerCardProps> = ({ analyzing, onAn
         type="button"
         onClick={handleAnalyze}
         disabled={analyzing || !resumeFile}
-        className="w-full rounded-xl border border-white/10 bg-slate-800 px-4 py-3 text-[10px] font-black uppercase tracking-[0.2em] text-white disabled:opacity-50"
+        className="fd-btn-secondary w-full"
       >
         {analyzing ? 'Analisando...' : 'Analisar Curriculo'}
       </button>

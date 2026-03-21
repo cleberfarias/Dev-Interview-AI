@@ -1,9 +1,11 @@
 .card {
-  background: rgba(10, 14, 34, 0.72);
-  border: 1px solid rgba(140, 160, 255, 0.2);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
+    rgba(18, 24, 38, 0.74);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 26px;
   padding: 12px;
-  box-shadow: 0 26px 60px rgba(2, 6, 23, 0.6);
+  box-shadow: var(--fd-shadow-soft);
   position: relative;
   display: flex;
   flex-direction: column;
@@ -20,7 +22,7 @@
 .label {
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.32em;
+  letter-spacing: 0.24em;
   text-transform: uppercase;
   color: var(--text-muted);
 }
@@ -28,22 +30,24 @@
 .status {
   font-size: 9px;
   font-weight: 700;
-  letter-spacing: 0.26em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   padding: 4px 10px;
   border-radius: 999px;
-  color: var(--neon-blue);
-  background: rgba(94, 231, 255, 0.15);
-  border: 1px solid rgba(94, 231, 255, 0.4);
+  color: var(--fd-text-primary);
+  background: linear-gradient(145deg, rgba(34, 211, 238, 0.12), rgba(139, 92, 246, 0.12));
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .avatarFrame {
   position: relative;
   height: var(--avatar-height, 220px);
-  border-radius: 20px;
-  border: 1px solid rgba(94, 231, 255, 0.65);
-  background: linear-gradient(180deg, rgba(12, 18, 48, 0.75), rgba(6, 8, 24, 0.92));
-  box-shadow: 0 0 35px rgba(94, 231, 255, 0.25);
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background:
+    radial-gradient(circle at top, rgba(79, 140, 255, 0.16), transparent 35%),
+    rgba(11, 15, 26, 0.88);
+  box-shadow: 0 0 35px rgba(34, 211, 238, 0.12);
   overflow: hidden;
 }
 
@@ -62,17 +66,19 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(196, 209, 255, 0.72);
+  color: var(--text-soft);
   font-size: 10px;
-  letter-spacing: 0.3em;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
-  background: rgba(6, 10, 28, 0.35);
+  background: rgba(11, 15, 26, 0.42);
   z-index: 2;
 }
 
 .speaking .avatarFrame {
-  border-color: rgba(94, 231, 255, 0.95);
-  box-shadow: 0 0 40px rgba(94, 231, 255, 0.45);
+  border-color: rgba(79, 140, 255, 0.24);
+  box-shadow:
+    0 0 30px rgba(34, 211, 238, 0.18),
+    0 0 42px rgba(139, 92, 246, 0.14);
 }
 
 .wave {
@@ -90,7 +96,7 @@
   width: 5px;
   height: 18px;
   border-radius: 999px;
-  background: linear-gradient(180deg, var(--neon-blue), var(--neon-violet));
+  background: var(--fd-gradient);
   transform-origin: bottom;
   animation: wave 1.2s ease-in-out infinite;
 }

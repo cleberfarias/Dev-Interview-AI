@@ -1,9 +1,9 @@
 .room {
-  --text-muted: #9aa7d1;
-  --text-soft: #c4d1ff;
-  --neon-blue: #5ee7ff;
-  --neon-violet: #8f5bff;
-  --neon-pink: #ff5ddf;
+  --text-muted: var(--fd-text-muted);
+  --text-soft: var(--fd-text-secondary);
+  --neon-blue: var(--fd-accent);
+  --neon-violet: var(--fd-secondary);
+  --neon-pink: var(--fd-error);
 
   position: relative;
   min-height: 100dvh;
@@ -11,10 +11,9 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  color: #f8fafc;
-  background:
-    linear-gradient(155deg, rgba(3, 10, 34, 0.84), rgba(4, 15, 50, 0.78) 50%, rgba(22, 20, 68, 0.86)),
-    url('/img/fundo.png');
+  color: var(--fd-text-primary);
+  font-family: var(--fd-font-body);
+  background: var(--fd-page-backdrop), url('/img/fundo.png');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
@@ -26,11 +25,11 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background-image:
-    linear-gradient(rgba(88, 156, 255, 0.12) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(88, 156, 255, 0.12) 1px, transparent 1px);
-  background-size: 48px 48px;
   opacity: 0.12;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 52px 52px;
 }
 
 .room > * {
@@ -47,46 +46,51 @@
   display: inline-flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 16px;
-  border-radius: 16px;
-  border: 1px solid rgba(119, 212, 255, 0.34);
-  background: rgba(8, 23, 67, 0.56);
-  box-shadow:
-    inset 0 0 0 1px rgba(92, 226, 255, 0.18),
-    0 12px 30px rgba(3, 9, 35, 0.48);
+  padding: 12px 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
+    rgba(18, 24, 38, 0.72);
+  box-shadow: var(--fd-shadow-soft);
 }
 
 .brandLogo {
-  width: 42px;
-  height: 42px;
-  border-radius: 13px;
+  width: 46px;
+  height: 46px;
+  border-radius: 16px;
   display: grid;
   place-items: center;
   overflow: hidden;
-  background: transparent;
-  box-shadow: none;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .brandTitle {
   margin: 0;
+  font-family: var(--fd-font-heading);
   font-size: clamp(1.32rem, 2.4vw, 2.1rem);
   font-weight: 700;
-  letter-spacing: 0.01em;
+  letter-spacing: -0.03em;
 }
 
 .brandTitle strong {
-  color: #6be7ff;
+  background: var(--fd-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .brandSubtitle {
   margin: 10px auto 0;
   width: fit-content;
   max-width: min(980px, 100%);
-  padding: 8px 14px;
+  padding: 9px 14px;
   border-radius: 999px;
-  border: 1px solid rgba(110, 199, 255, 0.38);
-  background: rgba(7, 28, 84, 0.45);
-  color: #cbe8ff;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(18, 24, 38, 0.56);
+  color: var(--fd-text-secondary);
   font-size: 0.85rem;
 }
 
@@ -152,11 +156,11 @@
 
 .presentationChip {
   align-self: flex-start;
-  padding: 7px 14px;
+  padding: 8px 14px;
   border-radius: 999px;
-  background: rgba(10, 16, 38, 0.78);
-  border: 1px solid rgba(120, 150, 255, 0.24);
-  color: #d5e5ff;
+  background: rgba(18, 24, 38, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--fd-text-secondary);
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.24em;
@@ -164,14 +168,13 @@
 }
 
 .sideStatusCard {
-  border: 1px solid rgba(118, 198, 255, 0.46);
-  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 22px;
   padding: 12px;
   background:
-    linear-gradient(180deg, rgba(10, 25, 76, 0.88), rgba(6, 16, 54, 0.76));
-  box-shadow:
-    inset 0 0 0 1px rgba(121, 221, 255, 0.14),
-    0 14px 34px rgba(3, 9, 35, 0.56);
+    linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
+    rgba(18, 24, 38, 0.72);
+  box-shadow: var(--fd-shadow-soft);
   display: grid;
   gap: 8px;
 }
@@ -179,30 +182,30 @@
 .sideCardTitle {
   font-size: 0.86rem;
   font-weight: 700;
-  color: #e7f6ff;
+  color: var(--fd-text-primary);
 }
 
 .scoreLine {
-  border-top: 1px solid rgba(111, 195, 245, 0.28);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
   padding-top: 7px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
   font-size: 0.82rem;
-  color: #b6d7ff;
+  color: var(--fd-text-secondary);
 }
 
 .scoreLine strong {
-  color: #78ecff;
+  color: var(--fd-text-primary);
   font-size: 1.02rem;
 }
 
 .nextHint {
   margin: 0;
-  border-top: 1px solid rgba(111, 195, 245, 0.28);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
   padding-top: 8px;
-  color: #d3e9ff;
+  color: var(--fd-text-secondary);
   font-size: 0.8rem;
   line-height: 1.35;
 }
@@ -235,14 +238,14 @@
 .audioControlButton {
   padding: 8px 12px;
   border-radius: 999px;
-  border: 1px solid rgba(125, 211, 252, 0.3);
-  background: rgba(8, 14, 34, 0.88);
-  color: #dbeafe;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(18, 24, 38, 0.82);
+  color: var(--fd-text-primary);
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  box-shadow: 0 12px 24px rgba(2, 6, 23, 0.28);
+  box-shadow: var(--fd-shadow-soft);
 }
 
 .modeSwitch {
@@ -252,15 +255,15 @@
   gap: 6px;
   padding: 4px;
   border-radius: 999px;
-  background: rgba(10, 16, 38, 0.82);
-  border: 1px solid rgba(148, 163, 255, 0.24);
-  box-shadow: 0 12px 28px rgba(2, 6, 23, 0.35);
+  background: rgba(18, 24, 38, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: var(--fd-shadow-soft);
 }
 
 .modeButton {
   border: 1px solid transparent;
   background: transparent;
-  color: #aebce8;
+  color: var(--fd-text-secondary);
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.18em;
@@ -274,9 +277,10 @@
 }
 
 .modeButtonActive {
-  color: #e6edff;
-  border-color: rgba(94, 231, 255, 0.6);
-  background: rgba(30, 58, 138, 0.45);
+  color: var(--fd-text-primary);
+  border-color: rgba(255, 255, 255, 0.14);
+  background: var(--fd-gradient);
+  box-shadow: var(--fd-shadow-glow);
 }
 
 .liveCoachCard {
@@ -286,10 +290,12 @@
   flex-direction: column;
   gap: 8px;
   padding: 12px;
-  border-radius: 16px;
-  background: rgba(8, 14, 34, 0.9);
-  border: 1px solid rgba(110, 231, 183, 0.25);
-  box-shadow: 0 14px 30px rgba(2, 6, 23, 0.45);
+  border-radius: 20px;
+  background:
+    linear-gradient(145deg, rgba(34, 211, 238, 0.08), rgba(139, 92, 246, 0.08)),
+    rgba(18, 24, 38, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: var(--fd-shadow-soft);
 }
 
 .partialFeedbackCard {
@@ -298,10 +304,12 @@
   display: grid;
   gap: 6px;
   padding: 12px;
-  border-radius: 16px;
-  background: linear-gradient(180deg, rgba(16, 35, 42, 0.94), rgba(9, 22, 28, 0.9));
-  border: 1px solid rgba(94, 234, 212, 0.22);
-  box-shadow: 0 14px 30px rgba(2, 6, 23, 0.45);
+  border-radius: 20px;
+  background:
+    linear-gradient(145deg, rgba(34, 211, 238, 0.08), rgba(139, 92, 246, 0.08)),
+    rgba(18, 24, 38, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: var(--fd-shadow-soft);
 }
 
 .partialFeedbackLabel {
@@ -309,12 +317,12 @@
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: rgba(153, 246, 228, 0.9);
+  color: var(--fd-accent);
 }
 
 .partialFeedbackText {
   margin: 0;
-  color: rgba(225, 248, 255, 0.92);
+  color: var(--fd-text-primary);
   font-size: 0.92rem;
   line-height: 1.45;
 }
@@ -331,14 +339,14 @@
   font-weight: 800;
   letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: #a7f3d0;
+  color: var(--fd-accent);
 }
 
 .liveCoachBadge {
   border-radius: 999px;
-  border: 1px solid rgba(110, 231, 183, 0.45);
-  background: rgba(16, 185, 129, 0.16);
-  color: #d1fae5;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--fd-text-primary);
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.12em;
@@ -349,13 +357,13 @@
 .liveCoachText {
   font-size: 11px;
   line-height: 1.45;
-  color: #d1fae5;
+  color: var(--fd-text-primary);
 }
 
 .liveCoachError {
   font-size: 11px;
   line-height: 1.4;
-  color: #fda4af;
+  color: #fecaca;
 }
 
 .liveCoachList {
@@ -365,11 +373,11 @@
   flex-direction: column;
   gap: 4px;
   font-size: 10px;
-  color: #cbd5e1;
+  color: var(--fd-text-secondary);
 }
 
 .liveCoachFeed {
-  border-top: 1px solid rgba(110, 231, 183, 0.2);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
   padding-top: 8px;
   margin-top: 2px;
 }
@@ -380,7 +388,7 @@
   font-weight: 800;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: #86efac;
+  color: var(--fd-accent);
 }
 
 .liveCoachFeedList {
@@ -393,10 +401,10 @@
 }
 
 .liveCoachFeedItem {
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
   padding: 6px 8px;
-  background: rgba(15, 23, 42, 0.55);
+  background: rgba(11, 15, 26, 0.58);
 }
 
 .liveCoachFeedMeta {
@@ -407,7 +415,7 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #94a3b8;
+  color: var(--fd-text-muted);
   margin-bottom: 3px;
 }
 
@@ -415,7 +423,7 @@
   margin: 0;
   font-size: 10px;
   line-height: 1.35;
-  color: #e2e8f0;
+  color: var(--fd-text-primary);
 }
 
 .textAnswerPanel {
@@ -425,10 +433,12 @@
   flex-direction: column;
   gap: 8px;
   padding: 12px;
-  border-radius: 16px;
-  background: rgba(10, 16, 38, 0.88);
-  border: 1px solid rgba(148, 163, 255, 0.25);
-  box-shadow: 0 14px 30px rgba(2, 6, 23, 0.45);
+  border-radius: 20px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
+    rgba(18, 24, 38, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: var(--fd-shadow-soft);
 }
 
 .textAnswerLabel {
@@ -436,7 +446,7 @@
   font-weight: 800;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: #d6e0ff;
+  color: var(--fd-text-secondary);
 }
 
 .textAnswerInput {
@@ -444,10 +454,10 @@
   resize: vertical;
   min-height: 88px;
   max-height: 180px;
-  border-radius: 12px;
-  border: 1px solid rgba(148, 163, 255, 0.25);
-  background: rgba(2, 6, 23, 0.8);
-  color: #eef2ff;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(11, 15, 26, 0.76);
+  color: var(--fd-text-primary);
   font-size: 13px;
   line-height: 1.45;
   padding: 10px 12px;
@@ -455,8 +465,10 @@
 
 .textAnswerInput:focus {
   outline: none;
-  border-color: rgba(94, 231, 255, 0.7);
-  box-shadow: 0 0 0 1px rgba(94, 231, 255, 0.35);
+  border-color: rgba(79, 140, 255, 0.7);
+  box-shadow:
+    0 0 0 1px rgba(79, 140, 255, 0.35),
+    0 0 20px rgba(34, 211, 238, 0.12);
 }
 
 .textAnswerInput:disabled {
@@ -465,15 +477,16 @@
 
 .textAnswerSubmit {
   align-self: flex-end;
-  border-radius: 999px;
-  border: 1px solid rgba(110, 231, 183, 0.45);
-  background: rgba(16, 185, 129, 0.18);
-  color: #c5ffe2;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: var(--fd-gradient);
+  color: var(--fd-text-primary);
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  padding: 8px 14px;
+  padding: 10px 16px;
+  box-shadow: var(--fd-shadow-glow);
 }
 
 .textAnswerSubmit:disabled {
@@ -488,11 +501,11 @@
   justify-content: space-between;
   gap: 10px;
   padding: 10px 14px;
-  border-radius: 14px;
-  background: rgba(127, 29, 29, 0.82);
-  border: 1px solid rgba(248, 113, 113, 0.55);
+  border-radius: 18px;
+  background: rgba(239, 68, 68, 0.14);
+  border: 1px solid rgba(239, 68, 68, 0.28);
   color: #fee2e2;
-  box-shadow: 0 14px 32px rgba(127, 29, 29, 0.35);
+  box-shadow: 0 14px 32px rgba(127, 29, 29, 0.18);
 }
 
 .errorNoticeText {
@@ -505,9 +518,9 @@
 .errorNoticeDismiss {
   flex-shrink: 0;
   padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(254, 202, 202, 0.35);
-  background: rgba(127, 29, 29, 0.3);
+  border-radius: 12px;
+  border: 1px solid rgba(254, 202, 202, 0.22);
+  background: rgba(127, 29, 29, 0.16);
   color: #fee2e2;
   font-size: 9px;
   font-weight: 800;
@@ -516,11 +529,11 @@
 }
 
 .timeNotice {
-  padding: 8px 14px;
+  padding: 9px 14px;
   border-radius: 999px;
-  background: rgba(78, 26, 40, 0.75);
-  border: 1px solid rgba(255, 96, 120, 0.55);
-  color: #ff6b7f;
+  background: rgba(239, 68, 68, 0.14);
+  border: 1px solid rgba(239, 68, 68, 0.28);
+  color: #fca5a5;
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.18em;
@@ -532,10 +545,12 @@
   pointer-events: auto;
   width: min(760px, calc(100vw - 36px));
   padding: 12px 16px;
-  border-radius: 18px;
-  background: rgba(12, 18, 48, 0.85);
-  border: 1px solid rgba(148, 163, 255, 0.32);
-  box-shadow: 0 14px 32px rgba(9, 14, 40, 0.45);
+  border-radius: 22px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
+    rgba(18, 24, 38, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: var(--fd-shadow-soft);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -549,13 +564,13 @@
   font-weight: 800;
   letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: #e2e8ff;
+  color: var(--fd-text-primary);
 }
 
 .noResponseText {
   margin: 0;
   font-size: 11px;
-  color: var(--text-soft);
+  color: var(--fd-text-secondary);
 }
 
 .noResponseActions {
@@ -565,11 +580,11 @@
 }
 
 .noResponsePrimary {
-  padding: 8px 14px;
-  border-radius: 999px;
-  background: rgba(110, 231, 183, 0.18);
-  border: 1px solid rgba(110, 231, 183, 0.45);
-  color: #b8ffd9;
+  padding: 10px 16px;
+  border-radius: 14px;
+  background: var(--fd-gradient);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--fd-text-primary);
   font-size: 10px;
   font-weight: 800;
   text-transform: uppercase;
@@ -577,11 +592,11 @@
 }
 
 .noResponseSecondary {
-  padding: 8px 14px;
-  border-radius: 999px;
-  background: rgba(244, 114, 182, 0.12);
-  border: 1px solid rgba(244, 114, 182, 0.4);
-  color: #ffb3d6;
+  padding: 10px 16px;
+  border-radius: 14px;
+  background: rgba(239, 68, 68, 0.14);
+  border: 1px solid rgba(239, 68, 68, 0.24);
+  color: #fecaca;
   font-size: 10px;
   font-weight: 800;
   text-transform: uppercase;
@@ -632,9 +647,7 @@
 @media (max-width: 640px) {
   .room {
     padding: 12px 12px 18px;
-    background:
-      linear-gradient(165deg, rgba(3, 8, 30, 0.86), rgba(5, 14, 44, 0.8) 52%, rgba(20, 18, 62, 0.86)),
-      url('/img/fundo_mob.png');
+    background: var(--fd-page-backdrop), url('/img/fundo_mob.png');
     background-size: cover;
     background-position: center top;
     background-repeat: no-repeat;

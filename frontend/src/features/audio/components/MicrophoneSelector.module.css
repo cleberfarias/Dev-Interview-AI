@@ -5,7 +5,7 @@
 }
 
 .label {
-  color: #dbeafe;
+  color: var(--fd-text-secondary);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.16em;
@@ -15,15 +15,16 @@
 .select {
   width: 100%;
   padding: 10px 12px;
-  border-radius: 14px;
-  border: 1px solid rgba(125, 211, 252, 0.3);
-  background: rgba(10, 16, 38, 0.9);
-  color: #eff6ff;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(18, 24, 38, 0.82);
+  color: var(--fd-text-primary);
   font-size: 12px;
+  box-shadow: var(--fd-shadow-soft);
 }
 
 .hint {
   margin: 0;
-  color: #94a3b8;
+  color: var(--fd-text-muted);
   font-size: 11px;
 }

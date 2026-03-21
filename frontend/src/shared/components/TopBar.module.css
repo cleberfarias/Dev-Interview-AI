@@ -17,28 +17,34 @@
   gap: 8px;
 }
 
+.backButton,
+.chip,
+.finishButton {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: var(--fd-shadow-soft);
+}
+
 .backButton {
   align-self: flex-start;
-  background: rgba(15, 23, 42, 0.75);
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  color: #e2e8f0;
-  padding: 8px 14px;
+  background: rgba(18, 24, 38, 0.78);
+  color: var(--fd-text-primary);
+  padding: 9px 14px;
   border-radius: 999px;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  transition: border-color 0.2s ease, transform 0.2s ease, background 0.2s ease;
+  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
 }
 
 .backButton:hover {
-  border-color: rgba(129, 140, 248, 0.7);
-  background: rgba(30, 41, 59, 0.9);
+  border-color: rgba(79, 140, 255, 0.28);
+  background: rgba(18, 24, 38, 0.9);
   transform: translateY(-1px);
 }
 
 .backButton:focus-visible {
-  outline: 2px solid rgba(129, 140, 248, 0.9);
+  outline: 2px solid rgba(79, 140, 255, 0.7);
   outline-offset: 3px;
 }
 
@@ -46,28 +52,28 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 7px 14px;
+  padding: 8px 14px;
   border-radius: 999px;
-  background: rgba(12, 16, 40, 0.7);
-  border: 1px solid rgba(120, 150, 255, 0.2);
-  color: rgba(226, 235, 255, 0.9);
+  background: rgba(18, 24, 38, 0.78);
+  color: var(--fd-text-primary);
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.32em;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
-  box-shadow: 0 10px 24px rgba(2, 6, 23, 0.35);
 }
 
 .timerChip {
-  color: #f8fafc;
+  background:
+    linear-gradient(145deg, rgba(34, 211, 238, 0.08), rgba(139, 92, 246, 0.08)),
+    rgba(18, 24, 38, 0.78);
 }
 
 .timerDot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #ff4d6d;
-  box-shadow: 0 0 10px rgba(255, 77, 109, 0.85);
+  background: var(--fd-error);
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.75);
   animation: pulse 1.4s ease-in-out infinite;
 }
 
@@ -77,9 +83,8 @@
 }
 
 .finishButton {
-  background: rgba(78, 26, 40, 0.75);
-  border: 1px solid rgba(255, 96, 120, 0.55);
-  color: #ff6b7f;
+  background: rgba(239, 68, 68, 0.14);
+  color: #fecaca;
   padding: 11px 22px;
   border-radius: 999px;
   font-size: 10px;
@@ -87,17 +92,16 @@
   letter-spacing: 0.24em;
   text-transform: uppercase;
   transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
-  box-shadow: 0 12px 30px rgba(255, 93, 139, 0.22);
 }
 
 .finishButton:hover {
-  border-color: rgba(255, 96, 120, 0.85);
-  box-shadow: 0 0 24px rgba(255, 96, 120, 0.35);
+  border-color: rgba(239, 68, 68, 0.4);
+  box-shadow: 0 0 24px rgba(239, 68, 68, 0.24);
   transform: translateY(-1px);
 }
 
 .finishButton:focus-visible {
-  outline: 2px solid var(--neon-pink);
+  outline: 2px solid rgba(239, 68, 68, 0.7);
   outline-offset: 4px;
 }
 
@@ -125,6 +129,10 @@
 
   .chip {
     font-size: 9px;
-    letter-spacing: 0.26em;
+    letter-spacing: 0.18em;
+  }
+
+  .finishButton {
+    padding-inline: 16px;
   }
 }

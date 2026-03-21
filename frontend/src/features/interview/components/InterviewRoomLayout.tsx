@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styles from './InterviewRoomLayout.module.css';
+import { shouldAttemptAudioEvaluation } from './answerDetection';
 import { useUserMedia } from '../../../../hooks/useUserMedia';
 import { useLipSync } from '../../../hooks/useLipSync';
 import {
@@ -86,25 +87,6 @@ const appendPartialTranscript = (currentValue: string, nextValue?: string | null
   if (current === incoming || current.endsWith(incoming)) return current;
   if (incoming.startsWith(current)) return incoming;
   return `${current} ${incoming}`.replace(/\s+/g, ' ').trim();
-};
-
-const countTranscriptWords = (value?: string | null): number =>
-  String(value || '')
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean).length;
-
-const hasMeaningfulAudioAnswer = (transcript: string, speechMetrics?: SpeechMetrics | null): boolean => {
-  const wordCount = countTranscriptWords(transcript);
-  if (wordCount >= 4) return true;
-
-  if (!speechMetrics) return false;
-  const totalDurationMs = Math.max(0, Number(speechMetrics.totalDurationMs) || 0);
-  const silenceDurationMs = Math.max(0, Number(speechMetrics.silenceDurationMs) || 0);
-  const silenceRatio = totalDurationMs > 0 ? silenceDurationMs / totalDurationMs : 1;
-  const startedSpeaking = Number(speechMetrics.timeToFirstSpeechMs || 0) > 0;
-
-  return wordCount >= 2 && startedSpeaking && silenceRatio < 0.9;
 };
 
 interface InterviewRoomLayoutProps {
@@ -1243,7 +1225,14 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
           transcript,
           answerMetricsRef.current ? Date.now() - answerMetricsRef.current.startedAtMs : undefined,
         );
-        if (!hasMeaningfulAudioAnswer(transcript, speechMetrics)) {
+        if (
+          !shouldAttemptAudioEvaluation({
+            transcript,
+            speechMetrics,
+            audioSize: blob.size,
+            localSpeechDetected: hasSpokenRef.current,
+          })
+        ) {
           resetCurrentAnswerAnalysis(null);
           setFlowState('no_response');
           setConversationState('ai_speaking');

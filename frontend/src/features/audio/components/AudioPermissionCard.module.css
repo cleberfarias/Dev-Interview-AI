@@ -3,22 +3,24 @@
   display: grid;
   gap: 10px;
   padding: 12px;
-  border-radius: 16px;
-  border: 1px solid rgba(129, 140, 248, 0.28);
-  background: rgba(10, 16, 38, 0.82);
-  box-shadow: 0 12px 28px rgba(2, 6, 23, 0.3);
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
+    rgba(18, 24, 38, 0.8);
+  box-shadow: var(--fd-shadow-soft);
 }
 
 .title {
   margin: 0;
-  color: #eff6ff;
+  color: var(--fd-text-primary);
   font-size: 12px;
   font-weight: 700;
 }
 
 .text {
   margin: 0;
-  color: #cbd5e1;
+  color: var(--fd-text-secondary);
   font-size: 11px;
   line-height: 1.5;
 }
@@ -29,13 +31,14 @@
 
 .action {
   justify-self: flex-start;
-  padding: 8px 12px;
+  padding: 9px 12px;
   border-radius: 999px;
-  border: 1px solid rgba(125, 211, 252, 0.4);
-  background: rgba(13, 33, 78, 0.86);
-  color: #dbeafe;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--fd-gradient);
+  color: var(--fd-text-primary);
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.14em;
   text-transform: uppercase;
+  box-shadow: var(--fd-shadow-glow);
 }
