@@ -8,6 +8,7 @@ interface DashboardProps {
   candidateProfile?: CandidateProfile | null;
   onStartInterview: () => void;
   onOpenProfile: () => void;
+  onOpenInterviewReport: (sessionId: string) => void;
   onDeleteInterview: (sessionId: string) => void;
 }
 
@@ -16,6 +17,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   candidateProfile,
   onStartInterview,
   onOpenProfile,
+  onOpenInterviewReport,
   onDeleteInterview,
 }) => {
   const [expandedTraceSessionId, setExpandedTraceSessionId] = useState<string | null>(null);
@@ -250,6 +252,9 @@ const Dashboard: React.FC<DashboardProps> = ({
                 </div>
 
                 <div className={styles.activityActions}>
+                  <button type="button" onClick={() => onOpenInterviewReport(item.id)}>
+                    Ver relatorio
+                  </button>
                   <button type="button" onClick={() => void handleToggleTrace(item.id)}>
                     {expandedTraceSessionId === item.id ? 'Ocultar trace' : 'Ver trace'}
                   </button>

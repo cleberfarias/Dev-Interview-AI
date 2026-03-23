@@ -78,6 +78,35 @@ def test_put_candidate_profile_route(monkeypatch):
         app.dependency_overrides = {}
 
 
+def test_patch_me_route(monkeypatch):
+    app.dependency_overrides[get_current_user] = _auth_user
+
+    def _fake_update_me(user, payload):
+        return {
+            "uid": user["uid"],
+            "name": payload.name,
+            "email": user["email"],
+            "avatar": None,
+            "credits": 3,
+            "interviews": [],
+        }
+
+    monkeypatch.setattr(
+        "app.api.routes_profile.profile_service.update_me",
+        _fake_update_me,
+    )
+
+    try:
+        client = TestClient(app)
+        resp = client.patch("/me", json={"name": "Cleber Silva"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["uid"] == "profile-user"
+        assert data["name"] == "Cleber Silva"
+    finally:
+        app.dependency_overrides = {}
+
+
 def test_get_candidate_profile_audit_route(monkeypatch):
     app.dependency_overrides[get_current_user] = _auth_user
     monkeypatch.setattr(

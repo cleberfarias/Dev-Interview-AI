@@ -68,10 +68,11 @@ from .report import (
     CommunicationScore,
     FinalReport,
     FinalReportRequest,
+    SessionReportResponse,
     SessionFinishRequest,
 )
 from .telemetry import ClientErrorLogRequest
-from .user import InterviewHistoryItem, UserProfile
+from .user import InterviewHistoryItem, UserProfile, UserProfileUpdateRequest
 
 __all__ = [
     "AudioChunkUploadRequest",
@@ -88,6 +89,7 @@ __all__ = [
     "PlanType",
     "InterviewHistoryItem",
     "UserProfile",
+    "UserProfileUpdateRequest",
     "InterviewConfig",
     "InterviewQuestion",
     "InterviewPlan",
@@ -104,6 +106,7 @@ __all__ = [
     "CommunicationScore",
     "FinalReport",
     "FinalReportRequest",
+    "SessionReportResponse",
     "SessionFinishRequest",
     "AnalysisTrace",
     "SpeechMetrics",

@@ -21,6 +21,7 @@ import type {
   JobAnalyzeResponse,
   LiveCoachProcessResponse,
   SessionAnalysisTraceResponse,
+  SessionReportResponse,
   AvatarResponse,
 } from "../types";
 
@@ -166,6 +167,24 @@ export const BackendApi = {
       clearCachedToken();
     }
     return apiFetch<User>("/me", { headers });
+  },
+
+  updateMeName: (name: string, token?: string | null) => {
+    const headers = new Headers();
+    const uid = auth.currentUser?.uid || null;
+    if (typeof token !== "undefined") {
+      if (token) {
+        headers.set("Authorization", `Bearer ${token}`);
+        setCachedToken(token, uid);
+      } else {
+        clearCachedToken();
+      }
+    }
+    return apiFetch<User>("/me", {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ name }),
+    });
   },
 
   getCandidateProfile: () =>
@@ -423,6 +442,7 @@ export const BackendApi = {
     transcript?: string;
     audioBase64?: string;
     mimeType?: string;
+    includeAvatar?: boolean;
   }) =>
     apiFetch<OrchestratorTurnResponse>("/interview/turn", {
       method: "POST",
@@ -464,6 +484,9 @@ export const BackendApi = {
 
   getSessionAnalysisTrace: (sessionId: string) =>
     apiFetch<SessionAnalysisTraceResponse>(`/sessions/${sessionId}/analysis-trace`),
+
+  getSessionReport: (sessionId: string) =>
+    apiFetch<SessionReportResponse>(`/sessions/${sessionId}/report`),
 
   devAddCredits: (amount = 3) =>
     apiFetch<{ credits: number }>(`/credits/dev-add?amount=${amount}`, { method: "POST" }),

@@ -10,6 +10,7 @@ from ..schemas import (
     JobAnalysisPageResponse,
     ResumeAnalysisPageResponse,
     UserProfile,
+    UserProfileUpdateRequest,
 )
 from ..services import candidate_profile_service, profile_service
 
@@ -24,6 +25,11 @@ def health():
 @router.get("/me", response_model=UserProfile)
 def me(user=Depends(get_current_user)):
     return profile_service.me(user)
+
+
+@router.patch("/me", response_model=UserProfile)
+def patch_me(payload: UserProfileUpdateRequest, user=Depends(get_current_user)):
+    return profile_service.update_me(user, payload)
 
 
 @router.get("/profile/candidate", response_model=CandidateProfile)

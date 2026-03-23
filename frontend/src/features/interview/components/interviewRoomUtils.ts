@@ -1,4 +1,11 @@
-import type { AnswerEvaluation, CommunicationAnalysis, FinalReport, InterviewConfig, InterviewPlan } from '../../../shared/types';
+import type {
+  AnswerEvaluation,
+  CommunicationAnalysis,
+  FinalReport,
+  InterviewConfig,
+  InterviewPlan,
+  SpeechMetrics,
+} from '../../../shared/types';
 import type { DifficultyLevel, InterviewQuestion } from '../../../shared/types/interview';
 
 export type UiQuestion = InterviewQuestion & {
@@ -7,11 +14,14 @@ export type UiQuestion = InterviewQuestion & {
 };
 
 export type HistoryItem = {
+  answerId?: string;
   questionId: string;
   question: string;
   section?: string;
   difficulty?: number;
-  evaluation: AnswerEvaluation;
+  evaluation?: AnswerEvaluation;
+  transcript?: string;
+  speechMetrics?: SpeechMetrics | null;
   communicationAnalysis?: CommunicationAnalysis | null;
 };
 
@@ -145,7 +155,341 @@ export const buildUiQuestions = (plan: InterviewPlan): UiQuestion[] => {
   return (plan.questions ?? []).map((question, index) => toUiQuestion(question, index, baseBullets));
 };
 
-const pickVariant = (items: string[], index: number): string => (items.length ? items[index % items.length] : '');
+export type SpokenPromptContext = {
+  track?: string;
+  seniority?: string;
+  stacks?: string[];
+  now?: Date;
+};
+
+const dayGreeting = (language: string, now: Date): string => {
+  const hour = now.getHours();
+  if (language === 'en') {
+    if (hour < 12) return 'Good morning';
+    if (hour < 18) return 'Good afternoon';
+    return 'Good evening';
+  }
+  if (language === 'es') {
+    if (hour < 12) return 'Buenos dias';
+    if (hour < 18) return 'Buenas tardes';
+    return 'Buenas noches';
+  }
+  if (hour < 12) return 'Bom dia';
+  if (hour < 18) return 'Boa tarde';
+  return 'Boa noite';
+};
+
+const joinNaturally = (items: string[], language: string): string => {
+  const values = items.map((item) => String(item || '').trim()).filter(Boolean);
+  if (!values.length) return '';
+  if (values.length === 1) return values[0];
+  const connector = language === 'en' ? 'and' : language === 'es' ? 'y' : 'e';
+  if (values.length === 2) return `${values[0]} ${connector} ${values[1]}`;
+  return `${values.slice(0, -1).join(', ')} ${connector} ${values[values.length - 1]}`;
+};
+
+const TRACK_LABELS: Record<string, Record<string, string>> = {
+  'pt-BR': {
+    frontend: 'frontend',
+    backend: 'backend',
+    fullstack: 'full stack',
+    mobile: 'mobile',
+    devops: 'DevOps',
+    data: 'dados',
+  },
+  en: {
+    frontend: 'frontend',
+    backend: 'backend',
+    fullstack: 'full stack',
+    mobile: 'mobile',
+    devops: 'DevOps',
+    data: 'data',
+  },
+  es: {
+    frontend: 'frontend',
+    backend: 'backend',
+    fullstack: 'full stack',
+    mobile: 'mobile',
+    devops: 'DevOps',
+    data: 'datos',
+  },
+};
+
+const SENIORITY_LABELS: Record<string, Record<string, string>> = {
+  'pt-BR': {
+    intern: 'estagio',
+    junior: 'junior',
+    mid: 'pleno',
+    senior: 'senior',
+    staff: 'staff',
+  },
+  en: {
+    intern: 'intern',
+    junior: 'junior',
+    mid: 'mid-level',
+    senior: 'senior',
+    staff: 'staff',
+  },
+  es: {
+    intern: 'practicas',
+    junior: 'junior',
+    mid: 'semi senior',
+    senior: 'senior',
+    staff: 'staff',
+  },
+};
+
+const describeProfileContext = (language: string, context: SpokenPromptContext): string => {
+  const langKey = TRACK_LABELS[language] ? language : 'pt-BR';
+  const track = TRACK_LABELS[langKey][String(context.track || '').trim()] || String(context.track || '').trim();
+  const seniority =
+    SENIORITY_LABELS[langKey][String(context.seniority || '').trim()] || String(context.seniority || '').trim();
+  const stacks = (context.stacks || []).map((item) => String(item || '').trim()).filter(Boolean).slice(0, 3);
+  const stackList = joinNaturally(stacks, langKey);
+
+  if (langKey === 'en') {
+    if (track && seniority && stackList) {
+      return `I saw that your focus today is ${track} at the ${seniority} level and that your main stack includes ${stackList}.`;
+    }
+    if (track && seniority) {
+      return `I saw that your focus today is ${track} at the ${seniority} level.`;
+    }
+    if (track && stackList) {
+      return `I saw that your focus today is ${track} and that your main stack includes ${stackList}.`;
+    }
+    if (track) {
+      return `I saw that your focus today is ${track}.`;
+    }
+    if (stackList) {
+      return `I saw that your main stack today includes ${stackList}.`;
+    }
+    if (seniority) {
+      return `I saw that this interview is calibrated for the ${seniority} level.`;
+    }
+    return '';
+  }
+
+  if (langKey === 'es') {
+    if (track && seniority && stackList) {
+      return `Vi que tu foco hoy es ${track} en nivel ${seniority} y que tu stack principal incluye ${stackList}.`;
+    }
+    if (track && seniority) {
+      return `Vi que tu foco hoy es ${track} en nivel ${seniority}.`;
+    }
+    if (track && stackList) {
+      return `Vi que tu foco hoy es ${track} y que tu stack principal incluye ${stackList}.`;
+    }
+    if (track) {
+      return `Vi que tu foco hoy es ${track}.`;
+    }
+    if (stackList) {
+      return `Vi que tu stack principal hoy incluye ${stackList}.`;
+    }
+    if (seniority) {
+      return `Vi que esta entrevista esta calibrada para el nivel ${seniority}.`;
+    }
+    return '';
+  }
+
+  if (track && seniority && stackList) {
+    return `Vi que seu foco hoje e ${track} no nivel ${seniority} e que sua stack principal inclui ${stackList}.`;
+  }
+  if (track && seniority) {
+    return `Vi que seu foco hoje e ${track} no nivel ${seniority}.`;
+  }
+  if (track && stackList) {
+    return `Vi que seu foco hoje e ${track} e que sua stack principal inclui ${stackList}.`;
+  }
+  if (track) {
+    return `Vi que seu foco hoje e ${track}.`;
+  }
+  if (stackList) {
+    return `Vi que sua stack principal hoje inclui ${stackList}.`;
+  }
+  if (seniority) {
+    return `Vi que esta entrevista esta calibrada para o nivel ${seniority}.`;
+  }
+  return '';
+};
+
+const OPENING_PROMPT_SCRIPTS: Record<string, Record<string, { firstBridge: string; firstClose: string }>> = {
+  'pt-BR': {
+    friendly: {
+      firstBridge: 'Podemos iniciar nossa entrevista tecnica?',
+      firstClose: 'Vamos comecar por esse contexto, tudo bem?',
+    },
+    neutral: {
+      firstBridge: 'Vamos iniciar nossa entrevista tecnica.',
+      firstClose: 'Vamos comecar.',
+    },
+    strict: {
+      firstBridge: 'Vamos iniciar a entrevista tecnica.',
+      firstClose: 'Vamos direto para a primeira pergunta.',
+    },
+  },
+  en: {
+    friendly: {
+      firstBridge: 'Can we start our technical interview?',
+      firstClose: 'Let us begin from that context, all right?',
+    },
+    neutral: {
+      firstBridge: 'Let us start our technical interview.',
+      firstClose: 'Let us begin.',
+    },
+    strict: {
+      firstBridge: 'We are starting the technical interview now.',
+      firstClose: 'Let us go to the first question.',
+    },
+  },
+  es: {
+    friendly: {
+      firstBridge: 'Podemos iniciar nuestra entrevista tecnica?',
+      firstClose: 'Vamos a empezar por ese contexto, de acuerdo?',
+    },
+    neutral: {
+      firstBridge: 'Vamos a iniciar la entrevista tecnica.',
+      firstClose: 'Vamos a empezar.',
+    },
+    strict: {
+      firstBridge: 'Iniciamos la entrevista tecnica ahora.',
+      firstClose: 'Vamos a la primera pregunta.',
+    },
+  },
+};
+
+const QUESTION_PROMPT_SCRIPTS: Record<
+  string,
+  Record<
+    string,
+    {
+      firstLeadNamed: string;
+      firstLead: string;
+      nextNamed: string;
+      next: string;
+      lastNamed: string;
+      last: string;
+    }
+  >
+> = {
+  'pt-BR': {
+    friendly: {
+      firstLeadNamed: '{name}, quero comecar com a seguinte pergunta:',
+      firstLead: 'Quero comecar com a seguinte pergunta:',
+      nextNamed: 'Perfeito, {name}. Seguindo a entrevista, aqui vai a proxima pergunta:',
+      next: 'Perfeito. Seguindo a entrevista, aqui vai a proxima pergunta:',
+      lastNamed: 'Perfeito, {name}. Estamos na ultima pergunta da entrevista:',
+      last: 'Perfeito. Estamos na ultima pergunta da entrevista:',
+    },
+    neutral: {
+      firstLeadNamed: '{name}, quero comecar com a seguinte pergunta:',
+      firstLead: 'Quero comecar com a seguinte pergunta:',
+      nextNamed: '{name}, vamos para a proxima pergunta:',
+      next: 'Vamos para a proxima pergunta:',
+      lastNamed: '{name}, vamos para a ultima pergunta da entrevista:',
+      last: 'Vamos para a ultima pergunta da entrevista:',
+    },
+    strict: {
+      firstLeadNamed: '{name}, primeira pergunta:',
+      firstLead: 'Primeira pergunta:',
+      nextNamed: '{name}, proxima pergunta:',
+      next: 'Proxima pergunta:',
+      lastNamed: '{name}, ultima pergunta:',
+      last: 'Ultima pergunta:',
+    },
+  },
+  en: {
+    friendly: {
+      firstLeadNamed: '{name}, I want to start with the following question:',
+      firstLead: 'I want to start with the following question:',
+      nextNamed: 'Perfect, {name}. Here is the next question:',
+      next: 'Perfect. Here is the next question:',
+      lastNamed: 'Perfect, {name}. We are at the final question of the interview:',
+      last: 'Perfect. We are at the final question of the interview:',
+    },
+    neutral: {
+      firstLeadNamed: '{name}, I want to start with the following question:',
+      firstLead: 'I want to start with the following question:',
+      nextNamed: '{name}, let us move to the next question:',
+      next: 'Let us move to the next question:',
+      lastNamed: '{name}, let us move to the final question of the interview:',
+      last: 'Let us move to the final question of the interview:',
+    },
+    strict: {
+      firstLeadNamed: '{name}, first question:',
+      firstLead: 'First question:',
+      nextNamed: '{name}, next question:',
+      next: 'Next question:',
+      lastNamed: '{name}, final question:',
+      last: 'Final question:',
+    },
+  },
+  es: {
+    friendly: {
+      firstLeadNamed: '{name}, quiero empezar con la siguiente pregunta:',
+      firstLead: 'Quiero empezar con la siguiente pregunta:',
+      nextNamed: 'Perfecto, {name}. Aqui va la siguiente pregunta:',
+      next: 'Perfecto. Aqui va la siguiente pregunta:',
+      lastNamed: 'Perfecto, {name}. Estamos en la ultima pregunta de la entrevista:',
+      last: 'Perfecto. Estamos en la ultima pregunta de la entrevista:',
+    },
+    neutral: {
+      firstLeadNamed: '{name}, quiero empezar con la siguiente pregunta:',
+      firstLead: 'Quiero empezar con la siguiente pregunta:',
+      nextNamed: '{name}, vamos con la siguiente pregunta:',
+      next: 'Vamos con la siguiente pregunta:',
+      lastNamed: '{name}, vamos con la ultima pregunta de la entrevista:',
+      last: 'Vamos con la ultima pregunta de la entrevista:',
+    },
+    strict: {
+      firstLeadNamed: '{name}, primera pregunta:',
+      firstLead: 'Primera pregunta:',
+      nextNamed: '{name}, siguiente pregunta:',
+      next: 'Siguiente pregunta:',
+      lastNamed: '{name}, ultima pregunta:',
+      last: 'Ultima pregunta:',
+    },
+  },
+};
+
+const CLOSING_PROMPTS: Record<string, string> = {
+  'pt-BR': 'Encerramos as perguntas. Estou consolidando seu relatorio final agora.',
+  en: 'We have finished the questions. I am consolidating your final report now.',
+  es: 'Hemos terminado las preguntas. Estoy consolidando tu informe final ahora.',
+};
+
+export const buildInterviewOpeningPrompt = (
+  style: string,
+  language: string,
+  candidateName?: string,
+  context: SpokenPromptContext = {},
+): string => {
+  const langKey = OPENING_PROMPT_SCRIPTS[language] ? language : 'pt-BR';
+  const styleKey = OPENING_PROMPT_SCRIPTS[langKey][style] ? style : 'neutral';
+  const safeCandidateName = String(candidateName || '').trim();
+  const now = context.now instanceof Date ? context.now : new Date();
+  const greeting = dayGreeting(langKey, now);
+  const profileSummary = describeProfileContext(langKey, context);
+  const introLine = safeCandidateName ? `${greeting}, ${safeCandidateName}.` : `${greeting}.`;
+  const variants = OPENING_PROMPT_SCRIPTS[langKey][styleKey];
+
+  return [introLine, variants.firstBridge, profileSummary, variants.firstClose].filter(Boolean).join(' ').trim();
+};
+
+export const buildInterviewOpeningRetryPrompt = (language: string, candidateName?: string): string => {
+  const safeCandidateName = String(candidateName || '').trim();
+  const prompts: Record<string, string> = {
+    'pt-BR': safeCandidateName
+      ? `${safeCandidateName}, nao consegui ouvir sua confirmacao. Quando estiver pronto, me responda com um sim rapido para iniciarmos.`
+      : 'Nao consegui ouvir sua confirmacao. Quando estiver pronto, me responda com um sim rapido para iniciarmos.',
+    en: safeCandidateName
+      ? `${safeCandidateName}, I could not hear your confirmation. When you are ready, give me a quick yes so we can begin.`
+      : 'I could not hear your confirmation. When you are ready, give me a quick yes so we can begin.',
+    es: safeCandidateName
+      ? `${safeCandidateName}, no pude escuchar tu confirmacion. Cuando estes listo, respondeme con un si rapido para empezar.`
+      : 'No pude escuchar tu confirmacion. Cuando estes listo, respondeme con un si rapido para empezar.',
+  };
+  return prompts[language] || prompts['pt-BR'];
+};
 
 export const buildSpokenPrompt = (
   question: string,
@@ -153,131 +497,45 @@ export const buildSpokenPrompt = (
   style: string,
   language: string,
   candidateName?: string,
+  context: SpokenPromptContext = {},
+  options: { isLastQuestion?: boolean } = {},
 ): string => {
-  const safeCandidateName = String(candidateName || '').trim();
-  const withName = (value: string) => value.replace(/\{name\}/g, safeCandidateName);
-  const script: Record<string, any> = {
-    'pt-BR': {
-      friendly: {
-        introNamed: [
-          '{name}, seja bem-vindo. Vamos comecar nossa entrevista.',
-          '{name}, vamos iniciar com a primeira pergunta.',
-        ],
-        intro: ['Oi! Vamos comecar.', 'Tudo certo? Vamos iniciar.'],
-        nextNamed: [
-          'Perfeito, {name}. Posso fazer a proxima pergunta?',
-          'Muito bom, {name}. Vamos seguir para a proxima pergunta?',
-        ],
-        next: ['Perfeito, posso fazer a proxima pergunta?', 'Certo, vamos para a proxima pergunta.'],
-        suffix: ['Pode responder com tranquilidade.', 'Use exemplos concretos se fizer sentido.'],
-      },
-      neutral: {
-        introNamed: ['{name}, vamos iniciar a entrevista.', '{name}, comecando agora.'],
-        intro: ['Vamos iniciar a entrevista.', 'Comecando agora.'],
-        nextNamed: [
-          'Perfeito, {name}. Posso seguir para a proxima pergunta?',
-          'Obrigado, {name}. Vamos para a proxima pergunta.',
-        ],
-        next: ['Perfeito, posso seguir para a proxima pergunta?', 'Proxima pergunta.'],
-        suffix: ['Fique a vontade para pensar alguns segundos.', ''],
-      },
-      strict: {
-        introNamed: ['{name}, vamos direto ao ponto.', '{name}, comecemos agora.'],
-        intro: ['Vamos direto ao ponto.', 'Comecemos sem rodeios.'],
-        nextNamed: [
-          'Certo, {name}. Posso avancar para a proxima pergunta?',
-          'Obrigado, {name}. Proxima pergunta.',
-        ],
-        next: ['Posso avancar para a proxima pergunta?', 'Proxima pergunta.'],
-        suffix: ['Seja direto, mas traga contexto.', ''],
-      },
-    },
-    en: {
-      friendly: {
-        introNamed: [
-          '{name}, welcome. Let us start the interview.',
-          '{name}, let us begin with the first question.',
-        ],
-        intro: ['Hi! Let us get started.', 'Ready? Let us begin.'],
-        nextNamed: [
-          'Perfect, {name}. May I ask the next question?',
-          'Great, {name}. Let us move to the next question.',
-        ],
-        next: ['Perfect, may I ask the next question?', 'Great, next question.'],
-        suffix: ['Take your time.', 'Use a concrete example if it helps.'],
-      },
-      neutral: {
-        introNamed: ['{name}, starting the interview now.', '{name}, let us begin.'],
-        intro: ['Starting the interview now.', 'Let us begin.'],
-        nextNamed: [
-          'Perfect, {name}. May I continue with the next question?',
-          'Thank you, {name}. Moving to the next question.',
-        ],
-        next: ['Perfect, may I continue with the next question?', 'Next question.'],
-        suffix: ['', 'Take a brief moment to think if needed.'],
-      },
-      strict: {
-        introNamed: ['{name}, let us go straight to it.', '{name}, we will begin now.'],
-        intro: ['Let us go straight to it.', 'We will begin now.'],
-        nextNamed: [
-          'All right, {name}. May I move to the next question?',
-          'Thank you, {name}. Next question.',
-        ],
-        next: ['May I move to the next question?', 'Next question.'],
-        suffix: ['Be concise, but keep it grounded in your experience.', ''],
-      },
-    },
-    es: {
-      friendly: {
-        introNamed: [
-          '{name}, bienvenido. Vamos a empezar la entrevista.',
-          '{name}, empecemos con la primera pregunta.',
-        ],
-        intro: ['Hola, vamos a empezar.', 'Todo listo? Comencemos.'],
-        nextNamed: [
-          'Perfecto, {name}. Puedo hacer la siguiente pregunta?',
-          'Muy bien, {name}. Vamos con la siguiente pregunta.',
-        ],
-        next: ['Perfecto, puedo hacer la siguiente pregunta?', 'Vamos con la siguiente pregunta.'],
-        suffix: ['Toma tu tiempo.', 'Usa un ejemplo concreto si ayuda.'],
-      },
-      neutral: {
-        introNamed: ['{name}, iniciamos la entrevista.', '{name}, empecemos ahora.'],
-        intro: ['Iniciamos la entrevista.', 'Empecemos ahora.'],
-        nextNamed: [
-          'Perfecto, {name}. Puedo seguir con la siguiente pregunta?',
-          'Gracias, {name}. Seguimos con la siguiente pregunta.',
-        ],
-        next: ['Perfecto, puedo seguir con la siguiente pregunta?', 'Siguiente pregunta.'],
-        suffix: ['', 'Puedes pensar unos segundos si hace falta.'],
-      },
-      strict: {
-        introNamed: ['{name}, vamos directo al punto.', '{name}, comencemos sin rodeos.'],
-        intro: ['Vamos directo al punto.', 'Comencemos sin rodeos.'],
-        nextNamed: [
-          'Bien, {name}. Puedo avanzar a la siguiente pregunta?',
-          'Gracias, {name}. Siguiente pregunta.',
-        ],
-        next: ['Puedo avanzar a la siguiente pregunta?', 'Siguiente pregunta.'],
-        suffix: ['Se conciso, pero con contexto real.', ''],
-      },
-    },
-  };
+  const safeQuestion = String(question || '').trim();
+  if (!safeQuestion) return '';
 
-  const langKey = script[language] ? language : 'pt-BR';
-  const styleKey = script[langKey][style] ? style : 'neutral';
-  const variants = script[langKey][styleKey];
-  const intro = safeCandidateName && Array.isArray(variants.introNamed)
-    ? withName(pickVariant(variants.introNamed, index))
-    : pickVariant(variants.intro, index);
-  const next = safeCandidateName && Array.isArray(variants.nextNamed)
-    ? withName(pickVariant(variants.nextNamed, index))
-    : pickVariant(variants.next, index);
-  const suffix = pickVariant(variants.suffix, index);
-  const opener = index === 0 ? intro : next;
-  const spacer = opener ? `${opener} ` : '';
-  const tail = suffix ? ` ${suffix}` : '';
-  return `${spacer}${question}${tail}`.trim();
+  const langKey = QUESTION_PROMPT_SCRIPTS[language] ? language : 'pt-BR';
+  const safeCandidateName = String(candidateName || '').trim();
+  const styleKey = QUESTION_PROMPT_SCRIPTS[langKey][style] ? style : 'neutral';
+  const variants = QUESTION_PROMPT_SCRIPTS[langKey][styleKey];
+  const withName = (value: string) => value.replace(/\{name\}/g, safeCandidateName);
+
+  if (index === 0) {
+    const opening = buildInterviewOpeningPrompt(styleKey, langKey, safeCandidateName, context);
+    const lead = safeCandidateName ? withName(variants.firstLeadNamed) : variants.firstLead;
+    return [opening, lead, safeQuestion].filter(Boolean).join(' ').trim();
+  }
+
+  const nextLead = options.isLastQuestion
+    ? safeCandidateName
+      ? withName(variants.lastNamed)
+      : variants.last
+    : safeCandidateName
+      ? withName(variants.nextNamed)
+      : variants.next;
+  return [nextLead, safeQuestion].filter(Boolean).join(' ').trim();
+};
+
+export const buildInterviewClosingPrompt = (language: string, candidateName?: string): string => {
+  const langKey = CLOSING_PROMPTS[language] ? language : 'pt-BR';
+  const safeCandidateName = String(candidateName || '').trim();
+  if (!safeCandidateName) return CLOSING_PROMPTS[langKey];
+  if (langKey === 'en') {
+    return `${safeCandidateName}, we have finished the questions. I am consolidating your final report now.`;
+  }
+  if (langKey === 'es') {
+    return `${safeCandidateName}, hemos terminado las preguntas. Estoy consolidando tu informe final ahora.`;
+  }
+  return `${safeCandidateName}, encerramos as perguntas. Estou consolidando seu relatorio final agora.`;
 };
 
 export const buildNoResponsePrompt = (language: string): string => {

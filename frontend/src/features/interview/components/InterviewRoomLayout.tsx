@@ -20,7 +20,6 @@ import { AvatarInterview } from '../../avatar';
 import { FIXED_INTERVIEW_DURATION_MINUTES, FIXED_INTERVIEW_QUESTION_COUNT, I18N } from '../../../shared/constants';
 import { BackendApi } from '../../../shared/services/backendApi';
 import type {
-  AnswerEvaluation,
   AvatarResponse,
   CommunicationAnalysis,
   FinalReport,
@@ -35,12 +34,14 @@ import type {
 import {
   blobToBase64,
   buildFallbackReport,
+  buildInterviewClosingPrompt,
+  buildInterviewOpeningPrompt,
+  buildInterviewOpeningRetryPrompt,
   buildNoResponsePrompt,
   buildSpokenPrompt,
   buildUiQuestions,
   deriveContextLabel,
   getLocalFallbackPrompt,
-  normalizeQuestionPrompt,
   toUiQuestion,
   type HistoryItem,
   type UiQuestion,
@@ -52,6 +53,7 @@ type InterviewFlowState =
   | 'awaiting_answer'
   | 'recording'
   | 'evaluating'
+  | 'finalizing'
   | 'no_response'
   | 'next_question'
   | 'finished';
@@ -65,13 +67,16 @@ const VIDEO_MEDIA_CONSTRAINTS: MediaStreamConstraints = { video: true, audio: fa
 const NO_RESPONSE_MS = 5000;
 const SILENCE_STOP_MS = 1500;
 const SILENCE_THRESHOLD = 0.02;
+const NEXT_QUESTION_TRANSITION_MS = 150;
 const AUTO_MODE = true;
 const MAX_RECORDING_MS = 90000;
 const LIVE_COACH_CHUNK_TIMESLICE_MS = 3000;
 const LIVE_COACH_CHUNK_INTERVAL_MS = 8000;
 const LIVE_COACH_WS_RESPONSE_TIMEOUT_MS = 7000;
+const PENDING_ANSWER_INSIGHT_TIMEOUT_MS = 7000;
 const LONG_PAUSE_MS = 1200;
 const PARTIAL_FEEDBACK_ENABLED = true;
+const DEFER_ANSWER_REVIEW_TO_FINAL = true;
 
 const getPreferredCandidateName = (name?: string): string => {
   const raw = String(name || '').trim();
@@ -87,6 +92,17 @@ const appendPartialTranscript = (currentValue: string, nextValue?: string | null
   if (current === incoming || current.endsWith(incoming)) return current;
   if (incoming.startsWith(current)) return incoming;
   return `${current} ${incoming}`.replace(/\s+/g, ' ').trim();
+};
+
+const hasOpeningAcknowledgement = (input: {
+  transcript: string;
+  audioSize: number;
+  localSpeechDetected: boolean;
+  speechMetrics?: SpeechMetrics | null;
+}): boolean => {
+  if (String(input.transcript || '').trim().length > 0) return true;
+  if (input.localSpeechDetected) return true;
+  return (input.speechMetrics?.totalDurationMs || 0) >= 600 && input.audioSize >= 4000;
 };
 
 interface InterviewRoomLayoutProps {
@@ -117,6 +133,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
   onBack,
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [introPending, setIntroPending] = useState(true);
   const [flowState, setFlowState] = useState<InterviewFlowState>('idle');
   const [conversationState, setConversationState] = useState<ConversationState>('idle');
   const [answerMode, setAnswerMode] = useState<AnswerMode>('audio');
@@ -151,6 +168,9 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
   const liveCoachChunkInFlightRef = useRef(false);
   const lastLiveCoachChunkAtRef = useRef(0);
   const liveCoachChunkIndexRef = useRef(0);
+  const avatarRequestByQuestionIdRef = useRef(new Map<string, Promise<AvatarResponse | null>>());
+  const avatarCacheRef = useRef<Record<string, AvatarResponse>>({});
+  const pendingAnswerInsightsRef = useRef(new Map<string, Promise<void>>());
   const liveCoachChunkHandlerRef = useRef<(chunk: Blob) => Promise<void>>(() => Promise.resolve());
   const liveCoachWsRef = useRef<WebSocket | null>(null);
   const liveCoachWsConnectRef = useRef<Promise<WebSocket | null> | null>(null);
@@ -210,22 +230,20 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     const source = filtered.length ? filtered : all;
     return source.slice(0, FIXED_INTERVIEW_QUESTION_COUNT);
   }, [plan, selectedLevel]);
-  const initialAvatarByQuestionId = useMemo<Record<string, AvatarResponse>>(() => {
-    const firstQuestion = baseQuestions[0];
-    if (!initialAvatar || !firstQuestion?.id) return {};
-    return { [firstQuestion.id]: initialAvatar };
-  }, [baseQuestions, initialAvatar]);
+  const initialAvatarByQuestionId = useMemo<Record<string, AvatarResponse>>(() => ({}), []);
   const [questions, setQuestions] = useState<UiQuestion[]>(() => baseQuestions);
   const sanitizedConfig = useMemo(() => {
     const { difficultyLevel, ...rest } = config;
     return rest;
   }, [config]);
   const currentQuestion = questions[currentIndex] ?? questions[0];
+  const isOpeningStep = introPending && currentIndex === 0;
+  const audioQuestionId = isOpeningStep ? 'intro' : currentQuestion?.id;
   const audioCapture = useAudioCapture({
     autoRequest: true,
     answerId: activeAnswerId || undefined,
     sessionId,
-    questionId: currentQuestion?.id,
+    questionId: audioQuestionId,
     userId: user.uid,
     chunkTimesliceMs: LIVE_COACH_CHUNK_TIMESLICE_MS,
     onChunkCaptured: async (chunk) => {
@@ -240,8 +258,8 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
   }, [isRecorderActive]);
 
   const contextLabel = useMemo(
-    () => deriveContextLabel(currentQuestion, config.stacks),
-    [currentQuestion, config.stacks],
+    () => (isOpeningStep ? 'Abertura da entrevista' : deriveContextLabel(currentQuestion, config.stacks)),
+    [config.stacks, currentQuestion, isOpeningStep],
   );
   const fallbackMaxQuestions = FIXED_INTERVIEW_QUESTION_COUNT;
   const totalSeconds = useMemo(
@@ -251,12 +269,13 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
   const t = I18N[config.uiLanguage];
 
   const stageLabel = useMemo(() => {
+    if (isOpeningStep) return t.introLabel ?? 'INTRODUCAO';
     const total = fallbackMaxQuestions;
     if (!total) return t.introLabel ?? 'INTRODUCAO';
     const current = Math.min(currentIndex + 1, total);
     const template = t.stepLabel ?? 'Stage {current} of {total}';
     return template.replace('{current}', String(current)).replace('{total}', String(total));
-  }, [currentIndex, fallbackMaxQuestions, t.introLabel, t.stepLabel]);
+  }, [currentIndex, fallbackMaxQuestions, isOpeningStep, t.introLabel, t.stepLabel]);
 
   const chipLabel = useMemo(() => {
     if (!questions.length) return t.introLabel ?? 'INTRODUCAO';
@@ -270,6 +289,10 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     const seconds = clamped % 60;
     return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   }, [remainingSeconds]);
+  const questionCardTitle = isOpeningStep ? 'Apresentacao inicial' : currentQuestion?.title ?? 'Carregando pergunta...';
+  const questionCardBullets = isOpeningStep
+    ? ['Responda algo breve, como "sim, podemos comecar", para iniciar a entrevista.']
+    : currentQuestion?.bullets ?? [];
   const isMediaReady = mediaStatus === 'ready' && audioCapture.isMicrophoneReady;
 
   const showRuntimeNotice = useCallback((message: string) => {
@@ -277,9 +300,9 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
   }, []);
 
   const buildAnswerId = useCallback(() => {
-    const questionToken = currentQuestion?.id || `q${currentIndex + 1}`;
+    const questionToken = audioQuestionId || `q${currentIndex + 1}`;
     return [sessionId || 'session', questionToken, Date.now().toString(36)].join('__');
-  }, [currentIndex, currentQuestion?.id, sessionId]);
+  }, [audioQuestionId, currentIndex, sessionId]);
 
   const resetCurrentAnswerAnalysis = useCallback((nextAnswerId?: string | null) => {
     setActiveAnswerId(nextAnswerId || null);
@@ -353,6 +376,44 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
       };
       return [next, ...prev].slice(0, 6);
     });
+  }, []);
+
+  const updateHistoryItemByAnswerId = useCallback((answerId: string, patch: Partial<HistoryItem>) => {
+    if (!answerId) return;
+    historyRef.current = historyRef.current.map((item) =>
+      item.answerId === answerId
+        ? {
+            ...item,
+            ...patch,
+          }
+        : item,
+    );
+  }, []);
+
+  const registerPendingAnswerInsight = useCallback((answerId: string, promise: Promise<void>) => {
+    if (!answerId) return;
+    pendingAnswerInsightsRef.current.set(answerId, promise);
+    void promise.finally(() => {
+      if (pendingAnswerInsightsRef.current.get(answerId) === promise) {
+        pendingAnswerInsightsRef.current.delete(answerId);
+      }
+    });
+  }, []);
+
+  const waitForPendingAnswerInsights = useCallback(async () => {
+    const pending = Array.from(pendingAnswerInsightsRef.current.values());
+    if (!pending.length) return;
+
+    await Promise.allSettled(
+      pending.map((task) =>
+        Promise.race([
+          task,
+          new Promise<void>((resolve) => {
+            window.setTimeout(resolve, PENDING_ANSWER_INSIGHT_TIMEOUT_MS);
+          }),
+        ]),
+      ),
+    );
   }, []);
 
   const clearLiveCoachWsPending = useCallback((reason: string) => {
@@ -511,6 +572,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
       options: { background?: boolean; silent?: boolean } = {},
     ) => {
       if (!isCandidateCoachingMode) return null;
+      if (isOpeningStep) return null;
       if (!currentQuestion?.title) return;
       const background = Boolean(options.background);
       const silent = Boolean(options.silent);
@@ -636,14 +698,88 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
       flowState,
       interviewMode,
       isCandidateCoachingMode,
+      isOpeningStep,
       requestLiveCoachViaWebSocket,
       sessionId,
     ],
   );
 
+  const queueDeferredAnswerInsight = useCallback(
+    (input: {
+      answerId: string;
+      questionText: string;
+      historySnapshot: HistoryItem[];
+      transcript?: string;
+      speechMetrics?: SpeechMetrics | null;
+      audioBlob?: Blob | null;
+      mimeType?: string;
+    }) => {
+      if (!DEFER_ANSWER_REVIEW_TO_FINAL) return;
+
+      const answerId = String(input.answerId || '').trim();
+      const fallbackTranscript = String(input.transcript || '').trim();
+      const hasAudio = Boolean(input.audioBlob && input.audioBlob.size > 0);
+      if (!answerId || (!hasAudio && !fallbackTranscript)) return;
+
+      const recentHistory = input.historySnapshot.slice(-3).map((item) => ({
+        question: item.question,
+        section: item.section,
+        scores: item.evaluation?.criteriaScores || item.evaluation?.scores || {},
+        improvements: (item.evaluation?.improvements || []).slice(0, 2),
+      }));
+
+      const task = (async () => {
+        const audioBase64 = hasAudio && input.audioBlob ? await blobToBase64(input.audioBlob) : '';
+        const response = await BackendApi.liveCoachProcess({
+          audioBase64,
+          mimeType: input.mimeType || input.audioBlob?.type || 'audio/webm',
+          context: {
+            source: 'interview-room',
+            mode: interviewMode,
+            answerId,
+            partialFeedbackEnabled: false,
+            partialFeedbackDelivered: true,
+            speechMetrics: input.speechMetrics || undefined,
+            sessionId: sessionId || undefined,
+            questionText: input.questionText,
+            transcript: fallbackTranscript || undefined,
+            candidateProfile: {
+              targetRole: config.track,
+              primarySkills: config.stacks || [],
+              weakSkills: [],
+            },
+            jobDescription: config.jobDescription || undefined,
+            interviewHistory: recentHistory,
+            recentLiveCoachTips: [],
+          },
+        });
+
+        updateHistoryItemByAnswerId(answerId, {
+          transcript: appendPartialTranscript(fallbackTranscript, response.transcript),
+          speechMetrics: response.speechMetrics || input.speechMetrics || null,
+        });
+      })().catch((error) => {
+        console.warn('Deferred answer insight failed', error);
+      });
+
+      registerPendingAnswerInsight(answerId, task);
+    },
+    [
+      config.jobDescription,
+      config.stacks,
+      config.track,
+      interviewMode,
+      registerPendingAnswerInsight,
+      sessionId,
+      updateHistoryItemByAnswerId,
+    ],
+  );
+
   const handleLiveCoachChunk = useCallback(
     async (chunk: Blob) => {
+      if (DEFER_ANSWER_REVIEW_TO_FINAL) return;
       if (flowState !== 'recording' || answerMode !== 'audio') return;
+      if (isOpeningStep) return;
       if (!currentQuestion?.title) return;
       if (chunk.size < 2048) return;
       if (liveCoachChunkInFlightRef.current) return;
@@ -681,7 +817,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
         liveCoachChunkInFlightRef.current = false;
       }
     },
-    [activeAnswerId, answerMode, computeSpeechMetrics, currentQuestion?.title, flowState, requestLiveCoachInsight],
+    [activeAnswerId, answerMode, computeSpeechMetrics, currentQuestion?.title, flowState, isOpeningStep, requestLiveCoachInsight],
   );
 
   const stopTTS = useCallback(() => {
@@ -698,28 +834,64 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
       if (!payload.audioBase64) return;
 
       stopTTS();
+      audioEl.preload = 'auto';
+      audioEl.muted = false;
+      audioEl.volume = 1;
       audioEl.src = `data:${payload.mimeType};base64,${payload.audioBase64}`;
-
-      const playPromise = audioEl.play();
-      if (playPromise) {
-        await playPromise;
-      }
+      audioEl.load();
 
       await new Promise<void>((resolve, reject) => {
-        const handleEnd = () => {
-          audioEl.removeEventListener('ended', handleEnd);
-          audioEl.removeEventListener('error', handleError);
+        const handleReady = () => {
+          cleanup();
           resolve();
         };
 
         const handleError = () => {
+          cleanup();
+          reject(new Error('Falha ao carregar o audio.'));
+        };
+
+        const cleanup = () => {
+          audioEl.removeEventListener('loadeddata', handleReady);
+          audioEl.removeEventListener('canplay', handleReady);
+          audioEl.removeEventListener('canplaythrough', handleReady);
+          audioEl.removeEventListener('error', handleError);
+        };
+
+        if (audioEl.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+          resolve();
+          return;
+        }
+
+        audioEl.addEventListener('loadeddata', handleReady);
+        audioEl.addEventListener('canplay', handleReady);
+        audioEl.addEventListener('canplaythrough', handleReady);
+        audioEl.addEventListener('error', handleError);
+      });
+
+      await new Promise<void>((resolve, reject) => {
+        const cleanup = () => {
           audioEl.removeEventListener('ended', handleEnd);
           audioEl.removeEventListener('error', handleError);
+        };
+
+        const handleEnd = () => {
+          cleanup();
+          resolve();
+        };
+
+        const handleError = () => {
+          cleanup();
           reject(new Error('Falha ao tocar o audio.'));
         };
 
         audioEl.addEventListener('ended', handleEnd);
         audioEl.addEventListener('error', handleError);
+
+        audioEl.play().catch((error) => {
+          cleanup();
+          reject(error);
+        });
       });
     },
     [audioEl, stopTTS],
@@ -744,23 +916,88 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
 
   const resolveAvatarForQuestion = useCallback(
     async (questionId: string, prompt: string): Promise<AvatarResponse | null> => {
-      const cached = avatarByQuestionId[questionId];
+      const cached = avatarCacheRef.current[questionId];
       if (cached) return cached;
-      try {
-        const avatar = await BackendApi.avatarRespond({
-          text: prompt,
-          language: config.interviewLanguage,
-          sessionId,
+      const inflight = avatarRequestByQuestionIdRef.current.get(questionId);
+      if (inflight) return inflight;
+      const request = BackendApi.avatarRespond({
+        text: prompt,
+        language: config.interviewLanguage,
+        sessionId,
+      })
+        .then((avatar) => {
+          avatarCacheRef.current = { ...avatarCacheRef.current, [questionId]: avatar };
+          setAvatarByQuestionId((prev) => ({ ...prev, [questionId]: avatar }));
+          return avatar;
+        })
+        .catch((error) => {
+          console.warn('Avatar respond fallback to regular TTS', error);
+          return null;
+        })
+        .finally(() => {
+          avatarRequestByQuestionIdRef.current.delete(questionId);
         });
-        setAvatarByQuestionId((prev) => ({ ...prev, [questionId]: avatar }));
-        return avatar;
-      } catch (error) {
-        console.warn('Avatar respond fallback to regular TTS', error);
-        return null;
-      }
+      avatarRequestByQuestionIdRef.current.set(questionId, request);
+      return request;
     },
-    [avatarByQuestionId, config.interviewLanguage, sessionId],
+    [config.interviewLanguage, sessionId],
   );
+
+  const beginInterviewAfterOpening = useCallback(() => {
+    resetCurrentAnswerAnalysis(null);
+    setTextAnswer('');
+    setPartialFeedback(null);
+    setPartialTranscript('');
+    partialTranscriptRef.current = '';
+    partialFeedbackShownRef.current = false;
+    currentSpeechMetricsRef.current = null;
+    currentCommunicationAnalysisRef.current = null;
+    answerMetricsRef.current = null;
+    setLiveCoachInsight(null);
+    setLiveCoachError(null);
+    setLiveCoachLoading(false);
+    setFlowState('idle');
+    setConversationState('processing');
+    setIntroPending(false);
+  }, [resetCurrentAnswerAnalysis]);
+
+  const askInterviewOpening = useCallback(async () => {
+    setFlowState('asking');
+    setConversationState('ai_speaking');
+    const prompt = buildInterviewOpeningPrompt(config.style, config.interviewLanguage, candidateFirstName, {
+      track: config.track,
+      seniority: config.seniority,
+      stacks: config.stacks,
+    });
+    const avatarPayload = await resolveAvatarForQuestion('__opening__', prompt);
+    if (avatarPayload) {
+      setCurrentAvatar(avatarPayload);
+    }
+
+    if (avatarPayload?.audio) {
+      try {
+        await playAudioPayload({ audioBase64: avatarPayload.audio, mimeType: avatarPayload.mimeType });
+      } catch (error) {
+        console.warn('Opening avatar playback failed, using fallback TTS', error);
+        await speakQuestion(prompt);
+      }
+    } else {
+      await speakQuestion(prompt);
+    }
+
+    setFlowState('awaiting_answer');
+    setConversationState('listening');
+  }, [
+    candidateFirstName,
+    config.interviewLanguage,
+    config.seniority,
+    config.stacks,
+    config.style,
+    config.track,
+    playAudioPayload,
+    resolveAvatarForQuestion,
+    speakQuestion,
+  ]);
 
   const clearNoResponseTimer = useCallback(() => {
     if (noResponseTimerRef.current) {
@@ -884,14 +1121,26 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     async (history: HistoryItem[]) => {
       if (finishingRef.current) return;
       finishingRef.current = true;
-      setFlowState('finished');
-      setConversationState('idle');
+      setFlowState('finalizing');
+      setConversationState('processing');
       clearNoResponseTimer();
       clearRecordingFailsafeTimer();
       stopVoiceMonitor();
       stopTTS();
       try {
-        const finalized = await BackendApi.orchestratorFinalize({ config: sanitizedConfig, sessionId, history });
+        showRuntimeNotice(t.generatingReport || 'Finalizando seu relatorio...');
+        if (history.length > 0) {
+          try {
+            await speakQuestion(buildInterviewClosingPrompt(config.interviewLanguage, candidateFirstName));
+          } catch {}
+        }
+        await waitForPendingAnswerInsights();
+        const finalizedHistory = historyRef.current.length >= history.length ? historyRef.current : history;
+        const finalized = await BackendApi.orchestratorFinalize({
+          config: sanitizedConfig,
+          sessionId,
+          history: finalizedHistory,
+        });
         const weeklyPlan = Array.isArray(finalized.studyPlan?.weeklyPlan)
           ? finalized.studyPlan.weeklyPlan
               .map((item, index) => {
@@ -909,16 +1158,35 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
             ? { ...finalized.report, plan7Days: weeklyPlan }
             : finalized.report;
 
+        setFlowState('finished');
+        setConversationState('idle');
         onFinish?.(report);
       } catch (error) {
         console.warn('Falha ao gerar report', error);
+        setFlowState('finished');
+        setConversationState('idle');
         showRuntimeNotice('Falha no servidor ao gerar relatorio. Exibindo versao local.');
-        onFinish?.(buildFallbackReport(history, config, plan));
+        const fallbackHistory = historyRef.current.length >= history.length ? historyRef.current : history;
+        onFinish?.(buildFallbackReport(fallbackHistory, config, plan));
       } finally {
         finishingRef.current = false;
       }
     },
-    [clearNoResponseTimer, clearRecordingFailsafeTimer, config, onFinish, plan, sanitizedConfig, sessionId, showRuntimeNotice, stopTTS],
+    [
+      clearNoResponseTimer,
+      clearRecordingFailsafeTimer,
+      config,
+      candidateFirstName,
+      onFinish,
+      plan,
+      sanitizedConfig,
+      sessionId,
+      showRuntimeNotice,
+      speakQuestion,
+      stopTTS,
+      t.generatingReport,
+      waitForPendingAnswerInsights,
+    ],
   );
 
   const handleFinish = useCallback(async () => {
@@ -949,15 +1217,25 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
         config.style,
         config.interviewLanguage,
         candidateFirstName,
+        {
+          track: config.track,
+          seniority: config.seniority,
+          stacks: config.stacks,
+        },
+        {
+          isLastQuestion: currentIndex === fallbackMaxQuestions - 1,
+        },
       );
-      const avatarPayload = await resolveAvatarForQuestion(currentQuestion.id, prompt);
-      if (avatarPayload) {
-        setCurrentAvatar(avatarPayload);
+      const cachedAvatar = avatarCacheRef.current[currentQuestion.id];
+      const avatarPayload = cachedAvatar || await resolveAvatarForQuestion(currentQuestion.id, prompt);
+      const playableAvatar = avatarPayload || (currentIndex === 0 ? initialAvatar || null : null);
+      if (playableAvatar) {
+        setCurrentAvatar(playableAvatar);
       }
 
-      if (avatarPayload?.audio) {
+      if (playableAvatar?.audio) {
         try {
-          await playAudioPayload({ audioBase64: avatarPayload.audio, mimeType: avatarPayload.mimeType });
+          await playAudioPayload({ audioBase64: playableAvatar.audio, mimeType: playableAvatar.mimeType });
         } catch (error) {
           console.warn('Avatar audio playback failed, using fallback TTS', error);
           await speakQuestion(prompt);
@@ -971,10 +1249,15 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     [
       audioEl,
       config.interviewLanguage,
+      config.seniority,
+      config.stacks,
       config.style,
+      config.track,
       candidateFirstName,
       currentIndex,
       currentQuestion,
+      fallbackMaxQuestions,
+      initialAvatar,
       playAudioPayload,
       resolveAvatarForQuestion,
       speakQuestion,
@@ -991,6 +1274,16 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
         await audioCapture.stop();
       } catch {}
     }
+    if (isOpeningStep) {
+      setFlowState('asking');
+      setConversationState('ai_speaking');
+      try {
+        await speakQuestion(buildInterviewOpeningRetryPrompt(config.interviewLanguage, candidateFirstName));
+      } catch {}
+      setFlowState('awaiting_answer');
+      setConversationState('listening');
+      return;
+    }
     setFlowState('no_response');
     setConversationState('ai_speaking');
     try {
@@ -1001,7 +1294,9 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     audioCapture,
     clearNoResponseTimer,
     clearRecordingFailsafeTimer,
+    candidateFirstName,
     config.interviewLanguage,
+    isOpeningStep,
     resetCurrentAnswerAnalysis,
     speakQuestion,
     stopVoiceMonitor,
@@ -1049,160 +1344,92 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     startVoiceMonitor,
   ]);
 
-  const continueWithTurnResult = useCallback(
-    async (turnResult: {
-      evaluation: AnswerEvaluation;
-      nextQuestion: {
-        shouldFinish: boolean;
-        question?: { id?: string; section?: string; difficulty?: number; prompt?: string };
-      };
-      coach?: { tips?: string[] };
-      avatar?: AvatarResponse | null;
-      communicationAnalysis?: CommunicationAnalysis | null;
-    }) => {
-      const response = turnResult.evaluation;
-      const communicationAnalysis = turnResult.communicationAnalysis || currentCommunicationAnalysisRef.current || null;
-      const nextHistory = [
-        ...historyRef.current,
-        {
-          questionId: currentQuestion.id,
-          question: currentQuestion.title,
-          section: currentQuestion.section,
-          difficulty: currentQuestion.sourceDifficulty,
-          evaluation: response,
-          communicationAnalysis,
-        },
-      ];
+  const continueLocallyAfterAnswer = useCallback(
+    async (
+      historyItem: HistoryItem,
+      options?: {
+        onHistoryCommitted?: (nextHistory: HistoryItem[]) => void;
+      },
+    ) => {
+      const nextHistory = [...historyRef.current, historyItem];
       historyRef.current = nextHistory;
+      options?.onHistoryCommitted?.(nextHistory);
 
       const nextIndex = currentIndex + 1;
-      const hasPlannedNext = Boolean(questions[nextIndex]);
-      if (remainingSeconds <= 0 || timeLimitReached) {
+      if (remainingSeconds <= 0 || timeLimitReached || nextIndex >= fallbackMaxQuestions) {
+        resetCurrentAnswerAnalysis(null);
         await finalizeInterview(nextHistory);
         return;
       }
 
-      try {
-        const nextRes = turnResult.nextQuestion;
-
-        if (nextRes.shouldFinish || !nextRes.question) {
-          await finalizeInterview(nextHistory);
-          return;
-        }
-
+      let nextQuestion = questions[nextIndex];
+      if (!nextQuestion) {
         const fallbackPrompt = getLocalFallbackPrompt(config.track, config.interviewLanguage, nextIndex);
-        const nextPrompt = String(nextRes.question.prompt || fallbackPrompt || '').trim();
-        if (!nextPrompt) {
+        if (!fallbackPrompt) {
+          resetCurrentAnswerAnalysis(null);
           await finalizeInterview(nextHistory);
           return;
         }
 
-        let mapped = toUiQuestion(
+        nextQuestion = toUiQuestion(
           {
-            ...nextRes.question,
-            prompt: nextPrompt,
+            id: `local-q${nextIndex + 1}`,
+            prompt: fallbackPrompt,
+            section: currentQuestion.section || 'technical',
+            difficulty: currentQuestion.sourceDifficulty || 3,
           },
           nextIndex,
           baseBullets,
         );
-        const repeatedPrompt =
-          normalizeQuestionPrompt(mapped.title) === normalizeQuestionPrompt(currentQuestion.title);
-        if (repeatedPrompt) {
-          if (
-            fallbackPrompt &&
-            normalizeQuestionPrompt(fallbackPrompt) !== normalizeQuestionPrompt(currentQuestion.title)
-          ) {
-            mapped = toUiQuestion(
-              {
-                id: `fallback-q${nextIndex + 1}`,
-                prompt: fallbackPrompt,
-                section: nextRes.question.section || currentQuestion.section || 'technical',
-                difficulty: nextRes.question.difficulty || currentQuestion.sourceDifficulty || 3,
-              },
-              nextIndex,
-              baseBullets,
-            );
-          } else {
-            mapped = {
-              ...mapped,
-              id: `${mapped.id || `q${nextIndex + 1}`}-next-${nextIndex + 1}`,
-            };
-          }
-        } else if (questions.some((question, index) => index !== nextIndex && question.id === mapped.id)) {
-          mapped = {
-            ...mapped,
-            id: `${mapped.id || `q${nextIndex + 1}`}-${nextIndex + 1}`,
-          };
-        }
-        if (turnResult.avatar) {
-          setAvatarByQuestionId((prev) => ({ ...prev, [mapped.id]: turnResult.avatar as AvatarResponse }));
-        }
+
         setQuestions((prev) => {
           const next = [...prev];
           if (next[nextIndex]) {
-            next[nextIndex] = mapped;
+            next[nextIndex] = nextQuestion;
           } else {
-            next.push(mapped);
+            next.push(nextQuestion);
           }
           return next;
         });
-
-        setFlowState('next_question');
-        setConversationState('processing');
-      } catch (error) {
-        console.warn(error);
-        if (hasPlannedNext) {
-          setFlowState('next_question');
-          setConversationState('processing');
-        } else {
-          showRuntimeNotice('Conexao instavel. Tentando manter a entrevista ativa.');
-          const shouldFallbackLocally = nextIndex < fallbackMaxQuestions;
-          if (shouldFallbackLocally) {
-            const prompt = getLocalFallbackPrompt(config.track, config.interviewLanguage, nextIndex);
-            if (prompt) {
-              const localQuestion = toUiQuestion(
-                {
-                  id: `local-q${nextIndex + 1}`,
-                  prompt,
-                  section: currentQuestion.section || 'technical',
-                  difficulty: currentQuestion.sourceDifficulty || 3,
-                },
-                nextIndex,
-                baseBullets,
-              );
-              setQuestions((prev) => {
-                const next = [...prev];
-                if (next[nextIndex]) {
-                  next[nextIndex] = localQuestion;
-                } else {
-                  next.push(localQuestion);
-                }
-                return next;
-              });
-              setFlowState('next_question');
-              setConversationState('processing');
-              return;
-            }
-          }
-          await finalizeInterview(nextHistory);
-        }
       }
+
+      resetCurrentAnswerAnalysis(null);
+      setFlowState('next_question');
+      setConversationState('processing');
+      const nextSpokenPrompt = buildSpokenPrompt(
+        nextQuestion.title,
+        nextIndex,
+        config.style,
+        config.interviewLanguage,
+        candidateFirstName,
+        {
+          track: config.track,
+          seniority: config.seniority,
+          stacks: config.stacks,
+        },
+        {
+          isLastQuestion: nextIndex === fallbackMaxQuestions - 1,
+        },
+      );
+      void resolveAvatarForQuestion(nextQuestion.id, nextSpokenPrompt);
     },
     [
       baseBullets,
+      candidateFirstName,
       config.interviewLanguage,
+      config.seniority,
+      config.stacks,
+      config.style,
       config.track,
       currentIndex,
-      currentQuestion.id,
       currentQuestion.section,
       currentQuestion.sourceDifficulty,
-      currentQuestion.title,
       fallbackMaxQuestions,
       finalizeInterview,
       questions,
       remainingSeconds,
-      setAvatarByQuestionId,
-      showRuntimeNotice,
+      resetCurrentAnswerAnalysis,
+      resolveAvatarForQuestion,
       timeLimitReached,
     ],
   );
@@ -1219,12 +1446,34 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
       setConversationState('processing');
       try {
         const blob = await audioCapture.stop();
-        const base64Audio = await blobToBase64(blob);
         const transcript = partialTranscriptRef.current;
         const speechMetrics = computeSpeechMetrics(
           transcript,
           answerMetricsRef.current ? Date.now() - answerMetricsRef.current.startedAtMs : undefined,
         );
+        if (isOpeningStep) {
+          if (
+            !hasOpeningAcknowledgement({
+              transcript,
+              audioSize: blob.size,
+              localSpeechDetected: hasSpokenRef.current,
+              speechMetrics,
+            })
+          ) {
+            resetCurrentAnswerAnalysis(null);
+            setFlowState('asking');
+            setConversationState('ai_speaking');
+            try {
+              await speakQuestion(buildInterviewOpeningRetryPrompt(config.interviewLanguage, candidateFirstName));
+            } catch {}
+            setFlowState('awaiting_answer');
+            setConversationState('listening');
+            return;
+          }
+
+          beginInterviewAfterOpening();
+          return;
+        }
         if (
           !shouldAttemptAudioEvaluation({
             transcript,
@@ -1242,28 +1491,29 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
           setConversationState('listening');
           return;
         }
-        void requestLiveCoachInsight({
-          audioBase64: base64Audio,
-          answerId: activeAnswerId || undefined,
-          mimeType: blob.type || 'audio/webm',
+        const answerId = activeAnswerId || buildAnswerId();
+        const historyItem: HistoryItem = {
+          answerId,
+          questionId: currentQuestion.id,
+          question: currentQuestion.title,
+          section: currentQuestion.section,
+          difficulty: currentQuestion.sourceDifficulty,
           transcript,
           speechMetrics,
+        };
+        await continueLocallyAfterAnswer(historyItem, {
+          onHistoryCommitted: (nextHistory) => {
+            queueDeferredAnswerInsight({
+              answerId,
+              questionText: currentQuestion.title,
+              historySnapshot: nextHistory,
+              transcript,
+              speechMetrics,
+              audioBlob: blob,
+              mimeType: blob.type || 'audio/webm',
+            });
+          },
         });
-        const turnResult = await BackendApi.orchestratorTurn({
-          config: sanitizedConfig,
-          sessionId,
-          history: historyRef.current,
-          question: currentQuestion.title,
-          remainingSeconds,
-          difficultyLevel: selectedLevel,
-          confirmedName: candidateFirstName,
-          answerId: activeAnswerId || undefined,
-          interviewMode,
-          speechMetrics: speechMetrics || undefined,
-          audioBase64: base64Audio,
-          mimeType: blob.type || 'audio/webm',
-        });
-        await continueWithTurnResult(turnResult);
       } catch (error) {
         console.warn(error);
         showRuntimeNotice('Nao foi possivel processar sua resposta. Tente novamente.');
@@ -1276,23 +1526,24 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     [
       clearNoResponseTimer,
       clearRecordingFailsafeTimer,
-      continueWithTurnResult,
+      continueLocallyAfterAnswer,
       flowState,
-      remainingSeconds,
-      sanitizedConfig,
-      selectedLevel,
       showRuntimeNotice,
       audioCapture,
       activeAnswerId,
+      buildAnswerId,
       computeSpeechMetrics,
       stopVoiceMonitor,
+      beginInterviewAfterOpening,
       candidateFirstName,
       config.interviewLanguage,
-      requestLiveCoachInsight,
+      isOpeningStep,
+      currentQuestion.id,
       currentQuestion.title,
-      interviewMode,
+      currentQuestion.section,
+      currentQuestion.sourceDifficulty,
+      queueDeferredAnswerInsight,
       resetCurrentAnswerAnalysis,
-      sessionId,
       speakQuestion,
     ],
   );
@@ -1309,6 +1560,11 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
 
     clearNoResponseTimer();
     stopVoiceMonitor();
+    if (isOpeningStep) {
+      setTextAnswer('');
+      beginInterviewAfterOpening();
+      return;
+    }
     const nextAnswerId = activeAnswerId || buildAnswerId();
     if (!activeAnswerId) {
       resetCurrentAnswerAnalysis(nextAnswerId);
@@ -1316,26 +1572,26 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     setFlowState('evaluating');
     setConversationState('processing');
     try {
-      void requestLiveCoachInsight({
-        audioBase64: '',
-        answerId: nextAnswerId,
-        transcript,
-        mimeType: 'text/plain',
-      });
-      const turnResult = await BackendApi.orchestratorTurn({
-        config: sanitizedConfig,
-        sessionId,
-        history: historyRef.current,
-        question: currentQuestion.title,
-        remainingSeconds,
-        difficultyLevel: selectedLevel,
-        confirmedName: candidateFirstName,
-        answerId: nextAnswerId,
-        interviewMode,
-        transcript,
-      });
       setTextAnswer('');
-      await continueWithTurnResult(turnResult);
+      const historyItem: HistoryItem = {
+        answerId: nextAnswerId,
+        questionId: currentQuestion.id,
+        question: currentQuestion.title,
+        section: currentQuestion.section,
+        difficulty: currentQuestion.sourceDifficulty,
+        transcript,
+      };
+      await continueLocallyAfterAnswer(historyItem, {
+        onHistoryCommitted: (nextHistory) => {
+          queueDeferredAnswerInsight({
+            answerId: nextAnswerId,
+            questionText: currentQuestion.title,
+            historySnapshot: nextHistory,
+            transcript,
+            mimeType: 'text/plain',
+          });
+        },
+      });
     } catch (error) {
       console.warn(error);
       showRuntimeNotice('Nao foi possivel processar a resposta em texto.');
@@ -1344,22 +1600,18 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     }
   }, [
     clearNoResponseTimer,
-    continueWithTurnResult,
+    continueLocallyAfterAnswer,
     buildAnswerId,
     currentQuestion,
     flowState,
-    remainingSeconds,
     activeAnswerId,
+    beginInterviewAfterOpening,
     resetCurrentAnswerAnalysis,
-    sanitizedConfig,
-    selectedLevel,
+    isOpeningStep,
     showRuntimeNotice,
     stopVoiceMonitor,
     textAnswer,
-    candidateFirstName,
-    requestLiveCoachInsight,
-    interviewMode,
-    sessionId,
+    queueDeferredAnswerInsight,
   ]);
 
   useEffect(() => {
@@ -1375,6 +1627,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     closeLiveCoachSocket('session_reset');
     historyRef.current = [];
     setCurrentIndex(0);
+    setIntroPending(true);
     setFlowState('idle');
     setConversationState('idle');
     setAnswerMode('audio');
@@ -1387,7 +1640,10 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     setPartialFeedback(null);
     setPartialTranscript('');
     setAvatarByQuestionId(initialAvatarByQuestionId);
-    setCurrentAvatar(baseQuestions[0] ? initialAvatarByQuestionId[baseQuestions[0].id] || null : null);
+    avatarCacheRef.current = initialAvatarByQuestionId;
+    avatarRequestByQuestionIdRef.current.clear();
+    pendingAnswerInsightsRef.current.clear();
+    setCurrentAvatar(null);
     liveCoachFeedRef.current = [];
     partialTranscriptRef.current = '';
     partialFeedbackShownRef.current = false;
@@ -1428,6 +1684,10 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
   ]);
 
   useEffect(() => {
+    avatarCacheRef.current = avatarByQuestionId;
+  }, [avatarByQuestionId]);
+
+  useEffect(() => {
     setTextAnswer('');
     setLiveCoachInsight(null);
     setLiveCoachError(null);
@@ -1435,7 +1695,13 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     setPartialFeedback(null);
     setPartialTranscript('');
     setActiveAnswerId(null);
-    setCurrentAvatar(currentQuestion ? avatarByQuestionId[currentQuestion.id] || null : null);
+    setCurrentAvatar(
+      isOpeningStep
+        ? avatarCacheRef.current.__opening__ || null
+        : currentQuestion
+          ? avatarCacheRef.current[currentQuestion.id] || null
+          : null,
+    );
     partialTranscriptRef.current = '';
     partialFeedbackShownRef.current = false;
     currentSpeechMetricsRef.current = null;
@@ -1444,7 +1710,17 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     liveCoachChunkInFlightRef.current = false;
     lastLiveCoachChunkAtRef.current = 0;
     liveCoachChunkIndexRef.current = 0;
-  }, [avatarByQuestionId, currentQuestion]);
+  }, [currentQuestion?.id, isOpeningStep]);
+
+  useEffect(() => {
+    setCurrentAvatar(
+      isOpeningStep
+        ? avatarByQuestionId.__opening__ || null
+        : currentQuestion
+          ? avatarByQuestionId[currentQuestion.id] || null
+          : null,
+    );
+  }, [avatarByQuestionId, currentQuestion?.id, isOpeningStep]);
 
   useEffect(() => {
     liveCoachChunkHandlerRef.current = handleLiveCoachChunk;
@@ -1482,6 +1758,10 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
   useEffect(() => {
     if (!currentQuestion) return;
     const run = async () => {
+      if (isOpeningStep) {
+        await askInterviewOpening();
+        return;
+      }
       await askCurrentQuestion();
     };
 
@@ -1490,14 +1770,14 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     return () => {
       stopTTS();
     };
-  }, [askCurrentQuestion, currentIndex, currentQuestion?.id, currentQuestion?.title, stopTTS]);
+  }, [askCurrentQuestion, askInterviewOpening, currentIndex, currentQuestion?.id, currentQuestion?.title, isOpeningStep, stopTTS]);
 
   useEffect(() => {
     if (flowState !== 'next_question') return;
     if (!questions.length) return;
     const id = window.setTimeout(() => {
       setCurrentIndex((prev) => Math.min(prev + 1, questions.length - 1));
-    }, 1200);
+    }, NEXT_QUESTION_TRANSITION_MS);
     return () => window.clearTimeout(id);
   }, [flowState, questions.length]);
 
@@ -1527,12 +1807,17 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
   const actionDisabled =
     isFinished ||
     flowState === 'evaluating' ||
+    flowState === 'finalizing' ||
     flowState === 'no_response' ||
     !(canStartRecording || flowState === 'recording');
 
   const actionLabel =
-    flowState === 'evaluating'
-      ? 'AVALIANDO'
+    flowState === 'finalizing'
+      ? 'FINALIZANDO'
+      : flowState === 'evaluating'
+      ? DEFER_ANSWER_REVIEW_TO_FINAL
+        ? 'PROCESSANDO'
+        : 'AVALIANDO'
       : isFinished
         ? 'ENCERRADO'
         : isRecording
@@ -1585,8 +1870,14 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
   const sideStatusText =
     audioCapture.state === 'paused'
       ? 'Gravacao pausada. Retome quando estiver pronto para continuar a resposta.'
+      : flowState === 'finalizing'
+        ? (t.generatingReport || 'Finalizando seu relatorio...')
+      : isOpeningStep
+        ? `${candidateFirstName}, responda a saudacao inicial para comecarmos a entrevista.`
       : conversationState === 'processing'
-      ? 'IA analisando sua resposta...'
+      ? DEFER_ANSWER_REVIEW_TO_FINAL
+        ? 'Preparando a proxima etapa da entrevista...'
+        : 'IA analisando sua resposta...'
       : conversationState === 'ai_speaking'
         ? `Entrevistadora conduzindo a pergunta para ${candidateFirstName}.`
         : conversationState === 'candidate_speaking'
@@ -1608,15 +1899,17 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
             : isFinished
               ? 'Entrevista encerrada.'
               : 'Preparando entrevista...';
-  const partialFeedbackVisible = Boolean(partialFeedback && isCandidateCoachingMode);
-  const showLiveCoachPanel = isCandidateCoachingMode && !isFinished && (liveCoachLoading || liveCoachInsight || liveCoachError);
+  const inlineCoachEnabled = isCandidateCoachingMode && !DEFER_ANSWER_REVIEW_TO_FINAL;
+  const partialFeedbackVisible = Boolean(partialFeedback && inlineCoachEnabled);
+  const showLiveCoachPanel = inlineCoachEnabled && !isFinished && (liveCoachLoading || liveCoachInsight || liveCoachError);
+  const showPartialTranscript = inlineCoachEnabled && !isFinished && flowState === 'recording' && Boolean(partialTranscript);
 
   const topStacks = (config.stacks || []).slice(0, 3);
   const roleSummary = `Candidato: ${candidateFirstName} | ${plan.roleTitleGuess || config.track || 'Entrevista'} | ${interviewModeLabel} | ${FIXED_INTERVIEW_QUESTION_COUNT} perguntas | ${FIXED_INTERVIEW_DURATION_MINUTES} min | Stack: ${topStacks.length ? topStacks.join(', ') : 'Nao informado'}`;
 
   const handlePrimaryAction = async () => {
     if (!currentQuestion) return;
-    if (flowState === 'evaluating' || isFinished) return;
+    if (flowState === 'evaluating' || flowState === 'finalizing' || isFinished) return;
 
     if (flowState === 'awaiting_answer') {
       await startRecordingFlow();
@@ -1706,7 +1999,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
         </div>
       </div>
 
-      <audio ref={setAudioEl} className={styles.ttsAudio} />
+      <audio ref={setAudioEl} className={styles.ttsAudio} preload="auto" playsInline />
 
       <section className={styles.content} aria-label="Sala de entrevista">
         <div className={styles.grid}>
@@ -1722,10 +2015,10 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
               {chipLabel}
             </div>
             <QuestionVisualCard
-              title={currentQuestion?.title ?? 'Carregando pergunta...'}
-              bullets={currentQuestion?.bullets ?? []}
+              title={questionCardTitle}
+              bullets={questionCardBullets}
               isLoading={isLoading}
-              topic={currentQuestion?.topic}
+              topic={isOpeningStep ? undefined : currentQuestion?.topic}
               contextLabel={contextLabel}
             />
           </div>
@@ -1763,7 +2056,11 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
 
             <div className={styles.sideStatusCard}>
               <div className={styles.sideCardTitle}>
-                {isCandidateCoachingMode ? 'Coaching e feedback' : 'Avaliacao silenciosa'}
+                {DEFER_ANSWER_REVIEW_TO_FINAL
+                  ? 'Avaliacao final'
+                  : isCandidateCoachingMode
+                    ? 'Coaching e feedback'
+                    : 'Avaliacao silenciosa'}
               </div>
               <div className={styles.scoreLine}>
                 <span>Qualidade da resposta</span>
@@ -1791,7 +2088,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
               </div>
             )}
 
-            {isCandidateCoachingMode && !isFinished && flowState === 'recording' && partialTranscript && (
+            {showPartialTranscript && (
               <div className={styles.partialFeedbackCard}>
                 <div className={styles.partialFeedbackLabel}>Transcricao parcial</div>
                 <p className={styles.partialFeedbackText}>{partialTranscript}</p>

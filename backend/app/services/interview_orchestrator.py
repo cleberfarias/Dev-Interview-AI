@@ -132,6 +132,7 @@ def run_turn(
     audio_base64: str | None = None,
     mime_type: str = "audio/webm",
     session_id: str | None = None,
+    include_avatar: bool = False,
 ) -> dict[str, Any]:
     transcript_text = (transcript or "").strip()
     audio_text = (audio_base64 or "").strip()
@@ -229,7 +230,7 @@ def run_turn(
         user=user,
         session_id=session_id,
     )
-    avatar = _avatar_for_question(question_payload=next_question, config=config)
+    avatar = _avatar_for_question(question_payload=next_question, config=config) if include_avatar else None
 
     if answer_id:
         if session_id:
@@ -334,6 +335,7 @@ def run_orchestrated_turn(*, payload: OrchestratorTurnRequest, user: dict) -> di
                 audio_base64=audio_base64 or None,
                 mime_type=payload.mimeType,
                 session_id=payload.sessionId,
+                include_avatar=payload.includeAvatar,
             )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

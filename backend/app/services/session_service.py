@@ -9,9 +9,11 @@ from fastapi import HTTPException
 from ..repositories import candidate_profile_repository, report_repository, session_repository
 from ..request_context import scoped_context
 from ..schemas import (
+    FinalReport,
     InterviewConfig,
     SessionAnalysisTraceResponse,
     SessionFinishRequest,
+    SessionReportResponse,
     SessionStartResponse,
 )
 from . import metrics_service, planning_service
@@ -208,4 +210,35 @@ def get_session_analysis_trace(session_id: str, user) -> SessionAnalysisTraceRes
         sessionId=session_id,
         hasTrace=has_trace,
         analysisTraceSnapshot=snapshot if has_trace else None,
+    )
+
+
+def get_session_report(session_id: str, user) -> SessionReportResponse:
+    session = session_repository.get_session(session_id)
+    if not session or session.get("uid") != user["uid"]:
+        raise HTTPException(status_code=404, detail="Sessao nao encontrada")
+
+    report_data = session.get("report")
+    config_data = session.get("config")
+    has_report = isinstance(report_data, dict) and bool(report_data)
+
+    report = None
+    if has_report:
+        try:
+            report = FinalReport(**report_data)
+        except Exception:
+            raise HTTPException(status_code=503, detail="Sessao sem relatorio valido")
+
+    config = None
+    if isinstance(config_data, dict) and config_data:
+        try:
+            config = InterviewConfig(**config_data)
+        except Exception:
+            config = None
+
+    return SessionReportResponse(
+        sessionId=session_id,
+        hasReport=has_report and report is not None,
+        config=config,
+        report=report,
     )

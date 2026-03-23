@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from app.ai.router import AIResult
 from app.firebase_admin import get_current_user
 from app.main import app
+from app.schemas.analysis import BehaviorProfile, CandidateProfile, CultureFitSignals
 
 
 def test_final_report_includes_criteria_summary(monkeypatch):
@@ -219,5 +220,124 @@ def test_final_report_includes_criteria_summary(monkeypatch):
         assert data["behavioralSpeechSignals"]["consistency"] >= 7.0
         assert data["behaviorProfile"]["communicationStyle"] in {"analitico-direto", "estruturado-reflexivo"}
         assert data["cultureFitSignals"]["overallAlignment"] >= 6.5
+    finally:
+        app.dependency_overrides = {}
+
+
+def test_final_report_enriches_raw_history_without_inline_evaluation(monkeypatch):
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "test-user",
+        "email": "test@example.com",
+        "name": "Test User",
+        "picture": None,
+    }
+
+    monkeypatch.setattr("app.main._get_user_credits", lambda uid: 1)
+    monkeypatch.setattr("app.main._debit_credits", lambda uid, amount=1: 0)
+    monkeypatch.setattr(
+        "app.services.report_service.candidate_profile_service.get_candidate_profile",
+        lambda user: CandidateProfile(userId=user["uid"], primarySkills=["react", "typescript"]),
+    )
+    monkeypatch.setattr("app.services.report_service.job_agent.run", lambda **kwargs: {})
+    monkeypatch.setattr("app.services.report_service.match_agent.run", lambda **kwargs: {})
+    monkeypatch.setattr(
+        "app.services.report_service.behavior_agent.run",
+        lambda **kwargs: BehaviorProfile(
+            communicationStyle="analitico-direto",
+            observedTraits=["clareza"],
+            summary="Perfil objetivo.",
+        ),
+    )
+    monkeypatch.setattr(
+        "app.services.report_service.culture_fit_agent.run",
+        lambda **kwargs: CultureFitSignals(
+            collaboration=7.4,
+            ownership=7.8,
+            adaptability=7.0,
+            communicationFit=7.5,
+            overallAlignment=7.4,
+            supportingSignals=["ownership"],
+            summary="Bom alinhamento.",
+        ),
+    )
+
+    report_payload = {
+        "overallScore": 7.0,
+        "levelEstimate": "mid",
+        "jobMatch": {"covered": ["react"], "gaps": ["observability"]},
+        "feedback": {
+            "posture": [],
+            "communication": ["Continue estruturando a resposta por contexto, acao e resultado."],
+            "technical": ["Traga exemplos práticos com React e TypeScript."],
+            "language": [],
+        },
+        "plan7Days": [{"day": 1, "task": "Revisar exemplos de arquitetura frontend."}],
+    }
+
+    def fake_generate(*args, **kwargs):
+        return AIResult(
+            output_text=json.dumps(report_payload),
+            provider_used="test",
+            model_used="test-model",
+            latency_ms=5,
+            tokens_used=10,
+        )
+
+    monkeypatch.setattr("app.main.ai_router.generate", fake_generate)
+
+    history = [
+        {
+            "answerId": "a1",
+            "questionId": "q1",
+            "question": "Como voce organiza estado compartilhado em uma aplicacao React grande?",
+            "transcript": (
+                "Eu comeco separando estado local do global. Em React eu deixo o que e visual dentro do componente "
+                "e uso context ou uma store para regras compartilhadas. Primeiro olho acoplamento, depois impacto de "
+                "renderizacao e por fim observabilidade para debugar fluxos criticos."
+            ),
+            "speechMetrics": {
+                "answerId": "a1",
+                "timeToFirstSpeechMs": 800,
+                "totalDurationMs": 24000,
+                "silenceDurationMs": 1800,
+                "pauseCount": 2,
+                "longPauseCount": 0,
+                "fillerCount": 1,
+                "hesitationMarkers": ["ahn"],
+                "wordsPerMinute": 132,
+                "interruptionRecoveryCount": 0,
+                "fluencyScore": 8.0,
+                "fluencyLevel": "high",
+            },
+        }
+    ]
+
+    try:
+        client = TestClient(app)
+        body = {
+            "config": {
+                "uiLanguage": "pt-BR",
+                "interviewLanguage": "pt-BR",
+                "track": "frontend",
+                "seniority": "mid",
+                "stacks": ["react", "typescript"],
+                "style": "friendly",
+                "duration": 20,
+                "plan": "free",
+                "jobDescription": None,
+                "interviewMode": "candidate_coaching_mode",
+            },
+            "history": history,
+        }
+        resp = client.post("/ai/final-report", json=body)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["scoresSummary"]["technical"] > 0
+        assert data["criteriaSummary"]["technicalPrecision"] > 0
+        assert data["criteriaSummary"]["structure"] > 0
+        assert data["communicationScore"]["overall"] > 0
+        assert data["communicationSignals"]["responseClarity"] > 0
+        assert data["behaviorProfile"]["communicationStyle"] == "analitico-direto"
+        assert data["cultureFitSignals"]["overallAlignment"] == 7.4
     finally:
         app.dependency_overrides = {}

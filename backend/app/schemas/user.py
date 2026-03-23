@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class InterviewHistoryItem(BaseModel):
@@ -21,3 +21,15 @@ class UserProfile(BaseModel):
     avatar: Optional[str] = None
     credits: int = 0
     interviews: List[InterviewHistoryItem] = Field(default_factory=list)
+
+
+class UserProfileUpdateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        normalized = " ".join((value or "").split())
+        if len(normalized) < 2:
+            raise ValueError("Informe um nome com pelo menos 2 caracteres.")
+        return normalized

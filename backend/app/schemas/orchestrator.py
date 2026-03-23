@@ -55,6 +55,7 @@ class OrchestratorTurnRequest(BaseModel):
     transcript: Optional[str] = None
     audioBase64: Optional[str] = None
     mimeType: str = "audio/webm"
+    includeAvatar: bool = False
 
 
 class OrchestratorTurnResponse(BaseModel):

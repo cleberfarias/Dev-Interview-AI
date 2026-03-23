@@ -5,7 +5,7 @@ import os
 from datetime import datetime, timezone
 
 from ..repositories import user_repository
-from ..schemas import UserProfile
+from ..schemas import UserProfile, UserProfileUpdateRequest
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -29,27 +29,57 @@ def health():
     return {"ok": True, "time": _now_iso()}
 
 
+def _resolve_name(user: dict, data: dict | None = None) -> str:
+    stored = data or {}
+    return (
+        stored.get("name")
+        or stored.get("displayName")
+        or user.get("name")
+        or user.get("displayName")
+        or user.get("email", "Usuario").split("@")[0]
+    )
+
+
+def _resolve_avatar(user: dict, data: dict | None = None) -> str | None:
+    stored = data or {}
+    return (
+        stored.get("avatar")
+        or stored.get("photoURL")
+        or user.get("photoURL")
+        or user.get("picture")
+    )
+
+
+def _merge_user_profile_defaults(user: dict, data: dict | None = None) -> dict:
+    merged = dict(data or {})
+    now = _now_iso()
+    name = _resolve_name(user, merged)
+    avatar = _resolve_avatar(user, merged)
+
+    merged.setdefault("uid", user["uid"])
+    merged["name"] = name
+    merged.setdefault("displayName", name)
+    merged.setdefault("email", user.get("email", ""))
+    if avatar:
+        merged.setdefault("avatar", avatar)
+        merged.setdefault("photoURL", avatar)
+    merged.setdefault("plan", os.environ.get("DEFAULT_PLAN", "free"))
+    merged["credits"] = int(merged.get("credits", _initial_credits()))
+    merged.setdefault("createdAt", now)
+    merged.setdefault("updatedAt", merged.get("createdAt") or now)
+    return merged
+
+
 def me(user):
     logger.info("GET /me called uid=%s email=%s", user.get("uid"), user.get("email"))
     try:
         data = user_repository.get_user(user["uid"])
         if not data:
-            profile = {
-                "uid": user["uid"],
-                "name": user.get("name") or user.get("email", "Usuario").split("@")[0],
-                "displayName": user.get("displayName") or user.get("name") or user.get("email", "Usuario").split("@")[0],
-                "email": user.get("email", ""),
-                "avatar": user.get("picture"),
-                "photoURL": user.get("photoURL") or user.get("picture"),
-                "plan": os.environ.get("DEFAULT_PLAN", "free"),
-                "credits": _initial_credits(),
-                "createdAt": _now_iso(),
-                "updatedAt": _now_iso(),
-            }
+            profile = _merge_user_profile_defaults(user)
             user_repository.upsert_user(user["uid"], profile, merge=True)
             return UserProfile(**profile)
 
-        data.setdefault("uid", user["uid"])
+        data = _merge_user_profile_defaults(user, data)
         try:
             data["interviews"] = user_repository.list_user_interviews(user["uid"], limit=20)
         except Exception:
@@ -65,3 +95,22 @@ def me(user):
             credits=_initial_credits(),
             interviews=[],
         )
+
+
+def update_me(user: dict, payload: UserProfileUpdateRequest) -> UserProfile:
+    logger.info("PATCH /me called uid=%s email=%s", user.get("uid"), user.get("email"))
+    existing = user_repository.get_user(user["uid"]) or {}
+    now = _now_iso()
+    profile = _merge_user_profile_defaults(
+        {**user, "name": payload.name, "displayName": payload.name},
+        {
+            **existing,
+            "name": payload.name,
+            "displayName": payload.name,
+            "updatedAt": now,
+            "createdAt": existing.get("createdAt") or now,
+        },
+    )
+    profile["updatedAt"] = now
+    user_repository.upsert_user(user["uid"], profile, merge=True)
+    return me({**user, "name": payload.name, "displayName": payload.name})

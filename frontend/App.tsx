@@ -306,6 +306,27 @@ const App: React.FC = () => {
     }
   };
 
+  const handleOpenInterviewReport = async (targetSessionId: string) => {
+    try {
+      const sessionReport = await BackendApi.getSessionReport(targetSessionId);
+      if (!sessionReport.hasReport || !sessionReport.report) {
+        showGlobalNotice('Essa sessao ainda nao possui relatorio salvo.');
+        return;
+      }
+
+      if (sessionReport.config) {
+        setConfig(sessionReport.config);
+      }
+      setSessionId(targetSessionId);
+      setPlan(null);
+      setInitialAvatar(null);
+      setReport(sessionReport.report);
+      setState(AppState.REPORT);
+    } catch (e: any) {
+      showGlobalNotice(e?.message || 'Nao foi possivel abrir o relatorio da entrevista.');
+    }
+  };
+
   const handleInterviewFinish = async (finalReport: FinalReport) => {
     setReport(finalReport);
     setState(AppState.REPORT);
@@ -507,6 +528,7 @@ const App: React.FC = () => {
                 candidateProfile={candidateProfile}
                 onOpenProfile={() => setState(AppState.PROFILE)}
                 onStartInterview={handleStartInterview}
+                onOpenInterviewReport={handleOpenInterviewReport}
                 onDeleteInterview={handleDeleteInterview}
               />
             )}
@@ -519,7 +541,9 @@ const App: React.FC = () => {
                 onOpenTour={() => setActiveTourId('profile')}
                 onLogout={handleLogout}
                 onAddCredits={addCredits}
+                onOpenInterviewReport={handleOpenInterviewReport}
                 onDeleteInterview={handleDeleteInterview}
+                onUserUpdated={(nextUser) => setUser(nextUser)}
                 onCandidateProfileUpdated={(profile) => setCandidateProfile(profile)}
               />
             )}

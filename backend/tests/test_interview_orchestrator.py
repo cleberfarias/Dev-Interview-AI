@@ -100,6 +100,69 @@ def test_run_turn_returns_evaluation_coach_and_next_question(monkeypatch):
             summary="Resumo",
         ),
     )
+    result = interview_orchestrator.run_turn(
+        user={"uid": "u1"},
+        config=_config(),
+        history=[],
+        question="Tell me about API design",
+        transcript="I usually start from constraints.",
+        remaining_seconds=600,
+        answer_id="answer-1",
+    )
+    assert "evaluation" in result
+    assert "coach" in result
+    assert result["nextQuestion"]["shouldFinish"] is False
+    assert result["avatar"] is None
+    assert result["communicationAnalysis"]["behaviorProfile"]["communicationStyle"] == "analitico-direto"
+    assert result["communicationAnalysis"]["cultureFitSignals"]["overallAlignment"] == 7.1
+
+
+def test_run_turn_can_inline_avatar_when_requested(monkeypatch):
+    monkeypatch.setattr(
+        "app.services.interview_orchestrator.evaluator_agent.run_text",
+        lambda **kwargs: {"scores": {"technical": 8}, "strengths": ["clear"], "improvements": ["detail"], "transcript": "ok"},
+    )
+    monkeypatch.setattr(
+        "app.services.interview_orchestrator.coach_agent.run",
+        lambda **kwargs: {"tips": ["Use concrete examples"]},
+    )
+    monkeypatch.setattr(
+        "app.services.interview_orchestrator.interviewer_agent.run",
+        lambda **kwargs: {"shouldFinish": False, "question": {"prompt": "Next?"}},
+    )
+    monkeypatch.setattr(
+        "app.services.interview_orchestrator.candidate_profile_service.get_candidate_profile",
+        lambda user: type("ProfileObj", (), {"model_dump": lambda self: {"primarySkills": ["python"], "jobDescription": "API"}})(),
+    )
+    monkeypatch.setattr(
+        "app.services.interview_orchestrator.job_agent.run",
+        lambda **kwargs: {"softSkills": ["ownership"], "roleTitleGuess": "Backend Engineer"},
+    )
+    monkeypatch.setattr(
+        "app.services.interview_orchestrator.match_agent.run",
+        lambda **kwargs: {"matchScore": 80},
+    )
+    monkeypatch.setattr(
+        "app.services.interview_orchestrator.behavior_agent.run",
+        lambda **kwargs: BehaviorProfile(
+            communicationStyle="analitico-direto",
+            observedTraits=["objetividade"],
+            summary="Resumo",
+            discReadiness=DiscReadinessSignals(dominance=7, influence=6, steadiness=6, conscientiousness=8),
+        ),
+    )
+    monkeypatch.setattr(
+        "app.services.interview_orchestrator.culture_fit_agent.run",
+        lambda **kwargs: CultureFitSignals(
+            collaboration=7.1,
+            ownership=7.4,
+            adaptability=6.8,
+            communicationFit=7.2,
+            overallAlignment=7.1,
+            supportingSignals=["ownership"],
+            summary="Resumo",
+        ),
+    )
     monkeypatch.setattr(
         "app.services.interview_orchestrator.avatar_controller.generate_avatar_response",
         lambda **kwargs: {
@@ -119,14 +182,11 @@ def test_run_turn_returns_evaluation_coach_and_next_question(monkeypatch):
         question="Tell me about API design",
         transcript="I usually start from constraints.",
         remaining_seconds=600,
-        answer_id="answer-1",
+        answer_id="answer-inline-avatar",
+        include_avatar=True,
     )
-    assert "evaluation" in result
-    assert "coach" in result
-    assert result["nextQuestion"]["shouldFinish"] is False
+
     assert result["avatar"]["ttsProvider"] == "openai"
-    assert result["communicationAnalysis"]["behaviorProfile"]["communicationStyle"] == "analitico-direto"
-    assert result["communicationAnalysis"]["cultureFitSignals"]["overallAlignment"] == 7.1
 
 
 def test_run_turn_hiring_mode_returns_empty_coach_payload(monkeypatch):

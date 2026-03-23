@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { updateProfile } from 'firebase/auth';
+import { auth } from '../../../lib/firebase';
 import { BackendApi } from '../../../shared/services/backendApi';
 import type { CandidateProfile, InterviewConfig, SessionAnalysisTraceResponse, User } from '../../../shared/types';
 import CandidateProfilePanel from './CandidateProfilePanel';
@@ -12,7 +14,9 @@ interface Props {
   onOpenTour?: () => void;
   onLogout: () => void;
   onAddCredits: (amount: number) => void;
+  onOpenInterviewReport: (sessionId: string) => void;
   onDeleteInterview: (sessionId: string) => void;
+  onUserUpdated?: (user: User) => void;
   onCandidateProfileUpdated?: (profile: CandidateProfile) => void;
 }
 
@@ -23,7 +27,9 @@ const UserProfile: React.FC<Props> = ({
   onOpenTour,
   onLogout,
   onAddCredits: _onAddCredits,
+  onOpenInterviewReport,
   onDeleteInterview,
+  onUserUpdated,
   onCandidateProfileUpdated,
 }) => {
   const [buying, setBuying] = useState(false);
@@ -31,6 +37,10 @@ const UserProfile: React.FC<Props> = ({
   const [traceLoadingSessionId, setTraceLoadingSessionId] = useState<string | null>(null);
   const [traceErrorBySessionId, setTraceErrorBySessionId] = useState<Record<string, string>>({});
   const [traceBySessionId, setTraceBySessionId] = useState<Record<string, SessionAnalysisTraceResponse | null>>({});
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(user.name || '');
+  const [nameError, setNameError] = useState('');
+  const [savingName, setSavingName] = useState(false);
 
   const checkoutLinks = {
     pack3: 'https://pay.kiwify.com.br/pe3fE5y',
@@ -50,6 +60,12 @@ const UserProfile: React.FC<Props> = ({
   ];
 
   const firstName = user.name ? user.name.split(' ')[0] : 'Candidato';
+
+  useEffect(() => {
+    if (!isEditingName) {
+      setNameDraft(user.name || '');
+    }
+  }, [isEditingName, user.name]);
 
   const formatDate = (value?: string) => {
     if (!value) return '';
@@ -95,6 +111,57 @@ const UserProfile: React.FC<Props> = ({
     const ok = window.confirm('Deseja excluir esta entrevista?');
     if (!ok) return;
     await onDeleteInterview(sessionId);
+  };
+
+  const handleStartNameEdit = () => {
+    setNameDraft(user.name || '');
+    setNameError('');
+    setIsEditingName(true);
+  };
+
+  const handleCancelNameEdit = () => {
+    setNameDraft(user.name || '');
+    setNameError('');
+    setIsEditingName(false);
+  };
+
+  const handleSaveName = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const nextName = nameDraft.replace(/\s+/g, ' ').trim();
+    if (nextName.length < 2) {
+      setNameError('Digite um nome com pelo menos 2 caracteres.');
+      return;
+    }
+    if (nextName === user.name) {
+      handleCancelNameEdit();
+      return;
+    }
+
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      setNameError('Sua sessao expirou. Faca login novamente.');
+      return;
+    }
+
+    setSavingName(true);
+    setNameError('');
+    try {
+      await updateProfile(currentUser, { displayName: nextName });
+      let refreshedToken: string | null = null;
+      try {
+        refreshedToken = await currentUser.getIdToken(true);
+      } catch (tokenError) {
+        console.warn('Nao foi possivel atualizar o token apos editar o nome.', tokenError);
+      }
+      const updatedProfile = await BackendApi.updateMeName(nextName, refreshedToken);
+      onUserUpdated?.(updatedProfile);
+      setNameDraft(updatedProfile.name);
+      setIsEditingName(false);
+    } catch (e: any) {
+      setNameError(e?.message || 'Nao foi possivel atualizar o nome.');
+    } finally {
+      setSavingName(false);
+    }
   };
 
   const handleToggleTrace = async (sessionId: string) => {
@@ -153,9 +220,41 @@ const UserProfile: React.FC<Props> = ({
             <div className={styles.avatarWrap}>
               {user.avatar ? <img src={user.avatar} alt="Avatar" /> : <span>{firstName.charAt(0)}</span>}
             </div>
-            <div>
-              <h2>{user.name}</h2>
+            <div className={styles.heroIdentity}>
+              {isEditingName ? (
+                <form className={styles.nameForm} onSubmit={handleSaveName}>
+                  <label htmlFor="profile-name" className={styles.nameLabel}>
+                    Nome que aparece na entrevista
+                  </label>
+                  <div className={styles.nameFormRow}>
+                    <input
+                      id="profile-name"
+                      value={nameDraft}
+                      onChange={(event) => setNameDraft(event.target.value)}
+                      className={styles.nameInput}
+                      placeholder="Digite seu nome"
+                      autoComplete="name"
+                      disabled={savingName}
+                    />
+                    <button type="submit" className={styles.namePrimaryButton} disabled={savingName}>
+                      {savingName ? 'Salvando...' : 'Salvar'}
+                    </button>
+                    <button type="button" className={styles.nameSecondaryButton} onClick={handleCancelNameEdit} disabled={savingName}>
+                      Cancelar
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div className={styles.nameDisplayRow}>
+                  <h2>{user.name}</h2>
+                  <button type="button" className={styles.inlineAction} onClick={handleStartNameEdit}>
+                    Editar nome
+                  </button>
+                </div>
+              )}
               <p>{user.email}</p>
+              <span className={styles.nameHint}>Esse nome aparece para a entrevistadora e no dashboard.</span>
+              {nameError && <span className={styles.nameError} role="alert">{nameError}</span>}
             </div>
           </div>
 
@@ -233,6 +332,9 @@ const UserProfile: React.FC<Props> = ({
                   </div>
 
                   <div className={styles.historyActions}>
+                    <button type="button" onClick={() => onOpenInterviewReport(item.id)}>
+                      Ver relatorio
+                    </button>
                     <button
                       type="button"
                       onClick={() => {

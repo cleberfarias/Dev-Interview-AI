@@ -65,6 +65,13 @@ class FinalReportRequest(BaseModel):
     sessionId: Optional[str] = None
 
 
+class SessionReportResponse(BaseModel):
+    sessionId: str
+    hasReport: bool = False
+    config: Optional[InterviewConfig] = None
+    report: Optional[FinalReport] = None
+
+
 class SessionFinishRequest(BaseModel):
     report: FinalReport
     meta: Dict[str, Any] = Field(default_factory=dict)

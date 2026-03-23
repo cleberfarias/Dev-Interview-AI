@@ -293,6 +293,17 @@ def finalize_evaluation(payload: dict, config: InterviewConfig, question: str) -
     return payload
 
 
+def build_heuristic_text_evaluation(
+    *,
+    config: InterviewConfig,
+    question: str,
+    transcript: str,
+) -> AnswerEvaluation:
+    safe_transcript = (transcript or "").strip()
+    normalized = finalize_evaluation({"transcript": safe_transcript}, config, question)
+    return AnswerEvaluation(**normalized)
+
+
 def evaluate_audio(payload, user):
     # Lazy import avoids circular dependency: interview_core imports this module.
     from . import interview_core

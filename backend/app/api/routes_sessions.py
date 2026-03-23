@@ -8,6 +8,7 @@ from ..schemas import (
     PlanGenerateResponse,
     SessionAnalysisTraceResponse,
     SessionFinishRequest,
+    SessionReportResponse,
     SessionStartResponse,
 )
 from ..services import session_service
@@ -38,3 +39,8 @@ def delete_session(session_id: str, user=Depends(get_current_user)):
 @router.get("/sessions/{session_id}/analysis-trace", response_model=SessionAnalysisTraceResponse)
 def get_session_analysis_trace(session_id: str, user=Depends(get_current_user)):
     return session_service.get_session_analysis_trace(session_id, user)
+
+
+@router.get("/sessions/{session_id}/report", response_model=SessionReportResponse)
+def get_session_report(session_id: str, user=Depends(get_current_user)):
+    return session_service.get_session_report(session_id, user)

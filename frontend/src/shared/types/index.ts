@@ -369,6 +369,13 @@ export interface SessionAnalysisTraceResponse {
   analysisTraceSnapshot?: Record<string, unknown> | null;
 }
 
+export interface SessionReportResponse {
+  sessionId: string;
+  hasReport: boolean;
+  config?: InterviewConfig | null;
+  report?: FinalReport | null;
+}
+
 export interface ResumeAnalyzeResponse {
   text: string;
   extraction: ResumeExtraction;
