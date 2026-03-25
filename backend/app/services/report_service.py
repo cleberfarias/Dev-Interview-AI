@@ -174,6 +174,9 @@ def final_report(payload, user):
         report_data["cultureFitSignals"] = (
             culture_fit_signals.model_dump() if culture_fit_signals else None
         )
+        report_data["reportSource"] = "ai"
+        report_data["reportStatus"] = "complete"
+        report_data["reportWarnings"] = []
         report = FinalReport(**report_data)
     except Exception:
         raise HTTPException(status_code=503, detail="AI retornou resposta invalida")

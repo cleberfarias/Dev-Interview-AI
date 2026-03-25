@@ -57,6 +57,9 @@ class FinalReport(BaseModel):
     behavioralSpeechSignals: Optional[BehavioralSpeechSignals] = None
     behaviorProfile: Optional[BehaviorProfile] = None
     cultureFitSignals: Optional[CultureFitSignals] = None
+    reportSource: str = "ai"
+    reportStatus: str = "complete"
+    reportWarnings: List[str] = Field(default_factory=list)
 
 
 class FinalReportRequest(BaseModel):

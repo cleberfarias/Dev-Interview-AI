@@ -656,10 +656,15 @@ export const buildFallbackReport = (
   history: HistoryItem[],
   config: InterviewConfig,
   plan: InterviewPlan,
+  options?: {
+    reason?: 'fallback' | 'payment_required';
+    warning?: string;
+  },
 ): FinalReport => {
   const { overall, summary, criteriaSummary } = summarizeScores(history);
   const strengths = history.flatMap((item) => item.evaluation?.strengths ?? []);
   const improvements = history.flatMap((item) => item.evaluation?.improvements ?? []);
+  const warning = String(options?.warning || '').trim();
   return {
     overallScore: overall,
     levelEstimate: config.seniority,
@@ -676,6 +681,9 @@ export const buildFallbackReport = (
     plan7Days: [],
     scoresSummary: summary,
     criteriaSummary,
+    reportSource: 'local_fallback',
+    reportStatus: options?.reason || 'fallback',
+    reportWarnings: warning ? [warning] : [],
     communicationScore: {
       clarity: criteriaSummary?.clarity ?? summary?.communication ?? 0,
       fluency: criteriaSummary?.communication ?? summary?.communication ?? 0,

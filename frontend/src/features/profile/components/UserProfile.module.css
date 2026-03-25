@@ -30,12 +30,12 @@
 
 .topBar {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 12px;
 }
 
-.brandRow,
+.topBarCopy,
 .heroCard,
 .neonBlock,
 .panel,
@@ -47,33 +47,32 @@
   box-shadow: var(--fd-shadow-soft);
 }
 
-.brandRow {
+.topBarCopy {
+  flex: 1 1 520px;
+  padding: 18px 20px;
+  border-radius: 24px;
+}
+
+.pageEyebrow,
+.panelEyebrow,
+.heroEyebrow {
   display: inline-flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 18px;
-  border-radius: 20px;
+  color: var(--fd-text-secondary);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
 }
 
-.logoBadge {
-  width: 46px;
-  height: 46px;
-  border-radius: 16px;
-  display: grid;
-  place-items: center;
-  padding: 8px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.brandTitle {
-  margin: 0;
+.pageTitle {
+  margin: 8px 0 0;
   font-family: var(--fd-font-heading);
-  font-size: clamp(1.32rem, 2vw, 2.05rem);
+  font-size: clamp(1.48rem, 2.8vw, 2.4rem);
   font-weight: 700;
 }
 
-.brandTitle strong,
+.pageTitle,
 .heroUser h2,
 .panel h3,
 .statCard strong,
@@ -82,6 +81,21 @@
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+
+.pageIntro {
+  max-width: 62ch;
+  margin: 10px 0 0;
+  color: var(--fd-text-secondary);
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
+.topBarActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .backTopButton {
@@ -102,12 +116,12 @@
 }
 
 .heroCard {
-  margin-top: 14px;
+  margin-top: 16px;
   border-radius: 28px;
-  padding: 18px;
+  padding: 20px;
   display: grid;
   grid-template-columns: 1.3fr 1fr;
-  gap: 14px;
+  gap: 16px;
   align-items: center;
 }
 
@@ -121,6 +135,10 @@
   min-width: 0;
   display: grid;
   gap: 6px;
+}
+
+.heroEyebrow {
+  color: var(--fd-text-muted);
 }
 
 .avatarWrap {
@@ -181,7 +199,7 @@
 .nameInput {
   flex: 1 1 220px;
   min-width: min(220px, 100%);
-  min-height: 42px;
+  min-height: 48px;
   padding: 0 14px;
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -198,14 +216,14 @@
 .inlineAction,
 .namePrimaryButton,
 .nameSecondaryButton {
-  min-height: 34px;
+  min-height: 44px;
   padding: 0 14px;
-  border-radius: 999px;
+  border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   color: var(--fd-text-primary);
   font-size: 0.72rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   transition: transform 0.2s ease, border-color 0.2s ease;
 }
@@ -293,18 +311,43 @@
 .neonBlock,
 .panel {
   border-radius: 28px;
-  padding: 14px;
+  padding: 16px;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 .panel h3 {
-  margin: 0 0 12px;
+  margin: 6px 0 0;
   font-family: var(--fd-font-heading);
   font-size: 1rem;
   font-weight: 700;
 }
 
+.panelMeta {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--fd-text-secondary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
 .packPrimary {
   width: 100%;
+  min-height: 112px;
   border-radius: 20px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   padding: 14px;
@@ -348,6 +391,7 @@
 }
 
 .packSecondary {
+  min-height: 84px;
   border-radius: 18px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   padding: 12px;
@@ -421,25 +465,48 @@
 }
 
 .historyActions {
-  margin-top: 10px;
-  display: flex;
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
-  flex-wrap: wrap;
 }
 
-.historyActions button,
+.historyPrimaryAction,
+.historyMoreButton,
+.historyOverflowMenu button,
+.loadMoreButton,
 .settingButton,
 .logoutButton {
-  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
   padding: 0 12px;
-  border-radius: 999px;
+  border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.05);
   color: var(--fd-text-primary);
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
+}
+
+.historyPrimaryAction,
+.loadMoreButton {
+  width: 100%;
+}
+
+.historyMoreButton {
+  min-width: 44px;
+  padding: 0;
+  font-size: 1rem;
+}
+
+.historyOverflowMenu {
+  margin-top: 8px;
+  display: grid;
+  gap: 8px;
 }
 
 .traceBox {
@@ -472,9 +539,8 @@
 .settingButton,
 .logoutButton {
   width: 100%;
-  min-height: 44px;
-  border-radius: 14px;
   text-align: left;
+  justify-content: flex-start;
 }
 
 .logoutButton {
@@ -505,13 +571,70 @@
     align-items: stretch;
   }
 
-  .statsGrid,
+  .topBarCopy {
+    padding: 12px 14px;
+    border-radius: 20px;
+  }
+
+  .pageEyebrow {
+    font-size: 0.62rem;
+    letter-spacing: 0.16em;
+  }
+
+  .pageTitle {
+    margin-top: 6px;
+    font-size: 1.3rem;
+    line-height: 1.15;
+  }
+
+  .pageIntro {
+    display: none;
+  }
+
+  .topBarActions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .backTopButton {
+    flex: 1 1 0;
+  }
+
+  .heroUser {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .heroCard {
+    padding: 16px;
+    border-radius: 24px;
+  }
+
+  .avatarWrap {
+    width: 76px;
+    height: 76px;
+    border-radius: 24px;
+  }
+
+  .statCard {
+    padding: 10px;
+  }
+
+  .statCard strong {
+    font-size: 1.24rem;
+  }
+
   .packGrid {
     grid-template-columns: 1fr;
   }
 
-  .heroUser {
-    align-items: flex-start;
+  .panelHeader {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .panelMeta {
+    align-self: flex-start;
   }
 
   .nameFormRow {

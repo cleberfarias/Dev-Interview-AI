@@ -33,13 +33,28 @@
 
 .hero {
   text-align: left;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
+}
+
+.heroEyebrow {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(18, 24, 38, 0.64);
+  color: var(--fd-accent);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
 }
 
 .hero h1 {
-  margin: 0;
+  margin: 12px 0 0;
   font-family: var(--fd-font-heading);
-  font-size: clamp(2rem, 4vw, 3.2rem);
+  font-size: clamp(1.7rem, 4vw, 3rem);
   font-weight: 700;
   letter-spacing: -0.05em;
   background: var(--fd-gradient);
@@ -50,7 +65,7 @@
 
 .hero p {
   margin: 10px 0 0;
-  max-width: 560px;
+  max-width: 620px;
   color: var(--fd-text-secondary);
   line-height: 1.6;
 }
@@ -91,7 +106,7 @@
 
 .previewFrame {
   position: relative;
-  min-height: 380px;
+  min-height: 340px;
   border-radius: 22px;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -167,7 +182,7 @@
 
 .liveBadge,
 .micBadge {
-  min-height: 32px;
+  min-height: 36px;
   border-radius: 12px;
   background: rgba(18, 24, 38, 0.66);
   color: var(--fd-text-primary);
@@ -241,8 +256,11 @@
 }
 
 .statusChip {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
   border-radius: 999px;
-  padding: 0.4rem 0.7rem;
+  padding: 0.4rem 0.78rem;
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -260,20 +278,19 @@
 }
 
 .settingsButton {
-  min-height: 30px;
+  min-height: 44px;
   padding: 0 12px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.05);
   color: var(--fd-text-primary);
-  font-size: 0.68rem;
+  font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
-.metaRow,
-.levelBlock,
-.sideMeta {
+.readinessPanel,
+.levelBlock {
   margin-top: 12px;
   border-radius: 18px;
   padding: 12px;
@@ -281,12 +298,102 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.metaRow {
+.readinessHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.panelEyebrow {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--fd-text-secondary);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.readinessHeader h2 {
+  margin: 8px 0 0;
+  font-family: var(--fd-font-heading);
+  font-size: 1.08rem;
+  font-weight: 700;
+}
+
+.readinessBadge {
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.readyBadge {
+  background: rgba(34, 197, 94, 0.18);
+  color: #86efac;
+}
+
+.reviewBadge {
+  background: rgba(245, 158, 11, 0.16);
+  color: #fcd34d;
+}
+
+.readinessGrid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.readinessItem,
+.factCard {
+  border-radius: 16px;
+  padding: 12px;
+  display: grid;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.readinessLabel,
+.factLabel {
+  color: var(--fd-text-secondary);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.readinessItem strong,
+.factCard strong {
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.readinessValueOk {
+  color: var(--fd-text-primary);
+}
+
+.readinessValueWarn {
+  color: #fde68a;
+}
+
+.factGrid {
+  margin-top: 12px;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  color: var(--fd-text-secondary);
-  font-size: 0.78rem;
+  gap: 10px;
 }
 
 .warningBox {
@@ -300,6 +407,40 @@
   line-height: 1.5;
 }
 
+.loadingNotice {
+  margin-top: 12px;
+  border-radius: 18px;
+  padding: 14px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: center;
+  background: rgba(34, 211, 238, 0.1);
+  border: 1px solid rgba(34, 211, 238, 0.18);
+  color: var(--fd-text-primary);
+}
+
+.loadingNotice strong {
+  display: block;
+  font-size: 0.9rem;
+}
+
+.loadingNotice p {
+  margin: 4px 0 0;
+  color: var(--fd-text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.loadingNoticeSpinner {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: 3px solid rgba(34, 211, 238, 0.18);
+  border-top-color: var(--fd-accent);
+  animation: spin 0.9s linear infinite;
+}
+
 .warningDetail {
   margin-top: 6px;
   color: #fef3c7;
@@ -308,7 +449,7 @@
 
 .warningAction {
   margin-top: 8px;
-  min-height: 34px;
+  min-height: 44px;
   padding: 0 12px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.08);
@@ -331,6 +472,13 @@
   font-size: 0.9rem;
   color: var(--fd-text-primary);
   font-weight: 600;
+}
+
+.actionHint {
+  margin: 12px 0 0;
+  color: var(--fd-text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.5;
 }
 
 .levelButtons {
@@ -400,6 +548,13 @@
   font-weight: 700;
 }
 
+.sideLead {
+  margin: 12px 0 0;
+  color: var(--fd-text-secondary);
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
 .checkList {
   margin: 12px 0 0;
   padding-left: 18px;
@@ -408,21 +563,6 @@
   color: var(--fd-text-secondary);
   font-size: 0.88rem;
   line-height: 1.5;
-}
-
-.sideMeta {
-  display: grid;
-  gap: 6px;
-  font-size: 0.8rem;
-  color: var(--fd-text-secondary);
-}
-
-.sideMeta p {
-  margin: 0;
-}
-
-.sideMeta strong {
-  color: var(--fd-text-primary);
 }
 
 .modalOverlay {
@@ -477,11 +617,11 @@
   }
 
   .previewFrame {
-    min-height: 280px;
+    min-height: 230px;
   }
 
   .previewBottom,
-  .metaRow,
+  .factGrid,
   .levelBlock,
   .actionRow,
   .modalActions {
@@ -492,5 +632,45 @@
   .levelBlock {
     display: grid;
     align-items: stretch;
+  }
+
+  .hero h1 {
+    margin-top: 10px;
+    font-size: 1.34rem;
+  }
+
+  .hero p {
+    font-size: 0.92rem;
+  }
+
+  .liveBadge,
+  .micBadge,
+  .previewBottom span {
+    font-size: 0.68rem;
+  }
+
+  .readinessHeader {
+    display: grid;
+  }
+
+  .loadingNotice {
+    grid-template-columns: 1fr;
+    justify-items: start;
+  }
+
+  .readinessGrid,
+  .factGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .sideCard {
+    padding: 14px;
+  }
+}
+
+@media (max-width: 420px) {
+  .readinessGrid,
+  .factGrid {
+    grid-template-columns: 1fr;
   }
 }

@@ -1,5 +1,5 @@
-import React from 'react';
-import { PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer } from 'recharts';
+import React, { useEffect, useState } from 'react';
+import { PolarAngleAxis, PolarGrid, Radar, RadarChart } from 'recharts';
 import { I18N } from '../../../shared/constants';
 import type { FinalReport, InterviewConfig } from '../../../shared/types';
 import styles from './Report.module.css';
@@ -29,14 +29,30 @@ const formatScore = (value: number): string => {
   return safe.toFixed(1);
 };
 
+const resolveRadarChartWidth = (): number => {
+  if (typeof window === 'undefined') return 280;
+  if (window.innerWidth <= 480) return Math.max(220, Math.min(window.innerWidth - 84, 280));
+  if (window.innerWidth <= 768) return 300;
+  return 320;
+};
+
 const Report: React.FC<Props> = ({ config, report, onBack }) => {
   const t = I18N[config.uiLanguage];
+  const [radarChartWidth, setRadarChartWidth] = useState(resolveRadarChartWidth);
   const isHiringMode = config.interviewMode === 'hiring_assessment_mode';
+  const reportStatus = report.reportStatus || 'complete';
+  const isInsufficientReport = reportStatus === 'insufficient_data';
+  const isPartialReport = reportStatus !== 'complete';
+  const reportWarnings = report.reportWarnings || [];
   const overallScore = Number.isFinite(report.overallScore) ? Math.min(10, Math.max(0, report.overallScore)) : 0;
   const overallPercent = Math.round((overallScore / 10) * 100);
 
   const summary = report.scoresSummary;
   const criteria = report.criteriaSummary;
+  const defaultCommunication = isPartialReport ? 0 : Math.max(3, overallScore + 1);
+  const defaultTechnical = isPartialReport ? 0 : Math.max(3, overallScore - 0.5);
+  const defaultProblemSolving = isPartialReport ? 0 : Math.max(3, overallScore + 0.8);
+  const defaultPresence = isPartialReport ? 0 : Math.max(3, overallScore);
   const radarData = criteria
     ? [
         { subject: 'Clareza', A: criteria.clarity, fullMark: 10 },
@@ -46,15 +62,15 @@ const Report: React.FC<Props> = ({ config, report, onBack }) => {
         { subject: 'Comunicacao', A: criteria.communication, fullMark: 10 },
       ]
     : [
-        { subject: 'Comunicacao', A: summary?.communication ?? Math.max(3, overallScore + 1), fullMark: 10 },
-        { subject: 'Tecnico', A: summary?.technical ?? Math.max(3, overallScore - 0.5), fullMark: 10 },
-        { subject: 'Problemas', A: summary?.problemSolving ?? Math.max(3, overallScore + 0.8), fullMark: 10 },
-        { subject: 'Postura', A: summary?.presence ?? Math.max(3, overallScore), fullMark: 10 },
+        { subject: 'Comunicacao', A: summary?.communication ?? defaultCommunication, fullMark: 10 },
+        { subject: 'Tecnico', A: summary?.technical ?? defaultTechnical, fullMark: 10 },
+        { subject: 'Problemas', A: summary?.problemSolving ?? defaultProblemSolving, fullMark: 10 },
+        { subject: 'Postura', A: summary?.presence ?? defaultPresence, fullMark: 10 },
       ];
 
-  const technicalScore = summary?.technical ?? Math.max(3, overallScore - 0.5);
-  const problemScore = summary?.problemSolving ?? Math.max(3, overallScore + 0.2);
-  const communicationScore = summary?.communication ?? Math.max(3, overallScore + 0.4);
+  const technicalScore = summary?.technical ?? defaultTechnical;
+  const problemScore = summary?.problemSolving ?? (isPartialReport ? 0 : Math.max(3, overallScore + 0.2));
+  const communicationScore = summary?.communication ?? (isPartialReport ? 0 : Math.max(3, overallScore + 0.4));
 
   const technicalFeedback = report.feedback?.technical || [];
   const communicationFeedback = report.feedback?.communication || [];
@@ -70,6 +86,23 @@ const Report: React.FC<Props> = ({ config, report, onBack }) => {
   const coveredSkills = report.jobMatch?.covered || [];
   const gapSkills = report.jobMatch?.gaps || [];
   const highlightSkills = coveredSkills.length > 0 ? coveredSkills.slice(0, 4) : (config.stacks || []).slice(0, 4);
+  const heroDescription = isInsufficientReport
+    ? 'A entrevista foi encerrada antes de respostas suficientes. O resumo abaixo serve apenas como registro da sessao.'
+    : isPartialReport
+      ? 'Este resumo foi montado com sinais locais da sessao. A consolidacao completa da IA nao foi concluida.'
+      : isHiringMode
+        ? 'Confira sua performance, sinais comportamentais e evidencias da sessao avaliativa.'
+        : 'Confira sua performance, feedbacks e proximos passos.';
+  const scoreHeadline = isInsufficientReport ? 'Dados insuficientes para avaliar' : scoreLabel(overallScore);
+  const scoreDescription = isInsufficientReport
+    ? 'Responda pelo menos uma pergunta tecnica antes de encerrar para gerar uma avaliacao confiavel.'
+    : scoreText(overallScore);
+  const alertTitle =
+    reportStatus === 'payment_required'
+      ? 'Relatorio parcial'
+      : isInsufficientReport
+        ? 'Sessao curta'
+        : 'Resumo local';
 
   const handleBack = () => {
     if (onBack) {
@@ -78,6 +111,18 @@ const Report: React.FC<Props> = ({ config, report, onBack }) => {
     }
     window.location.reload();
   };
+
+  useEffect(() => {
+    const syncRadarChartWidth = () => {
+      setRadarChartWidth(resolveRadarChartWidth());
+    };
+
+    syncRadarChartWidth();
+    window.addEventListener('resize', syncRadarChartWidth);
+    return () => {
+      window.removeEventListener('resize', syncRadarChartWidth);
+    };
+  }, []);
 
   return (
     <div className={styles.page}>
@@ -102,20 +147,25 @@ const Report: React.FC<Props> = ({ config, report, onBack }) => {
 
         <section className={styles.heroTitle}>
           <h2>Relatorio da Entrevista</h2>
-          <p>
-            {isHiringMode
-              ? 'Confira sua performance, sinais comportamentais e evidencias da sessao avaliativa.'
-              : 'Confira sua performance, feedbacks e proximos passos.'}
-          </p>
+          <p>{heroDescription}</p>
         </section>
+
+        {reportWarnings.length > 0 && (
+          <section className={styles.reportAlert} role="status" aria-live="polite">
+            <strong>{alertTitle}</strong>
+            {reportWarnings.map((warning, index) => (
+              <p key={`${index}-${warning}`}>{warning}</p>
+            ))}
+          </section>
+        )}
 
         <div className={styles.layout}>
           <section className={styles.mainCard}>
             <div className={styles.scoreHeader} data-tour-id="report-score">
               <div className={styles.scoreIntro}>
                 <p className={styles.kicker}>{t.overall}</p>
-                <h3>{scoreLabel(overallScore)}</h3>
-                <p className={styles.scoreText}>{scoreText(overallScore)}</p>
+                <h3>{scoreHeadline}</h3>
+                <p className={styles.scoreText}>{scoreDescription}</p>
               </div>
 
               <div className={styles.scoreVisual}>
@@ -261,19 +311,17 @@ const Report: React.FC<Props> = ({ config, report, onBack }) => {
             <section className={styles.sideCard}>
               <h3 className={styles.sideTitle}>Analise de skills</h3>
               <div className={styles.radarWrap}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="72%">
-                    <PolarGrid stroke="rgba(124, 171, 255, 0.35)" />
-                    <PolarAngleAxis dataKey="subject" tick={{ fill: '#9fd6ff', fontSize: 10, fontWeight: 700 }} />
-                    <Radar
-                      name="Performance"
-                      dataKey="A"
-                      stroke="#62f0ff"
-                      fill="#7f68ff"
-                      fillOpacity={0.42}
-                    />
-                  </RadarChart>
-                </ResponsiveContainer>
+                <RadarChart width={radarChartWidth} height={220} data={radarData} cx="50%" cy="50%" outerRadius="72%">
+                  <PolarGrid stroke="rgba(124, 171, 255, 0.35)" />
+                  <PolarAngleAxis dataKey="subject" tick={{ fill: '#9fd6ff', fontSize: 10, fontWeight: 700 }} />
+                  <Radar
+                    name="Performance"
+                    dataKey="A"
+                    stroke="#62f0ff"
+                    fill="#7f68ff"
+                    fillOpacity={0.42}
+                  />
+                </RadarChart>
               </div>
               <div className={styles.tagRow}>
                 {highlightSkills.map((skill) => (

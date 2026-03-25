@@ -20,6 +20,8 @@ interface Props {
   onCandidateProfileUpdated?: (profile: CandidateProfile) => void;
 }
 
+const HISTORY_PAGE_SIZE = 5;
+
 const UserProfile: React.FC<Props> = ({
   user,
   config,
@@ -34,6 +36,7 @@ const UserProfile: React.FC<Props> = ({
 }) => {
   const [buying, setBuying] = useState(false);
   const [expandedTraceSessionId, setExpandedTraceSessionId] = useState<string | null>(null);
+  const [expandedHistoryMenuSessionId, setExpandedHistoryMenuSessionId] = useState<string | null>(null);
   const [traceLoadingSessionId, setTraceLoadingSessionId] = useState<string | null>(null);
   const [traceErrorBySessionId, setTraceErrorBySessionId] = useState<Record<string, string>>({});
   const [traceBySessionId, setTraceBySessionId] = useState<Record<string, SessionAnalysisTraceResponse | null>>({});
@@ -41,6 +44,7 @@ const UserProfile: React.FC<Props> = ({
   const [nameDraft, setNameDraft] = useState(user.name || '');
   const [nameError, setNameError] = useState('');
   const [savingName, setSavingName] = useState(false);
+  const [visibleHistoryCount, setVisibleHistoryCount] = useState(HISTORY_PAGE_SIZE);
 
   const checkoutLinks = {
     pack3: 'https://pay.kiwify.com.br/pe3fE5y',
@@ -66,6 +70,13 @@ const UserProfile: React.FC<Props> = ({
       setNameDraft(user.name || '');
     }
   }, [isEditingName, user.name]);
+
+  useEffect(() => {
+    setVisibleHistoryCount((current) => {
+      if (user.interviews.length === 0) return HISTORY_PAGE_SIZE;
+      return Math.min(Math.max(current, HISTORY_PAGE_SIZE), user.interviews.length);
+    });
+  }, [user.interviews.length]);
 
   const formatDate = (value?: string) => {
     if (!value) return '';
@@ -108,6 +119,7 @@ const UserProfile: React.FC<Props> = ({
   };
 
   const handleDelete = async (sessionId: string) => {
+    setExpandedHistoryMenuSessionId(null);
     const ok = window.confirm('Deseja excluir esta entrevista?');
     if (!ok) return;
     await onDeleteInterview(sessionId);
@@ -165,6 +177,7 @@ const UserProfile: React.FC<Props> = ({
   };
 
   const handleToggleTrace = async (sessionId: string) => {
+    setExpandedHistoryMenuSessionId(null);
     if (expandedTraceSessionId === sessionId) {
       setExpandedTraceSessionId(null);
       return;
@@ -188,22 +201,24 @@ const UserProfile: React.FC<Props> = ({
     }
   };
 
+  const visibleInterviews = user.interviews.slice(0, visibleHistoryCount);
+  const hasMoreHistory = visibleHistoryCount < user.interviews.length;
+
   return (
     <div className={styles.page}>
       <div className={styles.overlay} aria-hidden="true" />
 
       <div className={styles.shell}>
         <header className={styles.topBar}>
-          <div className={styles.brandRow}>
-            <div className={styles.logoBadge}>
-              <img src="/img/logo.png" alt="Dev Interview AI" className="w-full h-full object-contain rounded-xl" />
-            </div>
-            <h1 className={styles.brandTitle}>
-              Dev Interview <strong>AI</strong>
-            </h1>
+          <div className={styles.topBarCopy}>
+            <span className={styles.pageEyebrow}>Conta e preparo</span>
+            <h1 className={styles.pageTitle}>Perfil do candidato</h1>
+            <p className={styles.pageIntro}>
+              Revise seu nome, seu foco de vaga e os sinais que orientam a IA antes da proxima simulacao.
+            </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className={styles.topBarActions}>
             {onOpenTour && (
               <button type="button" onClick={onOpenTour} className={styles.backTopButton}>
                 Tour
@@ -221,6 +236,7 @@ const UserProfile: React.FC<Props> = ({
               {user.avatar ? <img src={user.avatar} alt="Avatar" /> : <span>{firstName.charAt(0)}</span>}
             </div>
             <div className={styles.heroIdentity}>
+              <span className={styles.heroEyebrow}>Conta ativa</span>
               {isEditingName ? (
                 <form className={styles.nameForm} onSubmit={handleSaveName}>
                   <label htmlFor="profile-name" className={styles.nameLabel}>
@@ -284,42 +300,19 @@ const UserProfile: React.FC<Props> = ({
 
           <div className={styles.rightColumn}>
             <article className={styles.panel}>
-              <h3>Recarregar creditos</h3>
-              <button
-                type="button"
-                onClick={() => handleRecharge(100)}
-                disabled={buying}
-                className={styles.packPrimary}
-              >
+              <div className={styles.panelHeader}>
                 <div>
-                  <strong>Pack 100 Creditos</strong>
-                  <span>Ate 1000 entrevistas por mes</span>
+                  <span className={styles.panelEyebrow}>Historico</span>
+                  <h3>Ultimas sessoes</h3>
                 </div>
-                <em>R$ 100,00</em>
-              </button>
-
-              <div className={styles.packGrid}>
-                <button type="button" onClick={() => handleRecharge(3)} disabled={buying} className={styles.packSecondary}>
-                  <strong>3 creditos</strong>
-                  <span>R$ 20,00</span>
-                </button>
-                <button type="button" onClick={() => handleRecharge(10)} disabled={buying} className={styles.packSecondary}>
-                  <strong>10 creditos</strong>
-                  <span>R$ 40,00</span>
-                </button>
+                <span className={styles.panelMeta}>{user.interviews.length} entrevistas</span>
               </div>
-
-              <p className={styles.note}>Pagamento via checkout seguro da Kiwify (cartao, pix e boleto).</p>
-            </article>
-
-            <article className={styles.panel}>
-              <h3>Historico de sessoes</h3>
 
               {user.interviews.length === 0 && (
                 <p className={styles.emptyText}>Nenhuma entrevista realizada ainda.</p>
               )}
 
-              {user.interviews.map((item) => (
+              {visibleInterviews.map((item) => (
                 <div key={item.id} className={styles.historyItem}>
                   <div className={styles.historyTop}>
                     <div>
@@ -332,21 +325,44 @@ const UserProfile: React.FC<Props> = ({
                   </div>
 
                   <div className={styles.historyActions}>
-                    <button type="button" onClick={() => onOpenInterviewReport(item.id)}>
+                    <button
+                      type="button"
+                      className={styles.historyPrimaryAction}
+                      onClick={() => {
+                        setExpandedHistoryMenuSessionId(null);
+                        onOpenInterviewReport(item.id);
+                      }}
+                    >
                       Ver relatorio
                     </button>
                     <button
                       type="button"
-                      onClick={() => {
-                        void handleToggleTrace(item.id);
-                      }}
+                      className={styles.historyMoreButton}
+                      aria-expanded={expandedHistoryMenuSessionId === item.id}
+                      aria-label={`Mais acoes da entrevista de ${formatDate(item.date)}`}
+                      onClick={() =>
+                        setExpandedHistoryMenuSessionId((current) => (current === item.id ? null : item.id))
+                      }
                     >
-                      {expandedTraceSessionId === item.id ? 'Ocultar trace' : 'Ver trace'}
-                    </button>
-                    <button type="button" onClick={() => handleDelete(item.id)}>
-                      Excluir
+                      +
                     </button>
                   </div>
+
+                  {expandedHistoryMenuSessionId === item.id && (
+                    <div className={styles.historyOverflowMenu}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void handleToggleTrace(item.id);
+                        }}
+                      >
+                        {expandedTraceSessionId === item.id ? 'Ocultar trace' : 'Ver trace'}
+                      </button>
+                      <button type="button" onClick={() => handleDelete(item.id)}>
+                        Excluir entrevista
+                      </button>
+                    </div>
+                  )}
 
                   {expandedTraceSessionId === item.id && (
                     <div className={styles.traceBox}>
@@ -392,10 +408,61 @@ const UserProfile: React.FC<Props> = ({
                   )}
                 </div>
               ))}
+
+              {hasMoreHistory && (
+                <button
+                  type="button"
+                  className={styles.loadMoreButton}
+                  onClick={() => setVisibleHistoryCount((current) => current + HISTORY_PAGE_SIZE)}
+                >
+                  Carregar mais entrevistas
+                </button>
+              )}
             </article>
 
             <article className={styles.panel}>
-              <h3>Configuracoes</h3>
+              <div className={styles.panelHeader}>
+                <div>
+                  <span className={styles.panelEyebrow}>Conta</span>
+                  <h3>Recarregar creditos</h3>
+                </div>
+                <span className={styles.panelMeta}>{user.credits} disponiveis</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleRecharge(100)}
+                disabled={buying}
+                className={styles.packPrimary}
+              >
+                <div>
+                  <strong>Pack 100 Creditos</strong>
+                  <span>Ate 1000 entrevistas por mes</span>
+                </div>
+                <em>R$ 100,00</em>
+              </button>
+
+              <div className={styles.packGrid}>
+                <button type="button" onClick={() => handleRecharge(3)} disabled={buying} className={styles.packSecondary}>
+                  <strong>3 creditos</strong>
+                  <span>R$ 20,00</span>
+                </button>
+                <button type="button" onClick={() => handleRecharge(10)} disabled={buying} className={styles.packSecondary}>
+                  <strong>10 creditos</strong>
+                  <span>R$ 40,00</span>
+                </button>
+              </div>
+
+              <p className={styles.note}>Pagamento via checkout seguro da Kiwify (cartao, pix e boleto).</p>
+            </article>
+
+            <article className={styles.panel}>
+              <div className={styles.panelHeader}>
+                <div>
+                  <span className={styles.panelEyebrow}>Conta</span>
+                  <h3>Configuracoes</h3>
+                </div>
+              </div>
               <button type="button" className={styles.settingButton}>
                 Configuracoes de audio e video
               </button>

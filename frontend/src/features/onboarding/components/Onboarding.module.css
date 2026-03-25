@@ -2,7 +2,7 @@
   position: relative;
   min-height: 100dvh;
   padding: 22px 18px;
-  overflow: hidden;
+  overflow-x: hidden;
   color: var(--fd-text-primary);
   background: var(--fd-page-backdrop), url('/img/fundo.png');
   background-size: cover;
@@ -29,42 +29,10 @@
 }
 
 .header {
-  text-align: center;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
 }
 
-.brandRow {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 18px;
-  border-radius: 20px;
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
-    rgba(18, 24, 38, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: var(--fd-shadow-soft);
-}
-
-.logoBadge {
-  width: 46px;
-  height: 46px;
-  border-radius: 16px;
-  display: grid;
-  place-items: center;
-  padding: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.brandTitle {
-  margin: 0;
-  font-family: var(--fd-font-heading);
-  font-size: clamp(1.4rem, 2vw, 2.2rem);
-  font-weight: 700;
-}
-
-.brandTitle strong,
+.heroEyebrow,
 .heroTitle,
 .sectionTitle {
   background: var(--fd-gradient);
@@ -73,21 +41,38 @@
   color: transparent;
 }
 
-.heroTitle {
-  margin: 18px 0 6px;
-  font-family: var(--fd-font-heading);
-  font-size: clamp(1.8rem, 3vw, 2.4rem);
+.heroEyebrow {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(18, 24, 38, 0.64);
+  font-size: 0.72rem;
   font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.heroTitle {
+  margin: 12px 0 6px;
+  font-family: var(--fd-font-heading);
+  font-size: clamp(1.58rem, 3vw, 2.35rem);
+  font-weight: 700;
+  line-height: 1.08;
+  letter-spacing: -0.04em;
 }
 
 .heroSubtitle {
   margin: 0;
   color: var(--fd-text-secondary);
-  font-size: 1rem;
+  max-width: 620px;
+  line-height: 1.55;
 }
 
 .card {
-  padding: 24px;
+  padding: 20px;
   border-radius: 30px;
   background:
     linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
@@ -131,6 +116,37 @@
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+}
+
+.summaryStrip {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.summaryPill {
+  min-height: 72px;
+  border-radius: 18px;
+  padding: 12px 14px;
+  display: grid;
+  gap: 4px;
+  background: rgba(11, 15, 26, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.summaryLabel {
+  color: var(--fd-text-secondary);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.summaryPill strong {
+  color: var(--fd-text-primary);
+  font-size: 0.88rem;
+  line-height: 1.35;
 }
 
 .content {
@@ -335,6 +351,10 @@
 }
 
 @media (max-width: 860px) {
+  .summaryStrip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .choiceGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -346,7 +366,7 @@
 
 @media (max-width: 640px) {
   .page {
-    padding: 14px;
+    padding: 12px;
     background: var(--fd-page-backdrop), url('/img/fundo_mob.png');
     background-size: cover;
     background-position: center top;
@@ -354,8 +374,43 @@
   }
 
   .card {
-    padding: 18px 14px 14px;
+    padding: 16px 14px 14px;
     border-radius: 24px;
+  }
+
+  .heroEyebrow {
+    min-height: 28px;
+    font-size: 0.68rem;
+  }
+
+  .heroTitle {
+    margin-top: 10px;
+    font-size: 1.34rem;
+  }
+
+  .heroSubtitle {
+    font-size: 0.9rem;
+  }
+
+  .progressRow {
+    gap: 10px;
+  }
+
+  .progressDots {
+    gap: 8px;
+  }
+
+  .summaryStrip {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .summaryPill {
+    min-height: 64px;
+    padding: 10px 12px;
+  }
+
+  .sectionHint {
+    margin-bottom: 14px;
   }
 
   .choiceGrid,
@@ -369,5 +424,15 @@
 
   .backButton {
     width: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  .summaryStrip {
+    grid-template-columns: 1fr;
+  }
+
+  .heroSubtitle {
+    display: none;
   }
 }

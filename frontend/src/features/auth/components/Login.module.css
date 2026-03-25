@@ -1,8 +1,10 @@
 .page {
   position: relative;
   min-height: 100dvh;
-  padding: 24px;
-  overflow: hidden;
+  padding: clamp(14px, 3vw, 24px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   color: var(--fd-text-primary);
   background: var(--fd-page-backdrop), url('/img/fundo.png');
   background-size: cover;
@@ -36,24 +38,31 @@
 .hero {
   position: relative;
   z-index: 1;
-  width: min(1140px, 100%);
-  min-height: calc(100dvh - 48px);
+  width: min(100%, 560px);
+  min-height: calc(100dvh - 28px);
   margin: 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: clamp(6px, 2vh, 24px) 0;
+}
+
+.content {
+  width: 100%;
 }
 
 .brandBlock {
   text-align: center;
-  margin-bottom: 26px;
+  margin-bottom: 18px;
 }
 
 .logoRow {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 14px 20px;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 16px;
   border-radius: 22px;
   background:
     linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
@@ -63,8 +72,9 @@
 }
 
 .logoBadge {
-  width: 50px;
-  height: 50px;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
   border-radius: 18px;
   display: grid;
   place-items: center;
@@ -75,10 +85,14 @@
 
 .brandName {
   margin: 0;
+  flex: 1;
+  min-width: 0;
   font-family: var(--fd-font-heading);
-  font-size: clamp(1.9rem, 4vw, 3.2rem);
+  font-size: clamp(1.45rem, 7.6vw, 3.1rem);
   font-weight: 700;
+  line-height: 1.04;
   letter-spacing: -0.03em;
+  text-wrap: balance;
 }
 
 .brandName strong {
@@ -89,21 +103,22 @@
 }
 
 .tagline {
-  margin: 16px auto 0;
-  width: fit-content;
-  padding: 10px 18px;
+  margin: 12px auto 0;
+  width: min(100%, 34rem);
+  padding: 10px 16px;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(18, 24, 38, 0.56);
-  color: var(--fd-text-secondary);
-  font-size: 0.98rem;
+  color: #c7d7f5;
+  font-size: 0.92rem;
   font-weight: 600;
+  line-height: 1.45;
 }
 
 .card {
-  width: min(560px, 100%);
-  padding: 30px 28px 24px;
-  border-radius: 30px;
+  width: min(100%, 560px);
+  padding: 26px 22px 22px;
+  border-radius: 28px;
   background:
     linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
     rgba(18, 24, 38, 0.8);
@@ -114,20 +129,33 @@
   backdrop-filter: blur(16px);
 }
 
-.title {
-  margin: 0 0 20px;
+.header {
+  margin-bottom: 18px;
   text-align: center;
+}
+
+.title {
+  margin: 0;
   font-family: var(--fd-font-heading);
-  font-size: clamp(1.48rem, 2.4vw, 2.1rem);
+  font-size: clamp(1.5rem, 6vw, 2.2rem);
   font-weight: 700;
+  line-height: 1.08;
+}
+
+.subtitle {
+  margin: 8px auto 0;
+  max-width: 34ch;
+  color: #c2d0e7;
+  font-size: 0.93rem;
+  line-height: 1.5;
 }
 
 .alert {
-  margin: 0 0 14px;
-  padding: 11px 13px;
+  margin: 0 0 12px;
+  padding: 12px 14px;
   border-radius: 16px;
   font-size: 0.88rem;
-  line-height: 1.45;
+  line-height: 1.5;
 }
 
 .alertError {
@@ -142,10 +170,28 @@
   color: #bfdbfe;
 }
 
+.form {
+  display: block;
+}
+
+.formFieldset {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.fieldGroup {
+  display: grid;
+  gap: 7px;
+}
+
 .label {
   display: block;
-  margin: 12px 0 7px;
-  color: var(--fd-text-secondary);
+  margin: 0;
+  color: #cbd7ee;
   font-size: 0.74rem;
   font-weight: 700;
   letter-spacing: 0.14em;
@@ -156,7 +202,7 @@
   position: relative;
   display: flex;
   align-items: center;
-  min-height: 52px;
+  min-height: 56px;
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(11, 15, 26, 0.78);
@@ -171,8 +217,9 @@
 }
 
 .icon {
-  width: 46px;
-  height: 46px;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
   display: grid;
   place-items: center;
   color: var(--fd-accent);
@@ -180,7 +227,8 @@
 
 .input {
   width: 100%;
-  height: 52px;
+  min-width: 0;
+  height: 56px;
   border: 0;
   outline: 0;
   background: transparent;
@@ -190,7 +238,7 @@
 }
 
 .input::placeholder {
-  color: var(--fd-text-muted);
+  color: #8b97aa;
 }
 
 .input:-webkit-autofill,
@@ -202,36 +250,58 @@
   transition: background-color 9999s ease-out 0s;
 }
 
+.eyeButton,
+.secondaryLink,
+.primaryButton,
+.socialButton,
+.modeSwitch button {
+  -webkit-tap-highlight-color: transparent;
+}
+
 .eyeButton {
-  width: 46px;
-  height: 46px;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
   border: 0;
+  border-radius: 14px;
   background: transparent;
-  color: var(--fd-text-secondary);
-  transition: color 0.2s ease;
+  color: #c2d0e7;
+  transition: color 0.2s ease, background 0.2s ease;
 }
 
 .eyeButton:hover {
   color: var(--fd-text-primary);
 }
 
-.forgot {
-  margin-top: 8px;
-  margin-left: auto;
-  display: block;
+.helperText {
+  margin: -2px 0 0;
+  color: #c2d0e7;
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.inlineActions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.secondaryLink {
+  min-height: 44px;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
   border: 0;
   background: transparent;
-  color: var(--fd-text-secondary);
-  font-size: 0.88rem;
+  color: #d2def4;
+  font-size: 0.92rem;
   font-weight: 600;
 }
 
-.forgot:hover {
+.secondaryLink:hover {
   color: var(--fd-text-primary);
 }
 
 .primaryButton {
-  margin-top: 18px;
   width: 100%;
   min-height: 56px;
   border-radius: 16px;
@@ -252,15 +322,15 @@
 }
 
 .primaryButton:disabled {
-  opacity: 0.58;
+  opacity: 0.6;
 }
 
 .divider {
-  margin: 18px 0 14px;
+  margin: 18px 0 12px;
   display: flex;
   align-items: center;
   gap: 12px;
-  color: var(--fd-text-muted);
+  color: #c2d0e7;
   font-size: 0.84rem;
 }
 
@@ -274,12 +344,13 @@
 
 .socialGrid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 12px;
 }
 
 .socialButton {
-  min-height: 50px;
+  width: 100%;
+  min-height: 52px;
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.11);
   background: rgba(255, 255, 255, 0.05);
@@ -300,19 +371,31 @@
 }
 
 .socialButton:disabled {
-  opacity: 0.58;
+  opacity: 0.6;
+}
+
+.socialHint {
+  margin: 10px 0 0;
+  text-align: center;
+  color: #c2d0e7;
+  font-size: 0.82rem;
+  line-height: 1.45;
 }
 
 .modeSwitch {
-  margin-top: 15px;
+  margin-top: 16px;
   text-align: center;
 }
 
 .modeSwitch button {
+  min-height: 44px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
   border: 0;
   background: transparent;
-  color: var(--fd-text-secondary);
-  font-size: 0.88rem;
+  color: #d2def4;
+  font-size: 0.92rem;
   font-weight: 600;
 }
 
@@ -320,16 +403,20 @@
   color: var(--fd-text-primary);
 }
 
-.foot {
-  margin-top: 18px;
-  text-align: center;
-  color: var(--fd-text-muted);
-  font-size: 0.82rem;
+.eyeButton:focus-visible,
+.secondaryLink:focus-visible,
+.primaryButton:focus-visible,
+.socialButton:focus-visible,
+.modeSwitch button:focus-visible {
+  outline: 2px solid rgba(79, 140, 255, 0.8);
+  outline-offset: 2px;
 }
 
-.foot a {
-  color: var(--fd-accent);
-  font-weight: 700;
+.foot {
+  margin-top: 14px;
+  text-align: center;
+  color: #a8b7d1;
+  font-size: 0.82rem;
 }
 
 @media (max-width: 780px) {
@@ -347,15 +434,33 @@
   }
 
   .hero {
-    min-height: calc(100dvh - 28px);
+    min-height: 100%;
+    padding: 8px 0 14px;
+  }
+
+  .brandBlock {
+    margin-bottom: 14px;
+  }
+
+  .logoRow {
+    gap: 10px;
+    padding: 12px 14px;
+  }
+
+  .logoBadge {
+    width: 44px;
+    height: 44px;
+    flex-basis: 44px;
+    border-radius: 16px;
   }
 
   .brandName {
-    font-size: 1.8rem;
+    font-size: clamp(1.34rem, 8vw, 1.9rem);
   }
 
   .tagline {
-    font-size: 0.88rem;
+    padding: 10px 14px;
+    font-size: 0.84rem;
   }
 
   .card {
@@ -363,7 +468,36 @@
     border-radius: 24px;
   }
 
-  .socialGrid {
-    grid-template-columns: 1fr;
+  .subtitle {
+    font-size: 0.88rem;
+  }
+}
+
+@media (max-width: 380px) {
+  .brandName {
+    font-size: 1.48rem;
+  }
+
+  .tagline {
+    border-radius: 22px;
+  }
+}
+
+@media (max-height: 760px) {
+  .page {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  .brandBlock {
+    margin-bottom: 12px;
+  }
+
+  .tagline {
+    margin-top: 10px;
+  }
+
+  .card {
+    padding-top: 22px;
   }
 }

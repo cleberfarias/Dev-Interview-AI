@@ -119,20 +119,39 @@
 
 @media (max-width: 700px) {
   .topBar {
-    flex-direction: row;
-    align-items: center;
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
   }
 
   .leftStack {
     gap: 6px;
   }
 
+  .backButton,
+  .chip,
+  .finishButton {
+    min-height: 44px;
+  }
+
   .chip {
+    justify-content: center;
     font-size: 9px;
     letter-spacing: 0.18em;
   }
 
   .finishButton {
+    width: 100%;
     padding-inline: 16px;
+  }
+}
+
+@media (max-width: 420px) {
+  .backButton,
+  .chip,
+  .finishButton {
+    font-size: 8px;
+    letter-spacing: 0.16em;
   }
 }

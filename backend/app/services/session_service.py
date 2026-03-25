@@ -16,10 +16,11 @@ from ..schemas import (
     SessionReportResponse,
     SessionStartResponse,
 )
-from . import metrics_service, planning_service
+from . import metrics_service, planning_service, usage_policy_service
 
 logger = logging.getLogger("uvicorn.error")
 FIXED_INTERVIEW_DURATION_MINUTES = 10
+INTERVIEW_SESSION_REQUIRED_CREDITS = 2
 
 
 def _now_iso() -> str:
@@ -85,6 +86,15 @@ def _session_analysis_trace_snapshot(user_uid: str, captured_at: str) -> dict | 
 
 def start_session(config: InterviewConfig, user: dict) -> SessionStartResponse:
     normalized_config = _normalize_config(config)
+    try:
+        usage_policy_service.ensure_credits(user["uid"], required=INTERVIEW_SESSION_REQUIRED_CREDITS)
+    except HTTPException as exc:
+        if exc.status_code == 402:
+            raise HTTPException(
+                status_code=402,
+                detail="Voce precisa de pelo menos 2 creditos para iniciar e concluir a entrevista.",
+            ) from exc
+        raise
     try:
         ts = _now_iso()
         initial = _initial_credits()

@@ -44,6 +44,11 @@ const MODE_LABELS: Record<InterviewMode, string> = {
   hiring_assessment_mode: 'Avaliacao de contratacao',
 };
 
+const PLAN_LABELS: Record<PlanType, string> = {
+  free: 'Standard',
+  pro: 'Elite Pro',
+};
+
 const STEP_TITLES = [
   'Escolha os idiomas',
   'Selecione seu plano',
@@ -112,6 +117,17 @@ const Onboarding: React.FC<Props> = ({ onComplete, initialConfig }) => {
     { code: 'en', label: 'English' },
     { code: 'es', label: 'Espanol' },
   ];
+  const languageLabel =
+    languages.find((language) => language.code === config.interviewLanguage)?.label || config.interviewLanguage;
+  const summaryItems = [
+    { label: 'Idioma', value: languageLabel },
+    { label: 'Plano', value: PLAN_LABELS[config.plan] },
+    { label: 'Trilha', value: TRACK_LABELS[config.track] },
+    {
+      label: 'Stacks',
+      value: config.stacks.length ? `${config.stacks.length} selecionadas` : 'Defina depois',
+    },
+  ];
 
   const isLastStep = step === totalSteps;
 
@@ -124,16 +140,11 @@ const Onboarding: React.FC<Props> = ({ onComplete, initialConfig }) => {
 
       <div className={styles.shell}>
         <header className={styles.header}>
-          <div className={styles.brandRow}>
-            <div className={styles.logoBadge}>
-              <img src="/img/logo.png" alt="Dev Interview AI" className="w-full h-full object-contain rounded-xl" />
-            </div>
-            <h1 className={styles.brandTitle}>
-              Dev Interview <strong>AI</strong>
-            </h1>
-          </div>
-          <h2 className={styles.heroTitle}>Vamos comecar!</h2>
-          <p className={styles.heroSubtitle}>Preencha seu perfil para personalizar sua experiencia.</p>
+          <span className={styles.heroEyebrow}>Fluxo guiado</span>
+          <h1 className={styles.heroTitle}>Entre na sala com o setup pronto</h1>
+          <p className={styles.heroSubtitle}>
+            Escolha idioma, plano, foco tecnico e estilo antes do teste de camera e microfone.
+          </p>
         </header>
 
         <section className={styles.card}>
@@ -147,6 +158,15 @@ const Onboarding: React.FC<Props> = ({ onComplete, initialConfig }) => {
               ))}
             </div>
             <span className={styles.progressText}>{step + 1}/5</span>
+          </div>
+
+          <div className={styles.summaryStrip} aria-label="Resumo da entrevista">
+            {summaryItems.map((item) => (
+              <div key={item.label} className={styles.summaryPill}>
+                <span className={styles.summaryLabel}>{item.label}</span>
+                <strong>{item.value}</strong>
+              </div>
+            ))}
           </div>
 
           <div className={styles.content} data-tour-id="onboarding-content">

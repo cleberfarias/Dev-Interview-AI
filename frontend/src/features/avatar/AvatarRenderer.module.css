@@ -370,3 +370,28 @@
     height: 6.4%;
   }
 }
+
+@media (max-width: 640px) {
+  .card {
+    grid-template-rows: 1fr;
+    padding: 10px;
+    gap: 0;
+    border-radius: 24px;
+  }
+
+  .header,
+  .footer {
+    display: none;
+  }
+
+  .scene {
+    min-height: min(52vh, 340px);
+    border-radius: 18px;
+  }
+
+  .liveBadge {
+    top: 10px;
+    left: 10px;
+    padding: 6px 10px;
+  }
+}

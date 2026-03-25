@@ -7,6 +7,7 @@ import UserProfile from '../src/features/profile/components/UserProfile';
 const updateProfileMock = vi.fn();
 const getIdTokenMock = vi.fn();
 const updateMeNameMock = vi.fn();
+const getSessionAnalysisTraceMock = vi.fn();
 
 vi.mock('firebase/auth', () => ({
   updateProfile: (...args: unknown[]) => updateProfileMock(...args),
@@ -23,7 +24,7 @@ vi.mock('../src/lib/firebase', () => ({
 
 vi.mock('../src/shared/services/backendApi', () => ({
   BackendApi: {
-    getSessionAnalysisTrace: vi.fn(),
+    getSessionAnalysisTrace: (...args: unknown[]) => getSessionAnalysisTraceMock(...args),
     updateMeName: (...args: unknown[]) => updateMeNameMock(...args),
   },
 }));
@@ -57,11 +58,35 @@ const baseConfig: InterviewConfig = {
   difficultyLevel: 3,
 };
 
+const buildUserWithInterviews = (count: number): User => ({
+  ...baseUser,
+  interviews: Array.from({ length: count }, (_, index) => ({
+    id: `session-${index + 1}`,
+    date: `2026-03-${String(23 - index).padStart(2, '0')}T19:51:00.000Z`,
+    role: 'Entrevista',
+    score: 7 - index * 0.25,
+    style: 'friendly',
+    track: 'frontend',
+  })),
+});
+
 describe('UserProfile', () => {
   beforeEach(() => {
     updateProfileMock.mockReset();
     getIdTokenMock.mockReset();
     updateMeNameMock.mockReset();
+    getSessionAnalysisTraceMock.mockReset().mockResolvedValue({
+      sessionId: 'session-1',
+      hasTrace: true,
+      analysisTraceSnapshot: {
+        capturedAt: '2026-03-24T10:00:00.000Z',
+        lastResumeAnalysisTrace: {
+          source: 'ai',
+          aiProvider: 'openai',
+          aiModel: 'gpt-5.4',
+        },
+      },
+    });
   });
 
   it('edits and persists the profile name', async () => {
@@ -106,5 +131,38 @@ describe('UserProfile', () => {
         name: 'Cleber Silva',
       }),
     );
+  });
+
+  it('paginates session history and keeps secondary actions behind the overflow control', async () => {
+    render(
+      <UserProfile
+        user={buildUserWithInterviews(6)}
+        config={baseConfig}
+        onBack={vi.fn()}
+        onLogout={vi.fn()}
+        onAddCredits={vi.fn()}
+        onDeleteInterview={vi.fn()}
+        onOpenInterviewReport={vi.fn()}
+      />,
+    );
+
+    expect(screen.getAllByRole('button', { name: 'Ver relatorio' })).toHaveLength(5);
+    expect(screen.queryByRole('button', { name: 'Ver trace' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Excluir entrevista' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole('button', { name: /^Mais acoes da entrevista de/ })[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Ver trace' }));
+
+    await waitFor(() => {
+      expect(getSessionAnalysisTraceMock).toHaveBeenCalledWith('session-1');
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Capturado em:/)).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Carregar mais entrevistas' }));
+
+    expect(screen.getAllByRole('button', { name: 'Ver relatorio' })).toHaveLength(6);
   });
 });

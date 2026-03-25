@@ -132,6 +132,31 @@
   line-height: 1.6;
 }
 
+.reportAlert {
+  border-radius: 22px;
+  padding: 14px 16px;
+  background: rgba(245, 158, 11, 0.14);
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  box-shadow: 0 16px 34px rgba(120, 53, 15, 0.16);
+}
+
+.reportAlert strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #fde68a;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.reportAlert p {
+  margin: 0;
+  color: #fef3c7;
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
 .layout {
   display: grid;
   grid-template-columns: minmax(0, 1.6fr) minmax(280px, 0.78fr);
@@ -385,10 +410,14 @@
 .radarWrap {
   margin-top: 12px;
   height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 18px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(11, 15, 26, 0.58);
   padding: 10px;
+  overflow: hidden;
 }
 
 .tagRow,

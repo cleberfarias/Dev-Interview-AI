@@ -39,7 +39,7 @@
 
 .brandHeader {
   text-align: center;
-  margin-top: 6px;
+  margin-top: 2px;
 }
 
 .brandRow {
@@ -94,6 +94,42 @@
   font-size: 0.85rem;
 }
 
+.brandSummary {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.brandSummaryItem {
+  min-height: 66px;
+  border-radius: 18px;
+  padding: 10px 12px;
+  display: grid;
+  gap: 4px;
+  background: rgba(18, 24, 38, 0.56);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  text-align: left;
+}
+
+.brandSummaryLabel {
+  color: var(--fd-text-secondary);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.brandSummaryItem strong {
+  color: var(--fd-text-primary);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.brandSummaryItemSecondary {
+  display: grid;
+}
+
 .topBarArea {
   position: absolute;
   top: 14px;
@@ -138,6 +174,11 @@
   gap: 12px;
 }
 
+.mobileStage,
+.mobileSelfView {
+  display: none;
+}
+
 .leftColumn {
   --avatar-height: min(62vh, 580px);
 }
@@ -152,6 +193,49 @@
 
 .cameraSlot {
   --camera-height: 230px;
+}
+
+.audioConfigCard {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
+    rgba(18, 24, 38, 0.72);
+  box-shadow: var(--fd-shadow-soft);
+  overflow: hidden;
+}
+
+.audioConfigToggle {
+  width: 100%;
+  min-height: 52px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 0;
+  background: transparent;
+  color: var(--fd-text-primary);
+  text-align: left;
+}
+
+.audioConfigTitle {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.audioConfigValue {
+  color: var(--fd-text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.audioConfigBody {
+  padding: 0 12px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .presentationChip {
@@ -183,6 +267,55 @@
   font-size: 0.86rem;
   font-weight: 700;
   color: var(--fd-text-primary);
+}
+
+.statusSignalRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.statusSignalChip {
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--fd-text-primary);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.signalMetricGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.signalMetricCard {
+  border-radius: 16px;
+  padding: 10px;
+  display: grid;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.signalMetricCard span {
+  color: var(--fd-text-secondary);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.signalMetricCard strong {
+  color: var(--fd-text-primary);
+  font-size: 1rem;
 }
 
 .scoreLine {
@@ -224,6 +357,15 @@
   flex-direction: column;
   align-items: center;
   gap: 10px;
+}
+
+.actionPrompt {
+  margin: 0;
+  width: min(760px, calc(100vw - 36px));
+  color: var(--fd-text-secondary);
+  font-size: 11px;
+  line-height: 1.45;
+  text-align: center;
 }
 
 .audioControlsRow {
@@ -441,6 +583,31 @@
   box-shadow: var(--fd-shadow-soft);
 }
 
+.promptSummaryCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(11, 15, 26, 0.58);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.promptSummaryLabel {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--fd-accent);
+}
+
+.promptSummaryText {
+  margin: 0;
+  color: var(--fd-text-primary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .textAnswerLabel {
   font-size: 10px;
   font-weight: 800;
@@ -473,6 +640,13 @@
 
 .textAnswerInput:disabled {
   opacity: 0.6;
+}
+
+.textAnswerHelper {
+  margin: 0;
+  color: var(--fd-text-muted);
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .textAnswerSubmit {
@@ -622,59 +796,113 @@
     grid-template-columns: 1fr;
   }
 
-  .leftColumn {
-    --avatar-height: 260px;
-    order: 2;
-  }
-
   .centerColumn {
     order: 1;
   }
 
   .rightColumn {
+    order: 2;
+  }
+
+  .leftColumn {
+    --avatar-height: 260px;
     order: 3;
+  }
+
+  .brandSummary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 980px) {
-  .centerColumn {
-    display: none;
+  .brandSummary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .leftColumn {
-    order: 1;
-  }
-
-  .rightColumn {
-    order: 2;
+    --avatar-height: 220px;
   }
 }
 
 @media (max-width: 640px) {
   .room {
-    padding: 12px 12px 18px;
+    padding: 12px 12px 176px;
     background: var(--fd-page-backdrop), url('/img/fundo_mob.png');
     background-size: cover;
     background-position: center top;
     background-repeat: no-repeat;
   }
 
+  .brandHeader,
+  .leftColumn,
+  .presentationChip,
+  .centerColumn,
+  .sideCardTitle,
+  .statusSignalRow,
+  .signalMetricGrid {
+    display: none;
+  }
+
+  .mobileStage {
+    display: block;
+    order: 1;
+    position: relative;
+    --avatar-height: min(52vh, 360px);
+  }
+
+  .mobileSelfView {
+    display: block;
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: min(34vw, 108px);
+    max-width: 108px;
+    z-index: 3;
+    --camera-height: 84px;
+  }
+
+  .rightColumn {
+    order: 2;
+  }
+
+  .brandRow {
+    gap: 10px;
+    padding: 10px 14px;
+  }
+
+  .brandLogo {
+    width: 40px;
+    height: 40px;
+    border-radius: 14px;
+  }
+
   .brandTitle {
     font-size: 1.16rem;
   }
 
-  .brandSubtitle {
-    font-size: 0.76rem;
+  .brandSummary {
+    margin-top: 10px;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .brandSummaryItemSecondary {
+    display: none;
+  }
+
+  .brandSummaryItem {
+    min-height: 60px;
+    padding: 9px 10px;
   }
 
   .topBarArea {
     position: static;
     margin-bottom: 4px;
-    justify-content: center;
+    justify-content: stretch;
   }
 
   .topBarInner {
-    justify-content: center;
+    width: 100%;
+    justify-content: stretch;
   }
 
   .content {
@@ -682,12 +910,85 @@
   }
 
   .cameraSlot {
-    --camera-height: 180px;
+    --camera-height: 120px;
+  }
+
+  .grid,
+  .leftColumn,
+  .centerColumn,
+  .rightColumn {
+    gap: 10px;
+  }
+
+  .audioConfigToggle,
+  .modeButton,
+  .audioControlButton {
+    min-height: 44px;
   }
 
   .textAnswerPanel,
   .errorNotice,
   .noResponsePanel {
     width: 100%;
+  }
+
+  .actionArea {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    margin-top: 0;
+    padding-top: 8px;
+  }
+
+  .actionStack {
+    width: 100%;
+    max-width: 560px;
+    margin: 0 auto;
+    gap: 8px;
+  }
+
+  .modeSwitch {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .modeButton {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .audioControlsRow {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .audioControlButton {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .sideStatusCard,
+  .audioConfigCard {
+    border-radius: 18px;
+  }
+
+  .sideStatusCard {
+    display: none;
+  }
+}
+
+@media (max-width: 420px) {
+  .brandSummary {
+    grid-template-columns: 1fr;
+  }
+
+  .audioControlsRow,
+  .signalMetricGrid {
+    grid-template-columns: 1fr;
   }
 }

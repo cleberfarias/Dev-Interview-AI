@@ -14,7 +14,7 @@ interface TopBarProps {
 const TopBar: React.FC<TopBarProps> = ({
   timer,
   stage,
-  finishLabel = 'FINALIZAR CONSULTA',
+  finishLabel = 'FINALIZAR ENTREVISTA',
   backLabel = 'VOLTAR',
   onBack,
   onFinish,
@@ -38,7 +38,7 @@ const TopBar: React.FC<TopBarProps> = ({
             <span className={styles.timerDot} aria-hidden="true" />
             <span className={styles.timerText}>{timer}</span>
           </div>
-          <div className={styles.chip} aria-label={`Etapa ${stage}`}>
+          <div className={styles.chip} aria-label={stage}>
             <span className={styles.stageText}>{stage}</span>
           </div>
         </div>

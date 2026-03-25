@@ -266,6 +266,17 @@ const App: React.FC = () => {
     }
   }, [activeTourId, report, state]);
 
+  useEffect(() => {
+    const root = document.documentElement;
+    const useDocumentScroll = [AppState.DASHBOARD, AppState.PROFILE].includes(state);
+
+    root.classList.toggle('fd-document-scroll', useDocumentScroll);
+
+    return () => {
+      root.classList.remove('fd-document-scroll');
+    };
+  }, [state]);
+
   const handleLogin = (newUser: User) => {
     setUser(newUser);
     setCandidateProfile(null);
@@ -410,6 +421,7 @@ const App: React.FC = () => {
 
   const showHeader = ![AppState.INTERVIEWING, AppState.LOGIN, AppState.PROFILE, AppState.REPORT].includes(state);
   const disableMainScroll = state === AppState.LOBBY;
+  const useDocumentScrollLayout = [AppState.DASHBOARD, AppState.PROFILE].includes(state);
   const canHeaderBack = [AppState.ONBOARDING, AppState.LOBBY, AppState.REPORT].includes(state);
 
   const handleHeaderBack = () => {
@@ -455,7 +467,7 @@ const App: React.FC = () => {
         : 'max-w-md mx-auto h-full';
 
   return (
-    <div className="fd-app-shell h-full flex flex-col overflow-hidden">
+    <div className={`fd-app-shell flex flex-col ${useDocumentScrollLayout ? 'min-h-screen' : 'h-full overflow-hidden'}`}>
       {globalNotice && (
         <div className="fd-global-notice z-[90]">
           <div className="flex items-center justify-between gap-3">
@@ -472,8 +484,12 @@ const App: React.FC = () => {
       )}
 
       {showHeader && (
-        <header className="fd-app-header flex items-center justify-between shrink-0 z-50">
-          <div className="flex items-center gap-3">
+        <header
+          className={`fd-app-header flex items-center justify-between shrink-0 z-50 ${
+            useDocumentScrollLayout ? 'fd-app-header-sticky' : ''
+          }`}
+        >
+          <div className="fd-app-header-main">
             {canHeaderBack && (
               <button
                 type="button"
@@ -484,24 +500,26 @@ const App: React.FC = () => {
                 {'<'}
               </button>
             )}
-            <div className="w-8 h-8 rounded-xl flex items-center justify-center overflow-hidden">
-              <img src="/img/logo.png" alt="Dev Interview AI" className="w-full h-full object-contain rounded-md" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="fd-brand-title">{t.title}</h1>
-                <span className="fd-credit-pill">{user?.credits || 0} credits</span>
+            <div className="fd-app-brand">
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center overflow-hidden">
+                <img src="/img/logo.png" alt="Dev Interview AI" className="w-full h-full object-contain rounded-md" />
               </div>
-              <p className="fd-brand-caption">{user?.name?.split(' ')[0] || ''}</p>
+              <div className="fd-app-brand-copy">
+                <div className="fd-app-brand-meta">
+                  <h1 className="fd-brand-title">{t.title}</h1>
+                  <span className="fd-credit-pill">{user?.credits || 0} credits</span>
+                </div>
+              </div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="fd-app-header-actions">
             {currentTourId && (
               <button
                 type="button"
                 onClick={() => setActiveTourId(currentTourId)}
                 className="fd-small-action hover:scale-95"
                 title="Tour guiado"
+                aria-label="Abrir tour guiado"
               >
                 Tour
               </button>
@@ -510,6 +528,7 @@ const App: React.FC = () => {
               onClick={() => setState(AppState.PROFILE)}
               data-tour-id="app-header-profile"
               className="fd-avatar-button text-sm"
+              aria-label="Abrir perfil"
             >
               {user?.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : (user?.name?.charAt(0) || 'U')}
             </button>
@@ -517,7 +536,15 @@ const App: React.FC = () => {
         </header>
       )}
 
-      <main className={disableMainScroll ? 'flex-1 overflow-hidden' : 'flex-1 overflow-y-auto no-scrollbar'}>
+      <main
+        className={
+          useDocumentScrollLayout
+            ? 'flex-1 overflow-visible'
+            : disableMainScroll
+              ? 'flex-1 overflow-hidden'
+              : 'flex-1 overflow-y-auto no-scrollbar'
+        }
+      >
         <div className={containerClass}>
           <Suspense fallback={<RouteLoading />}>
             {state === AppState.LOGIN && <Login onLogin={handleLogin} />}

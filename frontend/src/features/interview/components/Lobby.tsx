@@ -1,5 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { AvatarResponse, CandidateProfile, InterviewConfig, InterviewPlan } from '../../../shared/types';
+import type {
+  AvatarResponse,
+  CandidateProfile,
+  InterviewConfig,
+  InterviewPlan,
+  InterviewStyle,
+  LanguageCode,
+  Seniority,
+} from '../../../shared/types';
 import type { DifficultyLevel } from '../../../shared/types/interview';
 import type { Track } from '../../../shared/types';
 import { clampDuration } from '../../../shared/constants';
@@ -26,7 +34,8 @@ interface Props {
   onBack: () => void;
 }
 
-const PLAN_GENERATE_TIMEOUT_MS = 8000;
+const PLAN_GENERATE_TIMEOUT_MS = 12000;
+const INTERVIEW_SESSION_MIN_CREDITS = 2;
 
 const TRACK_LABELS: Record<Track, string> = {
   frontend: 'Frontend',
@@ -35,6 +44,26 @@ const TRACK_LABELS: Record<Track, string> = {
   mobile: 'Mobile',
   devops: 'DevOps',
   data: 'Data',
+};
+
+const SENIORITY_LABELS: Record<Seniority, string> = {
+  intern: 'Estagio',
+  junior: 'Junior',
+  mid: 'Pleno',
+  senior: 'Senior',
+  staff: 'Staff',
+};
+
+const STYLE_LABELS: Record<InterviewStyle, string> = {
+  friendly: 'Amigavel',
+  neutral: 'Neutro',
+  strict: 'Rigoroso',
+};
+
+const LANGUAGE_LABELS: Record<LanguageCode, string> = {
+  'pt-BR': 'Portugues',
+  en: 'English',
+  es: 'Espanol',
 };
 
 const MODE_LABELS = {
@@ -85,6 +114,7 @@ const buildStarterPlan = (config: InterviewConfig, level: DifficultyLevel): Inte
 const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenProfile, onStart, onBack }) => {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingStage, setLoadingStage] = useState<string | null>(null);
   const [audioLevel, setAudioLevel] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [showNoJobModal, setShowNoJobModal] = useState(false);
@@ -93,11 +123,14 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
   const audioIntervalRef = useRef<number | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
-  const hasCredits = userCredits > 0;
+  const hasCredits = userCredits >= INTERVIEW_SESSION_MIN_CREDITS;
   const profileMissingFields = getMissingCandidateProfileFields(candidateProfile);
   const profileCompleteFromCache = candidateProfile ? isCandidateProfileComplete(candidateProfile) : false;
   const hasJobAnalysisFromCache = hasCandidateJobProfileAnalysis(candidateProfile);
   const startBlockedByProfile = Boolean(candidateProfile && !profileCompleteFromCache);
+  const cameraReady = Boolean(stream);
+  const microphonePermissionReady = Boolean(stream?.getAudioTracks().length);
+  const microphoneSignalDetected = audioLevel > 6;
 
   useEffect(() => {
     let cancelled = false;
@@ -160,6 +193,7 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
 
   const startInterviewSession = async () => {
     setLoading(true);
+    setLoadingStage('Criando sessao com IA...');
     setError(null);
 
     try {
@@ -173,19 +207,7 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
       });
       const res = orchestratedStart.session;
 
-      const nextRes = orchestratedStart.initialNextQuestion;
-      if (nextRes?.question && !nextRes.shouldFinish) {
-        const planStub: InterviewPlan = {
-          roleTitleGuess: effectiveConfig.track || 'Entrevista',
-          seniorityGuess: effectiveConfig.seniority,
-          mustHaveSkills: effectiveConfig.stacks || [],
-          blueprint: { hr: 15, technical: 50, design: 20, behavioral: 15 },
-          questions: [nextRes.question],
-        };
-        onStart(planStub, res.sessionId, res.credits, selectedLevel, orchestratedStart.initialAvatar || null);
-        return;
-      }
-
+      setLoadingStage('Preparando roteiro da entrevista...');
       try {
         const generated = await withTimeout(
           BackendApi.generatePlan(res.sessionId),
@@ -199,18 +221,44 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
         console.warn('Plan generation fallback failed', planErr);
       }
 
+      const nextRes = orchestratedStart.initialNextQuestion;
+      if (nextRes?.question && !nextRes.shouldFinish) {
+        setLoadingStage('Entrando com a primeira pergunta preparada...');
+        const planStub: InterviewPlan = {
+          roleTitleGuess: effectiveConfig.track || 'Entrevista',
+          seniorityGuess: effectiveConfig.seniority,
+          mustHaveSkills: effectiveConfig.stacks || [],
+          blueprint: { hr: 15, technical: 50, design: 20, behavioral: 15 },
+          questions: [nextRes.question],
+        };
+        onStart(planStub, res.sessionId, res.credits, selectedLevel, orchestratedStart.initialAvatar || null);
+        return;
+      }
+
+      setLoadingStage('Usando roteiro inicial da sessao...');
       onStart(buildStarterPlan(effectiveConfig, selectedLevel), res.sessionId, res.credits, selectedLevel, null);
     } catch (err) {
       console.error(err);
       const message = err instanceof Error ? err.message : 'Erro ao iniciar sessao.';
       setError(message);
       setLoading(false);
+      setLoadingStage(null);
     }
   };
 
   const handleEnter = async () => {
     if (!hasCredits || loading) return;
     setError(null);
+
+    if (!cameraReady) {
+      setError('Libere a camera no navegador antes de iniciar a entrevista.');
+      return;
+    }
+
+    if (!microphonePermissionReady) {
+      setError('Libere o microfone no navegador antes de entrar na sala.');
+      return;
+    }
 
     const resolvedProfile =
       candidateProfile ||
@@ -239,6 +287,70 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
 
   const roleLabel = TRACK_LABELS[config.track as Track] || config.track || 'Entrevista tecnica';
   const modeLabel = MODE_LABELS[config.interviewMode || 'candidate_coaching_mode'];
+  const seniorityLabel = SENIORITY_LABELS[config.seniority] || config.seniority;
+  const styleLabel = STYLE_LABELS[config.style] || config.style;
+  const languageLabel = LANGUAGE_LABELS[config.interviewLanguage] || config.interviewLanguage;
+  const readinessComplete = cameraReady && microphonePermissionReady && hasCredits && !startBlockedByProfile;
+  const readinessItems = [
+    {
+      label: 'Camera',
+      value: cameraReady ? 'Pronta' : 'Permissao pendente',
+      ready: cameraReady,
+    },
+    {
+      label: 'Microfone',
+      value: microphoneSignalDetected
+        ? 'Captando'
+        : microphonePermissionReady
+          ? 'Liberado'
+          : 'Permissao pendente',
+      ready: microphonePermissionReady,
+    },
+    {
+      label: 'Creditos',
+      value: `${userCredits} disponiveis`,
+      ready: hasCredits,
+    },
+    {
+      label: 'Entrada',
+      value: readinessComplete ? 'Liberada' : 'Revisar pendencias',
+      ready: readinessComplete,
+    },
+  ];
+  const sessionFacts = [
+    { label: 'Trilha', value: roleLabel },
+    { label: 'Senioridade', value: seniorityLabel },
+    { label: 'Modo', value: modeLabel },
+    { label: 'Idioma', value: languageLabel },
+    { label: 'Estilo', value: styleLabel },
+    { label: 'Duracao', value: `${config.duration} min` },
+  ];
+  const profileContextLabel = candidateProfile
+    ? profileCompleteFromCache
+      ? hasJobAnalysisFromCache
+        ? 'Perfil e vaga conectados para personalizar a entrevista.'
+        : 'Perfil pronto. A vaga ainda pode ser confirmada no inicio.'
+      : `Perfil incompleto: ${profileMissingFields.join(', ')}.`
+    : 'Seu perfil sera validado no inicio da sessao.';
+  const checklistItems = [
+    'Teste camera e microfone antes de entrar na sala.',
+    hasJobAnalysisFromCache
+      ? 'A descricao da vaga ja esta conectada ao contexto da entrevista.'
+      : 'Sem analise de vaga, a entrevista segue com contexto mais generico.',
+    'Escolha o nivel que melhor representa a pressao desejada.',
+    'Tenha um exemplo recente de projeto para abrir a conversa com seguranca.',
+  ];
+  const startHint = !hasCredits
+    ? `Adicione pelo menos ${INTERVIEW_SESSION_MIN_CREDITS} creditos para iniciar e concluir a entrevista.`
+    : startBlockedByProfile
+      ? 'Finalize o perfil do candidato para liberar a entrevista.'
+      : !cameraReady
+        ? 'Libere a camera no navegador para seguir.'
+        : !microphonePermissionReady
+          ? 'Libere o microfone no navegador para seguir.'
+          : !microphoneSignalDetected
+            ? 'Microfone liberado. Se quiser testar antes, fale por alguns segundos.'
+          : 'Tudo certo. Voce ja pode entrar na sala.';
 
   return (
     <div className={styles.page}>
@@ -246,9 +358,10 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
 
       <div className={styles.shell}>
         <header className={styles.hero}>
-          <h1>Prepare sua entrevista</h1>
+          <span className={styles.heroEyebrow}>Pre-entrevista</span>
+          <h1>Revise o setup e entre na sala</h1>
           <p>
-            Revise camera, microfone e inicie sua simulacao com IA.
+            Em menos de 1 minuto voce valida camera, microfone, nivel e o contexto da entrevista.
           </p>
         </header>
 
@@ -284,17 +397,17 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
               </div>
 
               <div className={styles.previewBottom}>
-                <span>Entrevista para {roleLabel}</span>
+                <span>{roleLabel}</span>
                 <span>Nivel {selectedLevel}</span>
               </div>
             </div>
 
             <div className={styles.statusRow}>
-              <span className={`${styles.statusChip} ${stream ? styles.statusOk : styles.statusWarn}`}>
-                Camera {stream ? 'pronta' : 'pendente'}
+              <span className={`${styles.statusChip} ${cameraReady ? styles.statusOk : styles.statusWarn}`}>
+                Camera {cameraReady ? 'pronta' : 'pendente'}
               </span>
-              <span className={`${styles.statusChip} ${audioLevel > 6 ? styles.statusOk : styles.statusWarn}`}>
-                Microfone {audioLevel > 6 ? 'pronto' : 'pendente'}
+              <span className={`${styles.statusChip} ${microphonePermissionReady ? styles.statusOk : styles.statusWarn}`}>
+                Microfone {microphoneSignalDetected ? 'captando' : microphonePermissionReady ? 'liberado' : 'pendente'}
               </span>
               <button
                 type="button"
@@ -306,16 +419,33 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
               </button>
             </div>
 
-            <div className={styles.metaRow}>
-              <span>Custo: 1 credito</span>
-              <span>Saldo: {userCredits}</span>
-              <span>Duracao aprox: {config.duration} min</span>
+            <div className={styles.readinessPanel}>
+              <div className={styles.readinessHeader}>
+                <div>
+                  <span className={styles.panelEyebrow}>Checklist rapido</span>
+                  <h2>Tudo pronto para entrar?</h2>
+                </div>
+                <span className={`${styles.readinessBadge} ${readinessComplete ? styles.readyBadge : styles.reviewBadge}`}>
+                  {readinessComplete ? 'Pronto' : 'Revisar'}
+                </span>
+              </div>
+              <div className={styles.readinessGrid}>
+                {readinessItems.map((item) => (
+                  <div key={item.label} className={styles.readinessItem}>
+                    <span className={styles.readinessLabel}>{item.label}</span>
+                    <strong className={item.ready ? styles.readinessValueOk : styles.readinessValueWarn}>{item.value}</strong>
+                  </div>
+                ))}
+              </div>
             </div>
 
-            <div className={styles.metaRow}>
-              <span>Modo: {modeLabel}</span>
-              <span>Idioma: {config.interviewLanguage}</span>
-              <span>Estilo: {config.style}</span>
+            <div className={styles.factGrid} aria-label="Resumo da sessao">
+              {sessionFacts.map((fact) => (
+                <div key={fact.label} className={styles.factCard}>
+                  <span className={styles.factLabel}>{fact.label}</span>
+                  <strong>{fact.value}</strong>
+                </div>
+              ))}
             </div>
 
             {candidateProfile && !profileCompleteFromCache && (
@@ -340,7 +470,23 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
 
             {!hasCredits && (
               <div className={styles.warningBox}>
-                Creditos insuficientes. Voce precisa de pelo menos 1 credito para iniciar.
+                Creditos insuficientes. Voce precisa de pelo menos {INTERVIEW_SESSION_MIN_CREDITS} creditos para gerar o roteiro e consolidar o relatorio final.
+              </div>
+            )}
+
+            {cameraReady && microphonePermissionReady && !microphoneSignalDetected && (
+              <div className={styles.warningBox}>
+                Microfone liberado, mas ainda sem atividade detectada. Voce pode entrar mesmo assim ou falar por alguns segundos para testar antes de iniciar.
+              </div>
+            )}
+
+            {loadingStage && (
+              <div className={styles.loadingNotice} role="status" aria-live="polite">
+                <div className={styles.loadingNoticeSpinner} aria-hidden="true" />
+                <div>
+                  <strong>{loadingStage}</strong>
+                  <p>Estamos preparando a sessao da entrevista e sincronizando o contexto com a IA.</p>
+                </div>
               </div>
             )}
 
@@ -361,6 +507,8 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
               </div>
             </div>
 
+            <p className={styles.actionHint}>{startHint}</p>
+
             <div className={styles.actionRow}>
               <button type="button" onClick={onBack} className={styles.backButton}>
                 Voltar
@@ -368,30 +516,23 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
               <button
                 type="button"
                 onClick={handleEnter}
-                disabled={loading || !stream || !hasCredits || startBlockedByProfile}
+                disabled={loading || !stream || !hasCredits || startBlockedByProfile || !cameraReady || !microphonePermissionReady}
                 data-tour-id="lobby-start"
                 className={styles.startButton}
               >
-                {loading ? 'Iniciando...' : 'Iniciar entrevista'}
+                {loading ? 'Preparando...' : 'Iniciar entrevista'}
               </button>
             </div>
           </section>
 
           <aside className={styles.sideCard}>
-            <h3>Checklist da entrevista</h3>
+            <h3>Antes de entrar</h3>
+            <p className={styles.sideLead}>{profileContextLabel}</p>
             <ul className={styles.checkList}>
-              <li>Teste camera e microfone antes de comecar.</li>
-              <li>Revise descricao da vaga e stack principal.</li>
-              <li>Escolha um nivel de dificuldade adequado.</li>
-              <li>Tenha exemplos reais de projetos para responder.</li>
+              {checklistItems.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
             </ul>
-
-            <div className={styles.sideMeta}>
-              <p><strong>Trilha:</strong> {roleLabel}</p>
-              <p><strong>Senioridade:</strong> {config.seniority}</p>
-              <p><strong>Idioma:</strong> {config.interviewLanguage}</p>
-              <p><strong>Modo:</strong> {modeLabel}</p>
-            </div>
           </aside>
         </div>
 

@@ -217,6 +217,9 @@ export interface FinalReport {
   behavioralSpeechSignals?: BehavioralSpeechSignals | null;
   behaviorProfile?: BehaviorProfile | null;
   cultureFitSignals?: CultureFitSignals | null;
+  reportSource?: 'ai' | 'local_fallback';
+  reportStatus?: 'complete' | 'fallback' | 'payment_required' | 'insufficient_data';
+  reportWarnings?: string[];
 }
 
 export interface NextQuestionResponse {

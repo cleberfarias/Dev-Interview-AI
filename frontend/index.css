@@ -92,6 +92,19 @@ body::after {
   z-index: 0;
 }
 
+html.fd-document-scroll,
+html.fd-document-scroll body {
+  height: auto;
+  min-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+html.fd-document-scroll #root {
+  height: auto;
+  min-height: 100vh;
+}
+
 body,
 button,
 input,
@@ -340,13 +353,50 @@ a {
   -webkit-backdrop-filter: blur(14px);
 }
 
+.fd-app-header-sticky {
+  position: sticky;
+  top: 0;
+}
+
+.fd-app-header-main,
+.fd-app-brand,
+.fd-app-brand-meta,
+.fd-app-header-actions {
+  display: flex;
+  align-items: center;
+}
+
+.fd-app-header-main {
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.fd-app-brand {
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.fd-app-brand-copy {
+  min-width: 0;
+}
+
+.fd-app-brand-meta {
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.fd-app-header-actions {
+  gap: 0.5rem;
+}
+
 .fd-brand-title {
   margin: 0;
   font-family: var(--fd-font-heading);
-  font-size: 0.78rem;
+  font-size: 0.84rem;
   font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
+  line-height: 1.1;
+  letter-spacing: 0.04em;
+  text-transform: none;
 }
 
 .fd-brand-caption {
@@ -361,15 +411,15 @@ a {
 .fd-credit-pill {
   display: inline-flex;
   align-items: center;
-  min-height: 18px;
-  padding: 0.15rem 0.45rem;
+  min-height: 22px;
+  padding: 0.2rem 0.5rem;
   border-radius: 999px;
   background: rgba(139, 92, 246, 0.16);
   border: 1px solid rgba(139, 92, 246, 0.24);
   color: #ddd6fe;
-  font-size: 0.58rem;
+  font-size: 0.62rem;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
@@ -391,14 +441,14 @@ a {
 }
 
 .fd-icon-button {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: 12px;
 }
 
 .fd-avatar-button {
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   border-radius: 999px;
   overflow: hidden;
   display: inline-flex;
@@ -408,12 +458,12 @@ a {
 }
 
 .fd-small-action {
-  min-height: 36px;
-  padding: 0.65rem 0.85rem;
+  min-height: 44px;
+  padding: 0 0.95rem;
   border-radius: 12px;
-  font-size: 0.65rem;
+  font-size: 0.68rem;
   font-weight: 700;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
@@ -482,5 +532,31 @@ a {
   50% {
     transform: scale(1.1);
     opacity: 1;
+  }
+}
+
+@media (max-width: 640px) {
+  .fd-app-header {
+    padding: 0.85rem 0.9rem;
+  }
+
+  .fd-app-header-main {
+    gap: 0.65rem;
+  }
+
+  .fd-app-brand {
+    gap: 0.6rem;
+  }
+
+  .fd-brand-title {
+    font-size: 0.78rem;
+  }
+
+  .fd-credit-pill {
+    font-size: 0.58rem;
+  }
+
+  .fd-app-header-actions {
+    gap: 0.45rem;
   }
 }
