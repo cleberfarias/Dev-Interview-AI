@@ -18,8 +18,8 @@ router = APIRouter()
 
 
 @router.get("/health")
-def health():
-    return profile_service.health()
+def health(checkDb: bool = Query(default=False)):
+    return profile_service.health(check_db=checkDb)
 
 
 @router.get("/me", response_model=UserProfile)

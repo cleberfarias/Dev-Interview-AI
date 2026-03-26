@@ -1,4 +1,5 @@
 export type DifficultyLevel = 1 | 2 | 3;
+export type InterviewModeLevel = 1 | 2 | 3;
 
 export type QuestionType = 'multiple_choice' | 'multiple_choice_with_justification' | 'open';
 

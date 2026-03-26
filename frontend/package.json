@@ -18,9 +18,11 @@
         "@capacitor/android": "^8.2.0",
         "@capacitor/core": "^8.2.0",
         "@pixiv/three-vrm": "^2.1.3",
+        "@tanstack/react-query": "^5.95.2",
         "firebase": "^10.14.1",
         "react": "^19.2.3",
         "react-dom": "^19.2.3",
+        "react-joyride": "^3.0.0",
         "recharts": "^3.6.0",
         "three": "^0.164.1"
     },

@@ -5,6 +5,7 @@ import {
   buildInterviewOpeningPrompt,
   buildInterviewOpeningRetryPrompt,
   buildSpokenPrompt,
+  getLocalFallbackPrompt,
 } from '../src/features/interview/components/interviewRoomUtils';
 
 describe('buildSpokenPrompt', () => {
@@ -101,5 +102,26 @@ describe('buildSpokenPrompt', () => {
     expect(prompt).toContain('Cleber');
     expect(prompt).toContain('encerramos as perguntas');
     expect(prompt).toContain('consolidando seu relatorio final');
+  });
+
+  it('avoids repeating fallback questions that were already asked', () => {
+    const firstPrompt = getLocalFallbackPrompt('backend', 'pt-BR', 0, { seed: 'session-a' });
+    const secondPrompt = getLocalFallbackPrompt('backend', 'pt-BR', 1, {
+      askedPrompts: [firstPrompt],
+      seed: 'session-a',
+    });
+
+    expect(firstPrompt).toBeTruthy();
+    expect(secondPrompt).toBeTruthy();
+    expect(secondPrompt).not.toBe(firstPrompt);
+  });
+
+  it('rotates fallback selection across sessions', () => {
+    const firstSessionPrompt = getLocalFallbackPrompt('backend', 'pt-BR', 0, { seed: 'session-a' });
+    const secondSessionPrompt = getLocalFallbackPrompt('backend', 'pt-BR', 0, { seed: 'session-b' });
+
+    expect(firstSessionPrompt).toBeTruthy();
+    expect(secondSessionPrompt).toBeTruthy();
+    expect(secondSessionPrompt).not.toBe(firstSessionPrompt);
   });
 });

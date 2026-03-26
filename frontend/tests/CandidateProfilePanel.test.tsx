@@ -30,6 +30,7 @@ vi.mock('../src/features/jobs', () => ({
 
 import CandidateProfilePanel from '../src/features/profile/components/CandidateProfilePanel';
 import type { CandidateProfile, CandidateProfileAuditPageResponse } from '../src/shared/types';
+import { renderWithQueryClient } from './renderWithQueryClient';
 
 const baseProfile: CandidateProfile = {
   userId: 'user-1',
@@ -68,7 +69,7 @@ describe('CandidateProfilePanel', () => {
   });
 
   it('keeps the audit collapsed by default and shows structured profile highlights', async () => {
-    render(<CandidateProfilePanel />);
+    renderWithQueryClient(<CandidateProfilePanel />);
 
     await screen.findByDisplayValue('Frontend Engineer');
 
@@ -99,7 +100,7 @@ describe('CandidateProfilePanel', () => {
       resumeSummary: 'Lidero entregas frontend com React.',
     });
 
-    render(<CandidateProfilePanel />);
+    renderWithQueryClient(<CandidateProfilePanel />);
 
     await screen.findByDisplayValue('Frontend Engineer');
 

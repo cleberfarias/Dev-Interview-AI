@@ -29,6 +29,11 @@ def _user() -> dict:
 def test_start_session_includes_profile_trace_snapshot(monkeypatch):
     captured = {}
 
+    monkeypatch.setattr(
+        "app.services.session_service.usage_policy_service.ensure_credits",
+        lambda uid, required=2: required,
+    )
+
     def _fake_create_pending_session(**kwargs):
         captured.update(kwargs)
         return "session-123", 5
@@ -72,6 +77,11 @@ def test_start_session_includes_profile_trace_snapshot(monkeypatch):
 
 def test_start_session_continues_without_trace_snapshot(monkeypatch):
     captured = {}
+
+    monkeypatch.setattr(
+        "app.services.session_service.usage_policy_service.ensure_credits",
+        lambda uid, required=2: required,
+    )
 
     def _fake_create_pending_session(**kwargs):
         captured.update(kwargs)

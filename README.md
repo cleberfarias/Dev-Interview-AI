@@ -79,6 +79,11 @@ Variaveis uteis do frontend:
 - A sessao oficial roda em `/interview/context`, `/interview/start`, `/interview/turn` e `/interview/finalize`
 - O entrevistador chama o candidato pelo nome e fala a pergunta com avatar + TTS
 - A sessao atual usa limite fixo de `10 minutos` e `5 perguntas` por entrevista
+- O produto agora separa `formato da entrevista` de `dificuldade tecnica`
+  - `Nivel 1 | Guiado`: enunciado visivel para leitura durante a resposta
+  - `Nivel 2 | Padrao`: equilibrio entre apoio visual e fluidez da conversa
+  - `Nivel 3 | Simulacao real`: menos apoio visual durante a pergunta, privilegiando a conducao por voz
+- A dificuldade tecnica da proxima pergunta e derivada principalmente da senioridade (`intern/junior -> 1`, `mid -> 2`, `senior/staff -> 3`)
 - O audio do candidato pode ser enviado por resposta completa ou por chunks incrementais
 - O live coach processa STT/sinais de fala em tempo real e pode devolver insight parcial
 - Em `candidate_coaching_mode`, a UI mostra ajuda parcial e feedback orientado a desenvolvimento
@@ -189,6 +194,16 @@ Android (opcional):
 cd frontend
 npm run build:android
 ```
+
+Android release bundle:
+```bash
+cd frontend/android
+./gradlew bundleRelease
+```
+
+Versao Android atual:
+- `versionName`: `1.0.2`
+- `versionCode`: `20260326`
 
 ---
 

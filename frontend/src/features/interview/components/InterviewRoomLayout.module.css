@@ -781,16 +781,6 @@
   pointer-events: auto;
 }
 
-.ttsAudio {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
-  left: -9999px;
-  top: -9999px;
-}
-
 @media (max-width: 1100px) {
   .grid {
     grid-template-columns: 1fr;

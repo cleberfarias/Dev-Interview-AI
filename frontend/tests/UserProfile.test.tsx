@@ -3,6 +3,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 import type { InterviewConfig, User } from '../src/shared/types';
 import UserProfile from '../src/features/profile/components/UserProfile';
+import { renderWithQueryClient } from './renderWithQueryClient';
 
 const updateProfileMock = vi.fn();
 const getIdTokenMock = vi.fn();
@@ -98,7 +99,7 @@ describe('UserProfile', () => {
       name: 'Cleber Silva',
     });
 
-    render(
+    renderWithQueryClient(
       <UserProfile
         user={baseUser}
         config={baseConfig}
@@ -134,7 +135,7 @@ describe('UserProfile', () => {
   });
 
   it('paginates session history and keeps secondary actions behind the overflow control', async () => {
-    render(
+    renderWithQueryClient(
       <UserProfile
         user={buildUserWithInterviews(6)}
         config={baseConfig}

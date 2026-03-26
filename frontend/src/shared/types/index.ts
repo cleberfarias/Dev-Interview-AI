@@ -1,4 +1,4 @@
-import type { DifficultyLevel } from './interview';
+import type { DifficultyLevel, InterviewModeLevel } from './interview';
 
 export type LanguageCode = 'pt-BR' | 'es' | 'en';
 export type Track = 'frontend' | 'backend' | 'fullstack' | 'mobile' | 'devops' | 'data';
@@ -38,6 +38,7 @@ export interface InterviewConfig {
   jobDescription?: string;
   plan: PlanType;
   interviewMode: InterviewMode;
+  interviewModeLevel?: InterviewModeLevel;
   difficultyLevel?: DifficultyLevel;
 }
 

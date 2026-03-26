@@ -48,7 +48,8 @@ Retorne SOMENTE JSON valido:
 Regras:
 - Idioma da pergunta: {config.interviewLanguage}
 - Se remainingSeconds <= 60 ou askedCount >= maxQuestions, defina shouldFinish=true e question=null.
-- Nao repita a mesma pergunta ou tema imediatamente.
+- Nao repita nenhuma pergunta ja feita nesta sessao, nem reformule o mesmo tema/subtema com palavras parecidas.
+- Se houver empate entre varias boas opcoes, prefira a que explora outro foco tecnico ou comportamental ainda nao coberto.
 - Balanceie secoes (hr, technical, design, behavioral) conforme gaps.
 - Considere sinais de communicationAnalysis, behaviorProfile e cultureFitSignals quando estiverem no historico.
 - Use o modo abaixo como regra de conduta:
@@ -86,4 +87,5 @@ def build_next_question_prompt_strict(
         "- Retorne exatamente um objeto JSON raiz.\n"
         "- Sem markdown, sem comentarios, sem texto fora do JSON.\n"
         "- Campo question deve ser objeto ou null.\n"
+        "- A pergunta precisa ser nova em relacao a toda a sessao, nao apenas a ultima pergunta.\n"
     )

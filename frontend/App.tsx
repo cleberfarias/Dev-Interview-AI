@@ -1,10 +1,20 @@
 import React, { Suspense, useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { AppState, AvatarResponse, CandidateProfile, InterviewConfig, InterviewPlan, FinalReport, User } from './src/shared/types';
 import { I18N, clampDuration, INTERVIEW_LIMITS } from './src/shared/constants';
 import { LandingPage, Login } from './src/features/auth';
 import { auth } from './src/lib/firebase';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { onAuthStateChanged, signOut, type User as FirebaseUser } from 'firebase/auth';
 import { BackendApi } from './src/shared/services/backendApi';
+import {
+  appQueryKeys,
+  useAnalyzeJob,
+  useCandidateProfile,
+  useDeleteSession,
+  useMe,
+  useSessionReport,
+  useUpsertCandidateProfile,
+} from './src/shared/hooks/useAppQueries';
 import { getMissingCandidateProfileFields } from './src/shared/utils/candidateProfile';
 import { ProductTour, buildTourStorageKey, getTourSteps, type ProductTourId } from './src/features/tour';
 
@@ -85,8 +95,10 @@ const writeCompletedTour = (tourId: ProductTourId): void => {
 };
 
 const App: React.FC = () => {
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(true);
   const [state, setState] = useState<AppState>(AppState.LOGIN);
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(() => auth.currentUser);
   const [user, setUser] = useState<User | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [plan, setPlan] = useState<InterviewPlan | null>(null);
@@ -95,7 +107,15 @@ const App: React.FC = () => {
   const [candidateProfile, setCandidateProfile] = useState<CandidateProfile | null>(null);
   const [globalNotice, setGlobalNotice] = useState<string | null>(null);
   const [activeTourId, setActiveTourId] = useState<ProductTourId | null>(null);
+  const [sessionReportRequestId, setSessionReportRequestId] = useState<string | null>(null);
   const noticeTimerRef = useRef<number | null>(null);
+  const audioRetryUidRef = useRef<string | null>(null);
+  const meQuery = useMe(firebaseUser);
+  const candidateProfileQuery = useCandidateProfile(firebaseUser?.uid);
+  const deleteSessionMutation = useDeleteSession();
+  const analyzeJobMutation = useAnalyzeJob();
+  const upsertCandidateProfileMutation = useUpsertCandidateProfile();
+  const sessionReportQuery = useSessionReport(sessionReportRequestId);
 
   const [config, setConfig] = useState<InterviewConfig>({
     uiLanguage: 'pt-BR',
@@ -108,7 +128,7 @@ const App: React.FC = () => {
     plan: 'free',
     jobDescription: '',
     interviewMode: 'candidate_coaching_mode',
-    difficultyLevel: 3,
+    interviewModeLevel: 2,
   });
 
   const showGlobalNotice = (message: string) => {
@@ -147,6 +167,7 @@ const App: React.FC = () => {
       if (!mounted) return;
 
       if (!fbUser) {
+        setFirebaseUser(null);
         setUser(null);
         setCandidateProfile(null);
         setInitialAvatar(null);
@@ -155,6 +176,7 @@ const App: React.FC = () => {
         return;
       }
 
+      setFirebaseUser(fbUser);
       setState(AppState.DASHBOARD);
       setUser((prev) =>
         prev && prev.uid === fbUser.uid
@@ -170,29 +192,6 @@ const App: React.FC = () => {
             },
       );
       finishFirstLoad();
-
-      const token = await fbUser.getIdToken(false).catch(() => null);
-
-      try {
-        const profile = token ? await BackendApi.meWithToken(token) : await BackendApi.me();
-        if (!mounted) return;
-        setUser(profile);
-        void retryAudioChunksInBackground().catch((error) => {
-          console.warn('Audio chunk retry bootstrap failed', error);
-        });
-      } catch (e) {
-        console.warn('Nao foi possivel sincronizar /me. Mantendo perfil local do Firebase.', e);
-      }
-
-      try {
-        const candidate = await BackendApi.getCandidateProfile();
-        if (!mounted) return;
-        setCandidateProfile(candidate);
-      } catch (e) {
-        if (!mounted) return;
-        setCandidateProfile(null);
-        console.warn('Nao foi possivel carregar /profile/candidate. Continuando sem perfil salvo.', e);
-      }
     });
 
     return () => {
@@ -203,6 +202,62 @@ const App: React.FC = () => {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!meQuery.data) return;
+    setUser(meQuery.data);
+
+    if (audioRetryUidRef.current === meQuery.data.uid) return;
+    audioRetryUidRef.current = meQuery.data.uid;
+    void retryAudioChunksInBackground().catch((error) => {
+      console.warn('Audio chunk retry bootstrap failed', error);
+    });
+  }, [meQuery.data]);
+
+  useEffect(() => {
+    if (firebaseUser) return;
+    audioRetryUidRef.current = null;
+  }, [firebaseUser]);
+
+  useEffect(() => {
+    if (!candidateProfileQuery.data) return;
+    setCandidateProfile(candidateProfileQuery.data);
+  }, [candidateProfileQuery.data]);
+
+  useEffect(() => {
+    if (!candidateProfileQuery.error) return;
+    setCandidateProfile(null);
+    console.warn('Nao foi possivel carregar /profile/candidate. Continuando sem perfil salvo.', candidateProfileQuery.error);
+  }, [candidateProfileQuery.error]);
+
+  useEffect(() => {
+    if (!sessionReportRequestId) return;
+
+    if (sessionReportQuery.error) {
+      showGlobalNotice(sessionReportQuery.error.message || 'Nao foi possivel abrir o relatorio da entrevista.');
+      setSessionReportRequestId(null);
+      return;
+    }
+
+    const sessionReport = sessionReportQuery.data;
+    if (!sessionReport) return;
+
+    if (!sessionReport.hasReport || !sessionReport.report) {
+      showGlobalNotice('Essa sessao ainda nao possui relatorio salvo.');
+      setSessionReportRequestId(null);
+      return;
+    }
+
+    if (sessionReport.config) {
+      setConfig(sessionReport.config);
+    }
+    setSessionId(sessionReportRequestId);
+    setPlan(null);
+    setInitialAvatar(null);
+    setReport(sessionReport.report);
+    setState(AppState.REPORT);
+    setSessionReportRequestId(null);
+  }, [sessionReportQuery.data, sessionReportQuery.error, sessionReportRequestId]);
 
   useEffect(() => {
     const onUnhandledRejection = (event: PromiseRejectionEvent) => {
@@ -296,7 +351,9 @@ const App: React.FC = () => {
     if (!user) return;
     try {
       const res = await BackendApi.devAddCredits(amount);
-      setUser({ ...user, credits: res.credits });
+      const nextUser = { ...user, credits: res.credits };
+      setUser(nextUser);
+      queryClient.setQueryData(appQueryKeys.me(user.uid), nextUser);
     } catch (e: any) {
       showGlobalNotice(e?.message || 'Nao foi possivel adicionar creditos.');
     }
@@ -305,37 +362,17 @@ const App: React.FC = () => {
   const handleDeleteInterview = async (targetSessionId: string) => {
     if (!user) return;
     try {
-      await BackendApi.deleteSession(targetSessionId);
-      const profile = await BackendApi.me().catch(() => null);
-      if (profile) {
-        setUser(profile);
-      } else {
-        setUser({ ...user, interviews: user.interviews.filter((item) => item.id !== targetSessionId) });
-      }
+      await deleteSessionMutation.mutateAsync(targetSessionId);
+      const nextUser = { ...user, interviews: user.interviews.filter((item) => item.id !== targetSessionId) };
+      setUser(nextUser);
+      queryClient.setQueryData(appQueryKeys.me(user.uid), nextUser);
     } catch (e: any) {
       showGlobalNotice(e?.message || 'Nao foi possivel excluir a entrevista.');
     }
   };
 
   const handleOpenInterviewReport = async (targetSessionId: string) => {
-    try {
-      const sessionReport = await BackendApi.getSessionReport(targetSessionId);
-      if (!sessionReport.hasReport || !sessionReport.report) {
-        showGlobalNotice('Essa sessao ainda nao possui relatorio salvo.');
-        return;
-      }
-
-      if (sessionReport.config) {
-        setConfig(sessionReport.config);
-      }
-      setSessionId(targetSessionId);
-      setPlan(null);
-      setInitialAvatar(null);
-      setReport(sessionReport.report);
-      setState(AppState.REPORT);
-    } catch (e: any) {
-      showGlobalNotice(e?.message || 'Nao foi possivel abrir o relatorio da entrevista.');
-    }
+    setSessionReportRequestId(targetSessionId);
   };
 
   const handleInterviewFinish = async (finalReport: FinalReport) => {
@@ -348,8 +385,9 @@ const App: React.FC = () => {
         uiLanguage: config.uiLanguage,
         interviewLanguage: config.interviewLanguage,
       });
-      const profile = await BackendApi.me();
-      setUser(profile);
+      if (user) {
+        await queryClient.invalidateQueries({ queryKey: appQueryKeys.me(user.uid) });
+      }
     } catch (e) {
       console.error(e);
       showGlobalNotice('Falha ao salvar o resultado da entrevista.');
@@ -380,7 +418,7 @@ const App: React.FC = () => {
 
   const syncCandidateProfileFromOnboarding = async (nextConfig: InterviewConfig) => {
     try {
-      const existing = await BackendApi.getCandidateProfile().catch(() => null);
+      const existing = candidateProfileQuery.data || null;
       const payload = {
         targetRole: existing?.targetRole || defaultRoleFromTrack(nextConfig.track),
         experienceLevel: existing?.experienceLevel || nextConfig.seniority,
@@ -392,7 +430,7 @@ const App: React.FC = () => {
 
       if (payload.jobDescription) {
         try {
-          const analysis = await BackendApi.analyzeJob({
+          const analysis = await analyzeJobMutation.mutateAsync({
             jobDescription: payload.jobDescription,
             resumeTechnologies: payload.primarySkills,
           });
@@ -407,7 +445,7 @@ const App: React.FC = () => {
         }
       }
 
-      const saved = await BackendApi.upsertCandidateProfile(payload);
+      const saved = await upsertCandidateProfileMutation.mutateAsync(payload);
       setCandidateProfile(saved);
     } catch (e) {
       console.error('Failed to sync candidate profile from onboarding', e);
@@ -570,8 +608,14 @@ const App: React.FC = () => {
                 onAddCredits={addCredits}
                 onOpenInterviewReport={handleOpenInterviewReport}
                 onDeleteInterview={handleDeleteInterview}
-                onUserUpdated={(nextUser) => setUser(nextUser)}
-                onCandidateProfileUpdated={(profile) => setCandidateProfile(profile)}
+                onUserUpdated={(nextUser) => {
+                  setUser(nextUser);
+                  queryClient.setQueryData(appQueryKeys.me(nextUser.uid), nextUser);
+                }}
+                onCandidateProfileUpdated={(profile) => {
+                  setCandidateProfile(profile);
+                  queryClient.setQueryData(appQueryKeys.candidateProfile(profile.userId), profile);
+                }}
               />
             )}
 
@@ -595,15 +639,19 @@ const App: React.FC = () => {
                   userCredits={user?.credits || 0}
                   candidateProfile={candidateProfile}
                   onOpenProfile={() => setState(AppState.PROFILE)}
-                  onStart={(p, sid, credits, difficultyLevel, nextAvatar) => {
+                  onStart={(p, sid, credits, interviewModeLevel, nextAvatar) => {
                     setPlan(p);
                     setSessionId(sid);
                     setInitialAvatar(nextAvatar || null);
                     setConfig((prev) => ({
                       ...prev,
-                      difficultyLevel: difficultyLevel ?? prev.difficultyLevel ?? 3,
+                      interviewModeLevel: interviewModeLevel ?? prev.interviewModeLevel ?? 2,
                     }));
-                    if (user) setUser({ ...user, credits });
+                    if (user) {
+                      const nextUser = { ...user, credits };
+                      setUser(nextUser);
+                      queryClient.setQueryData(appQueryKeys.me(user.uid), nextUser);
+                    }
                     setState(AppState.INTERVIEWING);
                   }}
                   onBack={() => setState(AppState.ONBOARDING)}

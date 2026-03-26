@@ -5,6 +5,11 @@ No build atual, o app Android abre a URL hospedada em Firebase:
 
 `https://dev-interview-ai.web.app`
 
+Versao de release atual:
+
+- `versionName`: `1.0.2`
+- `versionCode`: `20260326`
+
 ## Pre-requisitos
 
 - JDK 21 (recomendado Temurin 21)

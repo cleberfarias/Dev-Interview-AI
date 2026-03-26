@@ -4,6 +4,7 @@ import logging
 import os
 from datetime import datetime, timezone
 
+from ..firebase_admin import get_firestore_client
 from ..repositories import user_repository
 from ..schemas import UserProfile, UserProfileUpdateRequest
 
@@ -25,8 +26,20 @@ def _initial_credits() -> int:
     return _env_int("FREE_TRIAL_CREDITS", _env_int("DEFAULT_CREDITS", 3))
 
 
-def health():
-    return {"ok": True, "time": _now_iso()}
+def health(check_db: bool = False):
+    payload = {"ok": True, "time": _now_iso()}
+    if not check_db:
+        return payload
+
+    try:
+        # Use a lightweight read to force a real Firestore RPC instead of only creating the client.
+        get_firestore_client().collection("_healthcheck").limit(1).get()
+        payload["firestore"] = {"checked": True, "ok": True}
+    except Exception:
+        logger.exception("Firestore health check failed")
+        payload["ok"] = False
+        payload["firestore"] = {"checked": True, "ok": False, "error": "firestore_unavailable"}
+    return payload
 
 
 def _resolve_name(user: dict, data: dict | None = None) -> str:

@@ -8,12 +8,20 @@ const backendApiMocks = vi.hoisted(() => ({
   orchestratorStart: vi.fn(),
 }));
 
+const audioPlaybackMocks = vi.hoisted(() => ({
+  primeSharedTtsAudio: vi.fn(),
+}));
+
 vi.mock('../src/shared/services/backendApi', () => ({
   BackendApi: {
     generatePlan: backendApiMocks.generatePlan,
     getCandidateProfile: backendApiMocks.getCandidateProfile,
     orchestratorStart: backendApiMocks.orchestratorStart,
   },
+}));
+
+vi.mock('../src/shared/utils/audioPlayback', () => ({
+  primeSharedTtsAudio: audioPlaybackMocks.primeSharedTtsAudio,
 }));
 
 import Lobby from '../src/features/interview/components/Lobby';
@@ -94,6 +102,7 @@ describe('Lobby', () => {
     backendApiMocks.generatePlan.mockReset();
     backendApiMocks.getCandidateProfile.mockReset().mockResolvedValue(completeProfile);
     backendApiMocks.orchestratorStart.mockReset();
+    audioPlaybackMocks.primeSharedTtsAudio.mockReset().mockResolvedValue(true);
     mockTrackStop.mockReset();
 
     Object.defineProperty(window, 'AudioContext', {
@@ -214,6 +223,121 @@ describe('Lobby', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Iniciar entrevista' })).toBeEnabled();
+    });
+  });
+
+  it('primes audio playback before starting the interview flow', async () => {
+    backendApiMocks.generatePlan.mockResolvedValue(null);
+    backendApiMocks.orchestratorStart.mockResolvedValue({
+      session: {
+        sessionId: 'sess-1',
+        credits: 6,
+      },
+      initialNextQuestion: {
+        shouldFinish: false,
+        question: {
+          id: 'q1',
+          prompt: 'Conte sobre um projeto recente.',
+        },
+      },
+      initialAvatar: null,
+    });
+
+    const onStart = vi.fn();
+
+    render(
+      <Lobby
+        config={baseConfig}
+        userCredits={8}
+        candidateProfile={completeProfile}
+        onStart={onStart}
+        onBack={vi.fn()}
+      />,
+    );
+
+    const startButton = await screen.findByRole('button', { name: 'Iniciar entrevista' });
+    await waitFor(() => expect(startButton).toBeEnabled());
+
+    fireEvent.click(startButton);
+
+    await waitFor(() => {
+      expect(audioPlaybackMocks.primeSharedTtsAudio).toHaveBeenCalledTimes(1);
+    });
+
+    await waitFor(() => {
+      expect(backendApiMocks.orchestratorStart).toHaveBeenCalledTimes(1);
+    });
+
+    await waitFor(() => {
+      expect(onStart).toHaveBeenCalledWith(
+        expect.objectContaining({
+          questions: [
+            expect.objectContaining({
+              id: 'q1',
+            }),
+          ],
+        }),
+        'sess-1',
+        6,
+        2,
+        null,
+      );
+    });
+  });
+
+  it('keeps interview format separate from technical difficulty sent to the backend', async () => {
+    backendApiMocks.generatePlan.mockResolvedValue(null);
+    backendApiMocks.orchestratorStart.mockResolvedValue({
+      session: {
+        sessionId: 'sess-2',
+        credits: 6,
+      },
+      initialNextQuestion: {
+        shouldFinish: false,
+        question: {
+          id: 'q1',
+          prompt: 'Conte sobre um projeto recente.',
+        },
+      },
+      initialAvatar: null,
+    });
+
+    const onStart = vi.fn();
+
+    render(
+      <Lobby
+        config={{ ...baseConfig, interviewModeLevel: 1, seniority: 'mid' }}
+        userCredits={8}
+        candidateProfile={completeProfile}
+        onStart={onStart}
+        onBack={vi.fn()}
+      />,
+    );
+
+    const startButton = await screen.findByRole('button', { name: 'Iniciar entrevista' });
+    await waitFor(() => expect(startButton).toBeEnabled());
+
+    fireEvent.click(startButton);
+
+    await waitFor(() => {
+      expect(backendApiMocks.orchestratorStart).toHaveBeenCalledWith(
+        expect.objectContaining({
+          difficultyLevel: 2,
+          config: expect.objectContaining({
+            interviewModeLevel: 1,
+          }),
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(onStart).toHaveBeenCalledWith(
+        expect.anything(),
+        'sess-2',
+        6,
+        1,
+        null,
+      );
     });
   });
 });

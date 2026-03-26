@@ -23,7 +23,7 @@ _TASK_PROMPT_VERSION: dict[str, str] = {
     "plan": "interview_plan_v3",
     "evaluate": "evaluation_v3",
     "report": "report_v3",
-    "next_question": "next_question_v3",
+    "next_question": "next_question_v4",
 }
 
 

@@ -22,6 +22,7 @@ class InterviewConfig(BaseModel):
     jobDescription: Optional[str] = None
     plan: PlanType
     interviewMode: str = "candidate_coaching_mode"
+    interviewModeLevel: Optional[int] = None
 
 
 class InterviewQuestion(BaseModel):

@@ -46,6 +46,16 @@ import {
   type HistoryItem,
   type UiQuestion,
 } from './interviewRoomUtils';
+import {
+  clearAudioElementSource,
+  getSharedTtsAudioElement,
+  setAudioElementSourceFromBase64,
+} from '../../../shared/utils/audioPlayback';
+import {
+  deriveTechnicalDifficultyLevel,
+  getInterviewModeLevelMeta,
+  normalizeInterviewModeLevel,
+} from '../../../shared/utils/interviewMode';
 
 type InterviewFlowState =
   | 'idle'
@@ -150,7 +160,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
   );
   const [textAnswer, setTextAnswer] = useState('');
   const [showMicrophoneSelector, setShowMicrophoneSelector] = useState(false);
-  const [audioEl, setAudioEl] = useState<HTMLAudioElement | null>(null);
+  const audioEl = useMemo(() => getSharedTtsAudioElement(), []);
   const [remainingSeconds, setRemainingSeconds] = useState(() =>
     Math.max(0, Math.round((config.duration ?? 0) * 60)),
   );
@@ -230,7 +240,9 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
 
   const { mouthOpen, isSpeaking } = useLipSync(audioEl);
 
-  const selectedLevel = config.difficultyLevel ?? 3;
+  const interviewModeLevel = normalizeInterviewModeLevel(config.interviewModeLevel);
+  const technicalDifficultyLevel = deriveTechnicalDifficultyLevel(config.seniority);
+  const interviewModeLevelMeta = getInterviewModeLevelMeta(interviewModeLevel);
   const candidateFirstName = useMemo(() => getPreferredCandidateName(user?.name), [user?.name]);
   const interviewMode: InterviewMode = config.interviewMode || 'candidate_coaching_mode';
   const isCandidateCoachingMode = interviewMode === 'candidate_coaching_mode';
@@ -239,10 +251,10 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
   const baseBullets = useMemo(() => (plan.mustHaveSkills ?? []).slice(0, 3), [plan]);
   const baseQuestions = useMemo(() => {
     const all = buildUiQuestions(plan);
-    const filtered = all.filter((question) => question.difficulty === selectedLevel);
+    const filtered = all.filter((question) => question.difficulty === technicalDifficultyLevel);
     const source = filtered.length ? filtered : all;
     return source.slice(0, FIXED_INTERVIEW_QUESTION_COUNT);
-  }, [plan, selectedLevel]);
+  }, [plan, technicalDifficultyLevel]);
   const initialAvatarByQuestionId = useMemo<Record<string, AvatarResponse>>(() => ({}), []);
   const [questions, setQuestions] = useState<UiQuestion[]>(() => baseQuestions);
   const sanitizedConfig = useMemo(() => {
@@ -322,10 +334,25 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     const seconds = clamped % 60;
     return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   }, [remainingSeconds]);
-  const questionCardTitle = isOpeningStep ? 'Apresentacao inicial' : currentQuestion?.title ?? 'Carregando pergunta...';
+  const shouldRevealQuestionText =
+    isOpeningStep || interviewModeLevel !== 3 || answerMode === 'text' || questionAudioFallbackActive;
+  const questionCardTitle = isOpeningStep
+    ? 'Apresentacao inicial'
+    : shouldRevealQuestionText
+      ? currentQuestion?.title ?? 'Carregando pergunta...'
+      : 'Simulacao real em andamento';
   const questionCardBullets = isOpeningStep
     ? ['Responda algo breve, como "sim, podemos comecar", para iniciar a entrevista.']
-    : currentQuestion?.bullets ?? [];
+    : shouldRevealQuestionText
+      ? [
+          ...(interviewModeLevel === 1 ? [interviewModeLevelMeta.roomHint] : []),
+          ...(currentQuestion?.bullets ?? []),
+        ]
+      : [
+          interviewModeLevelMeta.roomHint,
+          'A pergunta foi entregue por voz para simular uma entrevista ao vivo.',
+          'Se precisar revisar o enunciado, troque para modo texto.',
+        ];
   const isMediaReady = mediaStatus === 'ready' && audioCapture.isMicrophoneReady;
 
   const showRuntimeNotice = useCallback((message: string) => {
@@ -858,10 +885,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
       window.speechSynthesis.cancel();
     }
     if (!audioEl) return;
-    audioEl.pause();
-    audioEl.currentTime = 0;
-    audioEl.removeAttribute('src');
-    audioEl.load();
+    clearAudioElementSource(audioEl);
   }, [audioEl]);
 
   const speakWithBrowserVoice = useCallback(
@@ -936,7 +960,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
       audioEl.preload = 'auto';
       audioEl.muted = false;
       audioEl.volume = 1;
-      audioEl.src = `data:${payload.mimeType};base64,${payload.audioBase64}`;
+      setAudioElementSourceFromBase64(audioEl, payload);
       audioEl.load();
 
       await new Promise<void>((resolve, reject) => {
@@ -1510,7 +1534,10 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
 
       let nextQuestion = questions[nextIndex];
       if (!nextQuestion) {
-        const fallbackPrompt = getLocalFallbackPrompt(config.track, config.interviewLanguage, nextIndex);
+        const fallbackPrompt = getLocalFallbackPrompt(config.track, config.interviewLanguage, nextIndex, {
+          askedPrompts: nextHistory.map((item) => item.question),
+          seed: sessionId || `${config.track}:${config.seniority}`,
+        });
         if (!fallbackPrompt) {
           resetCurrentAnswerAnalysis(null);
           await finalizeInterview(nextHistory);
@@ -1576,6 +1603,104 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
       remainingSeconds,
       resetCurrentAnswerAnalysis,
       resolveAvatarForQuestion,
+      sessionId,
+      timeLimitReached,
+    ],
+  );
+
+  const continueAfterAnswer = useCallback(
+    async (
+      historyItem: HistoryItem,
+      options?: {
+        onHistoryCommitted?: (nextHistory: HistoryItem[]) => void;
+      },
+    ) => {
+      try {
+        const turnResponse = await BackendApi.orchestratorTurn({
+          config: sanitizedConfig,
+          sessionId,
+          history: historyRef.current.map((item) => ({ ...item })),
+          question: historyItem.question,
+          remainingSeconds,
+          difficultyLevel: technicalDifficultyLevel,
+          confirmedName: candidateFirstName,
+          answerId: historyItem.answerId,
+          interviewMode,
+          speechMetrics: historyItem.speechMetrics || currentSpeechMetricsRef.current || undefined,
+          transcript: historyItem.transcript,
+          includeAvatar: true,
+        });
+
+        const committedHistoryItem: HistoryItem = {
+          ...historyItem,
+          transcript: turnResponse.evaluation?.transcript || historyItem.transcript,
+          evaluation: turnResponse.evaluation,
+          speechMetrics:
+            turnResponse.communicationAnalysis?.speechMetrics ||
+            historyItem.speechMetrics ||
+            currentSpeechMetricsRef.current ||
+            null,
+          communicationAnalysis: turnResponse.communicationAnalysis || null,
+        };
+
+        const nextHistory = [...historyRef.current, committedHistoryItem];
+        historyRef.current = nextHistory;
+        options?.onHistoryCommitted?.(nextHistory);
+
+        currentSpeechMetricsRef.current = committedHistoryItem.speechMetrics || null;
+        currentCommunicationAnalysisRef.current = committedHistoryItem.communicationAnalysis || null;
+
+        const nextIndex = currentIndex + 1;
+        const nextQuestionPayload = turnResponse.nextQuestion;
+        if (
+          remainingSeconds <= 0 ||
+          timeLimitReached ||
+          nextIndex >= fallbackMaxQuestions ||
+          nextQuestionPayload?.shouldFinish ||
+          !nextQuestionPayload?.question
+        ) {
+          resetCurrentAnswerAnalysis(null);
+          await finalizeInterview(nextHistory);
+          return;
+        }
+
+        const nextQuestion = toUiQuestion(nextQuestionPayload.question, nextIndex, baseBullets);
+        setQuestions((prev) => {
+          const next = [...prev];
+          if (next[nextIndex]) {
+            next[nextIndex] = nextQuestion;
+          } else {
+            next.push(nextQuestion);
+          }
+          return next;
+        });
+
+        if (turnResponse.avatar) {
+          avatarCacheRef.current = { ...avatarCacheRef.current, [nextQuestion.id]: turnResponse.avatar };
+          setAvatarByQuestionId((prev) => ({ ...prev, [nextQuestion.id]: turnResponse.avatar as AvatarResponse }));
+        }
+
+        resetCurrentAnswerAnalysis(null);
+        setFlowState('next_question');
+        setConversationState('processing');
+      } catch (error) {
+        console.warn('Falling back to local turn progression', error);
+        await continueLocallyAfterAnswer(historyItem, options);
+      }
+    },
+    [
+      baseBullets,
+      candidateFirstName,
+      continueLocallyAfterAnswer,
+      currentIndex,
+      fallbackMaxQuestions,
+      finalizeInterview,
+      interviewMode,
+      remainingSeconds,
+      resetCurrentAnswerAnalysis,
+      sanitizedConfig,
+      technicalDifficultyLevel,
+      sessionId,
       timeLimitReached,
     ],
   );
@@ -1651,7 +1776,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
           transcript,
           speechMetrics,
         };
-        await continueLocallyAfterAnswer(historyItem, {
+        await continueAfterAnswer(historyItem, {
           onHistoryCommitted: (nextHistory) => {
             queueDeferredAnswerInsight({
               answerId,
@@ -1676,7 +1801,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     [
       clearNoResponseTimer,
       clearRecordingFailsafeTimer,
-      continueLocallyAfterAnswer,
+      continueAfterAnswer,
       flowState,
       showRuntimeNotice,
       audioCapture,
@@ -1731,7 +1856,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
         difficulty: currentQuestion.sourceDifficulty,
         transcript,
       };
-      await continueLocallyAfterAnswer(historyItem, {
+      await continueAfterAnswer(historyItem, {
         onHistoryCommitted: (nextHistory) => {
           queueDeferredAnswerInsight({
             answerId: nextAnswerId,
@@ -1750,7 +1875,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     }
   }, [
     clearNoResponseTimer,
-    continueLocallyAfterAnswer,
+    continueAfterAnswer,
     buildAnswerId,
     currentQuestion,
     flowState,
@@ -2067,14 +2192,22 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
       ? 'Audio indisponivel. Leia a pergunta em texto e responda quando estiver pronto.'
     : isTextMode
       ? textEntryEnabled
-        ? 'Leia a pergunta e envie sua resposta quando estiver pronto.'
+        ? interviewModeLevel === 1
+          ? interviewModeLevelMeta.roomHint
+          : 'Leia a pergunta e envie sua resposta quando estiver pronto.'
         : 'Aguarde a IA concluir a pergunta para liberar a resposta em texto.'
       : flowState === 'recording'
         ? 'Sua resposta esta em gravacao. Pause ou finalize quando concluir.'
         : flowState === 'awaiting_answer'
-          ? 'Sua vez. Toque em comecar resposta quando estiver pronto.'
+          ? interviewModeLevel === 3
+            ? 'Responda com base no que voce ouviu. Use o modo texto se precisar revisar o enunciado.'
+            : interviewModeLevel === 1
+              ? interviewModeLevelMeta.roomHint
+              : 'Sua vez. Toque em comecar resposta quando estiver pronto.'
             : flowState === 'asking'
-              ? 'A IA esta conduzindo a pergunta.'
+              ? interviewModeLevel === 3
+                ? 'A IA esta conduzindo a pergunta por voz para simular a entrevista real.'
+                : 'A IA esta conduzindo a pergunta.'
               : flowState === 'next_question' || conversationState === 'processing'
                 ? 'Preparando a proxima etapa da entrevista.'
                 : 'A entrevista sera liberada assim que a IA concluir a abertura.';
@@ -2085,6 +2218,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     { label: 'Candidato', value: candidateFirstName, priority: 'primary' as const },
     { label: 'Trilha', value: interviewRoleLabel, priority: 'primary' as const },
     { label: 'Modo', value: interviewModeLabel, priority: 'primary' as const },
+    { label: 'Formato', value: interviewModeLevelMeta.label, priority: 'secondary' as const },
     {
       label: 'Ritmo',
       value: `${FIXED_INTERVIEW_QUESTION_COUNT} perguntas / ${FIXED_INTERVIEW_DURATION_MINUTES} min`,
@@ -2201,8 +2335,6 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
           />
         </div>
       </div>
-
-      <audio ref={setAudioEl} className={styles.ttsAudio} preload="auto" playsInline />
 
       <section className={styles.content} aria-label="Sala de entrevista">
         <div className={styles.grid}>

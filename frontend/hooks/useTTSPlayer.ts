@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BackendApi } from '../src/shared/services/backendApi';
+import {
+  clearAudioElementSource,
+  getSharedTtsAudioElement,
+  setAudioElementSourceFromBase64,
+} from '../src/shared/utils/audioPlayback';
 
 interface TTSPlayOptions {
   voiceId?: string;
@@ -19,9 +24,7 @@ export const useTTSPlayer = (defaultOptions: TTSPlayOptions = {}): TTSPlayer => 
 
   const stopAudio = useCallback(() => {
     if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.src = '';
-      audioRef.current = null;
+      clearAudioElementSource(audioRef.current);
     }
   }, []);
 
@@ -51,7 +54,15 @@ export const useTTSPlayer = (defaultOptions: TTSPlayOptions = {}): TTSPlayer => 
 
         if (requestIdRef.current !== requestId) return;
 
-        const audio = new Audio(`data:${response.mimeType};base64,${response.audioBase64}`);
+        const audio = audioRef.current || getSharedTtsAudioElement();
+        if (!audio) {
+          throw new Error('TTS audio element unavailable');
+        }
+        audio.preload = 'auto';
+        audio.muted = false;
+        audio.volume = 1;
+        setAudioElementSourceFromBase64(audio, response);
+        audio.load();
         audioRef.current = audio;
 
         await new Promise<void>((resolve, reject) => {

@@ -1,5 +1,14 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ACTIONS,
+  EVENTS,
+  Joyride,
+  STATUS,
+  type EventData,
+  type Step as JoyrideStep,
+  type TooltipRenderProps,
+} from 'react-joyride';
+
 import type { LanguageCode } from '../../../shared/types';
 import styles from './ProductTour.module.css';
 
@@ -18,19 +27,6 @@ interface ProductTourProps {
   onClose: () => void;
   onComplete: () => void;
 }
-
-interface SpotlightRect {
-  top: number;
-  left: number;
-  width: number;
-  height: number;
-}
-
-const POPOVER_WIDTH = 320;
-const VIEWPORT_PADDING = 16;
-const SPOTLIGHT_PADDING = 10;
-const SPOTLIGHT_RADIUS = 22;
-const STEP_GAP = 18;
 
 const LABELS: Record<LanguageCode, { skip: string; back: string; next: string; done: string; step: string }> = {
   'pt-BR': {
@@ -56,251 +52,224 @@ const LABELS: Record<LanguageCode, { skip: string; back: string; next: string; d
   },
 };
 
-const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
-
-const resolvePlacement = (
-  preferred: ProductTourStep['placement'],
-  rect: SpotlightRect | null,
-  popoverHeight: number,
-): NonNullable<ProductTourStep['placement']> => {
-  if (!rect) return 'center';
-  if (preferred && preferred !== 'auto') return preferred;
-
-  const fitsBottom = rect.top + rect.height + STEP_GAP + popoverHeight <= window.innerHeight - VIEWPORT_PADDING;
-  if (fitsBottom) return 'bottom';
-
-  const fitsTop = rect.top - popoverHeight - STEP_GAP >= VIEWPORT_PADDING;
-  if (fitsTop) return 'top';
-
-  const fitsRight = rect.left + rect.width + STEP_GAP + POPOVER_WIDTH <= window.innerWidth - VIEWPORT_PADDING;
-  if (fitsRight) return 'right';
-
-  const fitsLeft = rect.left - STEP_GAP - POPOVER_WIDTH >= VIEWPORT_PADDING;
-  if (fitsLeft) return 'left';
-
-  return 'center';
+const mapPlacement = (placement?: ProductTourStep['placement']): JoyrideStep['placement'] => {
+  if (!placement || placement === 'auto') return 'auto';
+  if (placement === 'center') return 'center';
+  return placement;
 };
 
-const computePopoverPosition = (
-  placement: NonNullable<ProductTourStep['placement']>,
-  rect: SpotlightRect | null,
-  popoverHeight: number,
-) => {
-  if (!rect || placement === 'center') {
-    return {
-      top: clamp(window.innerHeight / 2 - popoverHeight / 2, VIEWPORT_PADDING, window.innerHeight - popoverHeight - VIEWPORT_PADDING),
-      left: clamp(window.innerWidth / 2 - POPOVER_WIDTH / 2, VIEWPORT_PADDING, window.innerWidth - POPOVER_WIDTH - VIEWPORT_PADDING),
-    };
-  }
+type TooltipProps = TooltipRenderProps & {
+  labels: (typeof LABELS)[LanguageCode];
+  onPrimaryLastStep: () => void;
+  targetFound: boolean;
+};
 
-  const centeredLeft = clamp(
-    rect.left + rect.width / 2 - POPOVER_WIDTH / 2,
-    VIEWPORT_PADDING,
-    window.innerWidth - POPOVER_WIDTH - VIEWPORT_PADDING,
-  );
-  const centeredTop = clamp(
-    rect.top + rect.height / 2 - popoverHeight / 2,
-    VIEWPORT_PADDING,
-    window.innerHeight - popoverHeight - VIEWPORT_PADDING,
-  );
+const ProductTourTooltip: React.FC<TooltipProps> = ({
+  backProps,
+  continuous,
+  index,
+  isLastStep,
+  labels,
+  onPrimaryLastStep,
+  primaryProps,
+  skipProps,
+  size,
+  step,
+  targetFound,
+  tooltipProps,
+}) => {
+  const { role: _role, 'aria-label': _ariaLabel, ...restTooltipProps } = tooltipProps;
+  const { children: _backChildren, onClick: onBackClick, 'data-action': backAction } = backProps;
+  const { children: _primaryChildren, onClick: onPrimaryClick, 'data-action': primaryAction } = primaryProps;
+  const { children: _skipChildren, onClick: onSkipClick, 'data-action': skipAction } = skipProps;
+  const handlePrimaryClick = (event: React.MouseEvent<HTMLElement>) => {
+    onPrimaryClick(event);
 
-  if (placement === 'top') {
-    return {
-      top: clamp(rect.top - popoverHeight - STEP_GAP, VIEWPORT_PADDING, window.innerHeight - popoverHeight - VIEWPORT_PADDING),
-      left: centeredLeft,
-    };
-  }
-
-  if (placement === 'right') {
-    return {
-      top: centeredTop,
-      left: clamp(rect.left + rect.width + STEP_GAP, VIEWPORT_PADDING, window.innerWidth - POPOVER_WIDTH - VIEWPORT_PADDING),
-    };
-  }
-
-  if (placement === 'left') {
-    return {
-      top: centeredTop,
-      left: clamp(rect.left - POPOVER_WIDTH - STEP_GAP, VIEWPORT_PADDING, window.innerWidth - POPOVER_WIDTH - VIEWPORT_PADDING),
-    };
-  }
-
-  return {
-    top: clamp(rect.top + rect.height + STEP_GAP, VIEWPORT_PADDING, window.innerHeight - popoverHeight - VIEWPORT_PADDING),
-    left: centeredLeft,
+    if (continuous && isLastStep) {
+      onPrimaryLastStep();
+    }
   };
-};
 
-const ProductTour: React.FC<ProductTourProps> = ({ open, steps, locale = 'pt-BR', onClose, onComplete }) => {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [spotlightRect, setSpotlightRect] = useState<SpotlightRect | null>(null);
-  const [targetFound, setTargetFound] = useState(false);
-  const [portalReady, setPortalReady] = useState(false);
-  const [popoverPosition, setPopoverPosition] = useState<{ top: number; left: number } | null>(null);
-  const popoverRef = useRef<HTMLDivElement | null>(null);
+  return (
+    <div
+      {...restTooltipProps}
+      role="dialog"
+      className={styles.popover}
+      aria-label={String(step.title || step.content || labels.step)}
+    >
+      <div className={styles.popoverHeader}>
+        <span className={styles.kicker}>
+          {labels.step} {index + 1}/{size}
+        </span>
+        <button
+          type="button"
+          className={styles.skipButton}
+          onClick={onSkipClick}
+          aria-label={labels.skip}
+          data-action={skipAction}
+        >
+          {labels.skip}
+        </button>
+      </div>
 
-  const safeSteps = useMemo(() => steps.filter((step) => Boolean(step.title && step.description)), [steps]);
-  const activeStep = safeSteps[currentIndex];
-  const labels = LABELS[locale] || LABELS['pt-BR'];
-  const isLastStep = currentIndex === safeSteps.length - 1;
+      {step.title && <h3 className={styles.title}>{String(step.title)}</h3>}
+      <p className={styles.description}>{String(step.content || '')}</p>
 
-  useEffect(() => {
-    setPortalReady(true);
-  }, []);
-
-  useEffect(() => {
-    if (!open) {
-      setCurrentIndex(0);
-      setSpotlightRect(null);
-      setTargetFound(false);
-      setPopoverPosition(null);
-      return;
-    }
-    setCurrentIndex(0);
-  }, [open, safeSteps.length]);
-
-  useEffect(() => {
-    if (!open || !activeStep?.target) return;
-    const target = document.querySelector(activeStep.target);
-    if (target instanceof HTMLElement) {
-      target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
-    }
-  }, [activeStep, open]);
-
-  useLayoutEffect(() => {
-    if (!open || !activeStep) return;
-
-    let intervalId = 0;
-    let frameId = 0;
-
-    const updateSpotlight = () => {
-      const target = activeStep.target ? document.querySelector(activeStep.target) : null;
-      if (!(target instanceof HTMLElement)) {
-        setTargetFound(false);
-        setSpotlightRect(null);
-        return;
-      }
-
-      const rect = target.getBoundingClientRect();
-      if (rect.width === 0 && rect.height === 0) {
-        setTargetFound(false);
-        setSpotlightRect(null);
-        return;
-      }
-
-      setTargetFound(true);
-      setSpotlightRect({
-        top: Math.max(VIEWPORT_PADDING, rect.top - SPOTLIGHT_PADDING),
-        left: Math.max(VIEWPORT_PADDING, rect.left - SPOTLIGHT_PADDING),
-        width: rect.width + SPOTLIGHT_PADDING * 2,
-        height: rect.height + SPOTLIGHT_PADDING * 2,
-      });
-    };
-
-    frameId = window.requestAnimationFrame(updateSpotlight);
-    intervalId = window.setInterval(updateSpotlight, 250);
-    window.addEventListener('resize', updateSpotlight);
-    window.addEventListener('scroll', updateSpotlight, true);
-
-    return () => {
-      window.cancelAnimationFrame(frameId);
-      window.clearInterval(intervalId);
-      window.removeEventListener('resize', updateSpotlight);
-      window.removeEventListener('scroll', updateSpotlight, true);
-    };
-  }, [activeStep, open]);
-
-  useLayoutEffect(() => {
-    if (!open || !activeStep || !popoverRef.current) return;
-    const popoverHeight = popoverRef.current.getBoundingClientRect().height || 240;
-    const placement = resolvePlacement(activeStep.placement ?? 'auto', targetFound ? spotlightRect : null, popoverHeight);
-    setPopoverPosition(computePopoverPosition(placement, targetFound ? spotlightRect : null, popoverHeight));
-  }, [activeStep, open, spotlightRect, targetFound]);
-
-  if (!open || !portalReady || !activeStep || safeSteps.length === 0) {
-    return null;
-  }
-
-  const overlay = (
-    <div className={styles.root} aria-live="polite">
-      <div className={styles.backdrop} onClick={onClose} aria-hidden="true" />
-
-      {targetFound && spotlightRect && (
-        <div
-          className={styles.spotlight}
-          aria-hidden="true"
-          style={{
-            top: spotlightRect.top,
-            left: spotlightRect.left,
-            width: spotlightRect.width,
-            height: spotlightRect.height,
-            borderRadius: SPOTLIGHT_RADIUS,
-          }}
-        />
+      {!targetFound && step.target && (
+        <p className={styles.helperText}>
+          Esta area ainda nao esta visivel. O tour continua mesmo assim.
+        </p>
       )}
 
-      <div
-        ref={popoverRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label={activeStep.title}
-        className={styles.popover}
-        style={
-          popoverPosition
-            ? {
-                top: popoverPosition.top,
-                left: popoverPosition.left,
-              }
-            : undefined
-        }
-      >
-        <div className={styles.popoverHeader}>
-          <span className={styles.kicker}>
-            {labels.step} {currentIndex + 1}/{safeSteps.length}
-          </span>
-          <button type="button" onClick={onClose} className={styles.skipButton}>
-            {labels.skip}
-          </button>
-        </div>
+      <div className={styles.actions}>
+        <button
+          type="button"
+          className={styles.secondaryButton}
+          onClick={onBackClick}
+          aria-label={labels.back}
+          data-action={backAction}
+          disabled={index === 0}
+        >
+          {labels.back}
+        </button>
 
-        <h3 className={styles.title}>{activeStep.title}</h3>
-        <p className={styles.description}>{activeStep.description}</p>
-
-        {!targetFound && activeStep.target && (
-          <p className={styles.helperText}>
-            Esta area ainda nao esta visivel. O tour continua mesmo assim.
-          </p>
-        )}
-
-        <div className={styles.actions}>
-          <button
-            type="button"
-            onClick={() => setCurrentIndex((value) => Math.max(0, value - 1))}
-            disabled={currentIndex === 0}
-            className={styles.secondaryButton}
-          >
-            {labels.back}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              if (isLastStep) {
-                onComplete();
-                return;
-              }
-              setCurrentIndex((value) => Math.min(safeSteps.length - 1, value + 1));
-            }}
-            className={styles.primaryButton}
-          >
-            {isLastStep ? labels.done : labels.next}
-          </button>
-        </div>
+        <button
+          type="button"
+          className={styles.primaryButton}
+          onClick={handlePrimaryClick}
+          aria-label={continuous && isLastStep ? labels.done : labels.next}
+          data-action={primaryAction}
+        >
+          {continuous && isLastStep ? labels.done : labels.next}
+        </button>
       </div>
     </div>
   );
+};
 
-  return createPortal(overlay, document.body);
+const ProductTour: React.FC<ProductTourProps> = ({ open, steps, locale = 'pt-BR', onClose, onComplete }) => {
+  const [stepIndex, setStepIndex] = useState(0);
+  const completionHandledRef = useRef(false);
+  const labels = LABELS[locale] || LABELS['pt-BR'];
+  const safeSteps = useMemo(() => steps.filter((step) => Boolean(step.title && step.description)), [steps]);
+
+  useEffect(() => {
+    completionHandledRef.current = false;
+
+    if (!open) {
+      setStepIndex(0);
+      return;
+    }
+
+    setStepIndex((current) => Math.min(current, Math.max(0, safeSteps.length - 1)));
+  }, [open, safeSteps.length]);
+
+  const resolvedSteps = useMemo(() => {
+    return safeSteps.map<JoyrideStep>((step) => {
+      const targetFound =
+        typeof document !== 'undefined' && step.target ? Boolean(document.querySelector(step.target)) : false;
+
+      return {
+        content: step.description,
+        data: { targetFound },
+        placement: mapPlacement(step.placement),
+        skipBeacon: true,
+        target: step.target && targetFound ? step.target : 'body',
+        title: step.title,
+      };
+    });
+  }, [safeSteps]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const currentStep = safeSteps[stepIndex];
+
+    if (!currentStep?.target || typeof document === 'undefined') {
+      return;
+    }
+
+    const target = document.querySelector(currentStep.target);
+
+    if (target instanceof HTMLElement) {
+      target.scrollIntoView({ block: 'center', inline: 'nearest' });
+    }
+  }, [open, safeSteps, stepIndex]);
+
+  const completeTour = () => {
+    if (completionHandledRef.current) {
+      return;
+    }
+
+    completionHandledRef.current = true;
+    setStepIndex(0);
+    onComplete();
+  };
+
+  const handleEvent = (event: EventData) => {
+    const { action, index, status, type } = event;
+    const isFinalAdvance = type === EVENTS.STEP_AFTER && action === ACTIONS.NEXT && index >= resolvedSteps.length - 1;
+
+    if (status === STATUS.FINISHED || isFinalAdvance) {
+      completeTour();
+      return;
+    }
+
+    if (status === STATUS.SKIPPED || action === ACTIONS.CLOSE) {
+      setStepIndex(0);
+      onClose();
+      return;
+    }
+
+    if (type === EVENTS.STEP_AFTER || type === EVENTS.TARGET_NOT_FOUND) {
+      const delta = action === ACTIONS.PREV ? -1 : 1;
+      setStepIndex(Math.max(0, index + delta));
+    }
+  };
+
+  if (!open || safeSteps.length === 0) {
+    return null;
+  }
+
+  return (
+    <Joyride
+      callback={handleEvent}
+      continuous
+      disableCloseOnEsc={false}
+      disableOverlayClose={false}
+      disableScrolling={false}
+      hideCloseButton
+      run={open}
+      scrollDuration={300}
+      scrollOffset={20}
+      showProgress={false}
+      showSkipButton
+      spotlightClicks={false}
+      spotlightPadding={10}
+      stepIndex={stepIndex}
+      steps={resolvedSteps}
+      styles={{
+        options: {
+          arrowColor: '#0f172a',
+          overlayColor: 'rgba(2, 6, 23, 0.76)',
+          primaryColor: '#0891b2',
+          spotlightShadow: '0 0 0 1px rgba(103, 232, 249, 0.68), 0 0 32px rgba(34, 211, 238, 0.34)',
+          width: 320,
+          zIndex: 220,
+        },
+      }}
+      tooltipComponent={(props) => (
+        <ProductTourTooltip
+          {...props}
+          labels={labels}
+          onPrimaryLastStep={completeTour}
+          targetFound={Boolean((resolvedSteps[props.index]?.data as { targetFound?: boolean } | undefined)?.targetFound)}
+        />
+      )}
+    />
+  );
 };
 
 export default ProductTour;

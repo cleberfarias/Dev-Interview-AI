@@ -9,7 +9,9 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 ### Changed
 - Secured live coach websocket auth flow without passing Firebase tokens in query strings.
 - Added frontend typecheck and production build validation to CI.
-- Updated Android release version to 1.0.1 (`versionCode` 20260317).
+- Separated interview format levels from technical difficulty and kept technical depth derived from seniority.
+- Reduced repeated AI questions within the same session and made local fallback prompts less predictable.
+- Updated Android release version to 1.0.2 (`versionCode` 20260326).
 
 ## [0.1.0] - 2026-01-29
 

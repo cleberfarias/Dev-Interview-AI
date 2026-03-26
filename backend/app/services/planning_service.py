@@ -15,7 +15,7 @@ from . import ai_observability_service, interview_core
 
 
 PLAN_PROMPT_VERSION = "interview_plan_v3"
-NEXT_QUESTION_PROMPT_VERSION = "next_question_v3"
+NEXT_QUESTION_PROMPT_VERSION = "next_question_v4"
 
 
 def generate_plan(session_id: str, user):
@@ -133,6 +133,10 @@ def next_question(payload, user):
     history = request.history or []
     remaining_seconds = int(request.remainingSeconds or 0)
     asked_count = len(history)
+    resolved_difficulty_level = interview_core._resolve_technical_difficulty_level(
+        request.difficultyLevel,
+        config.seniority,
+    )
 
     duration = interview_core._clamp_duration_minutes(config)
     min_q, max_q = interview_core._plan_question_bounds(duration)
@@ -148,7 +152,7 @@ def next_question(payload, user):
         asked_count=asked_count,
         min_q=min_q,
         max_q=max_q,
-        difficulty_level=request.difficultyLevel,
+        difficulty_level=resolved_difficulty_level,
         context=context,
     )
     metadata = ai_observability_service.build_metadata(
@@ -170,6 +174,8 @@ def next_question(payload, user):
     except AIProviderError as e:
         interview_core._handle_ai_error(e)
 
+    question = None
+    rejected_prompt = None
     try:
         data = interview_core._safe_json_loads(result.output_text or "{}")
         question, should_finish, reason = interview_core._parse_next_question_payload(data, asked_count)
@@ -184,9 +190,11 @@ def next_question(payload, user):
             )
         if not question:
             raise ValueError("Invalid next question payload")
+        interview_core._ensure_next_question_is_fresh(question, history)
     except Exception:
+        rejected_prompt = question.prompt if question else None
         interview_core.logger.warning(
-            "Invalid next-question payload (provider=%s model=%s)",
+            "Invalid or repeated next-question payload (provider=%s model=%s)",
             result.provider_used,
             result.model_used,
         )
@@ -200,8 +208,9 @@ def next_question(payload, user):
                     asked_count=asked_count,
                     min_q=min_q,
                     max_q=max_q,
-                    difficulty_level=request.difficultyLevel,
+                    difficulty_level=resolved_difficulty_level,
                     context=context,
+                    rejected_question_prompt=rejected_prompt,
                 ),
                 max_tokens=360,
                 temperature=0.2,
@@ -224,6 +233,7 @@ def next_question(payload, user):
                 )
             if not question:
                 raise ValueError("Invalid next question payload after retry")
+            interview_core._ensure_next_question_is_fresh(question, history)
             result = retry_result
         except AIProviderError as e:
             interview_core._handle_ai_error(e)

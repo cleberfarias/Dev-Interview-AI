@@ -7,7 +7,14 @@ import type {
   ProfileAnalysisAuditItem,
   ResumeMatchResult,
 } from '../../../shared/types';
-import { BackendApi } from '../../../shared/services/backendApi';
+import { auth } from '../../../lib/firebase';
+import {
+  useAnalyzeJob,
+  useAnalyzeResume,
+  useCandidateProfile,
+  useCandidateProfileAudit,
+  useUpsertCandidateProfile,
+} from '../../../shared/hooks/useAppQueries';
 import { getMissingCandidateProfileDraftFields } from '../../../shared/utils/candidateProfile';
 import { ResumeAnalyzerCard } from '../../resume';
 import { JobAnalyzerCard } from '../../jobs';
@@ -96,10 +103,6 @@ const contextStatusClassName = (status: ContextStepStatus): string => {
 };
 
 const CandidateProfilePanel: React.FC<Props> = ({ initialJobDescription, onProfileUpdated }) => {
-  const [loadingProfile, setLoadingProfile] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [analyzingResume, setAnalyzingResume] = useState(false);
-  const [analyzingJob, setAnalyzingJob] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -114,12 +117,14 @@ const CandidateProfilePanel: React.FC<Props> = ({ initialJobDescription, onProfi
   const [jobAnalysis, setJobAnalysis] = useState<JobAnalysisResult | null>(null);
   const [resumeTrace, setResumeTrace] = useState<AnalysisTrace | null>(null);
   const [jobTrace, setJobTrace] = useState<AnalysisTrace | null>(null);
-  const [analysisAudit, setAnalysisAudit] = useState<ProfileAnalysisAuditItem[]>([]);
-  const [auditOffset, setAuditOffset] = useState(0);
-  const [auditHasMore, setAuditHasMore] = useState(false);
-  const [auditLoading, setAuditLoading] = useState(false);
   const [isAuditExpanded, setIsAuditExpanded] = useState(false);
   const [expandedContextStep, setExpandedContextStep] = useState<ContextStepId | null>('resume');
+  const currentUserKey = auth.currentUser?.uid || 'current-user';
+  const profileQuery = useCandidateProfile(currentUserKey);
+  const auditQuery = useCandidateProfileAudit(currentUserKey, AUDIT_PAGE_SIZE);
+  const saveProfileMutation = useUpsertCandidateProfile();
+  const analyzeResumeMutation = useAnalyzeResume();
+  const analyzeJobMutation = useAnalyzeJob();
 
   useEffect(() => {
     if (!jobDescription.trim() && initialJobDescription?.trim()) {
@@ -136,77 +141,45 @@ const CandidateProfilePanel: React.FC<Props> = ({ initialJobDescription, onProfi
     setJobDescription(profile.jobDescription || initialJobDescription || '');
     setResumeTrace(profile.lastResumeAnalysisTrace || null);
     setJobTrace(profile.lastJobAnalysisTrace || null);
-    setAnalysisAudit(profile.analysisAudit || []);
     onProfileUpdated?.(profile);
   };
 
   useEffect(() => {
-    let mounted = true;
+    if (!profileQuery.data) return;
+    applyProfileToState(profileQuery.data);
+  }, [initialJobDescription, onProfileUpdated, profileQuery.data]);
 
-    const loadAuditPage = async (offset = 0, replace = false) => {
-      setAuditLoading(true);
-      try {
-        const page = await BackendApi.getCandidateProfileAudit({ limit: AUDIT_PAGE_SIZE, offset });
-        if (!mounted) return;
-        setAnalysisAudit((prev) => {
-          const next = replace ? page.items : [...prev, ...page.items];
-          const dedup = new Map<string, ProfileAnalysisAuditItem>();
-          for (const item of next) {
-            const key = `${item.kind}|${item.createdAt}|${item.source}|${item.aiProvider || ''}|${item.aiModel || ''}`;
-            if (!dedup.has(key)) dedup.set(key, item);
-          }
-          return Array.from(dedup.values());
-        });
-        setAuditOffset(page.nextOffset ?? offset + page.items.length);
-        setAuditHasMore(Boolean(page.hasMore));
-      } catch (e) {
-        console.warn('Falha ao carregar auditoria de analises', e);
-      } finally {
-        if (mounted) setAuditLoading(false);
-      }
-    };
+  useEffect(() => {
+    if (!profileQuery.error) return;
+    setError(profileQuery.error.message || 'Nao foi possivel carregar perfil do candidato.');
+  }, [profileQuery.error]);
 
-    const load = async () => {
-      try {
-        const profile = await BackendApi.getCandidateProfile();
-        if (!mounted) return;
-        applyProfileToState(profile);
-        await loadAuditPage(0, true);
-      } catch (e: any) {
-        if (!mounted) return;
-        setError(e?.message || 'Nao foi possivel carregar perfil do candidato.');
-      } finally {
-        if (mounted) setLoadingProfile(false);
+  const analysisAudit = useMemo(() => {
+    const pages = auditQuery.data?.pages || [];
+    const dedup = new Map<string, ProfileAnalysisAuditItem>();
+    for (const page of pages) {
+      for (const item of page.items || []) {
+        const key = `${item.kind}|${item.createdAt}|${item.source}|${item.aiProvider || ''}|${item.aiModel || ''}`;
+        if (!dedup.has(key)) dedup.set(key, item);
       }
-    };
-    load();
-    return () => {
-      mounted = false;
-    };
-  }, []);
+    }
+    return Array.from(dedup.values());
+  }, [auditQuery.data]);
 
   const loadMoreAudit = useCallback(async () => {
-    if (auditLoading || !auditHasMore) return;
-    setAuditLoading(true);
+    if (!auditQuery.hasNextPage || auditQuery.isFetchingNextPage) return;
     try {
-      const page = await BackendApi.getCandidateProfileAudit({ limit: AUDIT_PAGE_SIZE, offset: auditOffset });
-      setAnalysisAudit((prev) => {
-        const next = [...prev, ...page.items];
-        const dedup = new Map<string, ProfileAnalysisAuditItem>();
-        for (const item of next) {
-          const key = `${item.kind}|${item.createdAt}|${item.source}|${item.aiProvider || ''}|${item.aiModel || ''}`;
-          if (!dedup.has(key)) dedup.set(key, item);
-        }
-        return Array.from(dedup.values());
-      });
-      setAuditOffset(page.nextOffset ?? auditOffset + page.items.length);
-      setAuditHasMore(Boolean(page.hasMore));
+      await auditQuery.fetchNextPage();
     } catch (e) {
       console.warn('Falha ao carregar mais auditoria', e);
-    } finally {
-      setAuditLoading(false);
     }
-  }, [auditHasMore, auditLoading, auditOffset]);
+  }, [auditQuery]);
+  const loadingProfile = profileQuery.isLoading && !profileQuery.data;
+  const saving = saveProfileMutation.isPending;
+  const analyzingResume = analyzeResumeMutation.isPending;
+  const analyzingJob = analyzeJobMutation.isPending;
+  const auditHasMore = Boolean(auditQuery.hasNextPage);
+  const auditLoading = auditQuery.isFetchingNextPage;
 
   const currentPrimarySkills = useMemo(() => splitCsv(primarySkillsInput), [primarySkillsInput]);
   const currentWeakSkills = useMemo(() => splitCsv(weakSkillsInput), [weakSkillsInput]);
@@ -300,21 +273,18 @@ const CandidateProfilePanel: React.FC<Props> = ({ initialJobDescription, onProfi
 
   const saveProfile = useCallback(
     async (override: Partial<CandidateProfileUpsertRequest> = {}, successMessage = 'Perfil salvo com sucesso.') => {
-      setSaving(true);
       setError(null);
       setMessage(null);
       try {
         const payload = buildPayload(override);
-        const saved = await BackendApi.upsertCandidateProfile(payload);
+        const saved = await saveProfileMutation.mutateAsync(payload);
         applyProfileToState(saved);
         setMessage(successMessage);
       } catch (e: any) {
         setError(e?.message || 'Nao foi possivel salvar perfil do candidato.');
-      } finally {
-        setSaving(false);
       }
     },
-    [buildPayload],
+    [buildPayload, saveProfileMutation],
   );
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -323,12 +293,11 @@ const CandidateProfilePanel: React.FC<Props> = ({ initialJobDescription, onProfi
   };
 
   const handleAnalyzeResume = async (resumeFile: File) => {
-    setAnalyzingResume(true);
     setError(null);
     setMessage(null);
     try {
       const fileBase64 = await fileToBase64(resumeFile);
-      const result = await BackendApi.analyzeResume({
+      const result = await analyzeResumeMutation.mutateAsync({
         fileName: resumeFile.name,
         fileBase64,
         mimeType: resumeFile.type || undefined,
@@ -359,15 +328,9 @@ const CandidateProfilePanel: React.FC<Props> = ({ initialJobDescription, onProfi
         },
         'Curriculo analisado e perfil atualizado.',
       );
-      const page = await BackendApi.getCandidateProfileAudit({ limit: AUDIT_PAGE_SIZE, offset: 0 });
-      setAnalysisAudit(page.items || []);
-      setAuditOffset(page.nextOffset ?? (page.items?.length || 0));
-      setAuditHasMore(Boolean(page.hasMore));
       setExpandedContextStep('job');
     } catch (e: any) {
       setError(e?.message || 'Falha ao analisar curriculo.');
-    } finally {
-      setAnalyzingResume(false);
     }
   };
 
@@ -376,11 +339,10 @@ const CandidateProfilePanel: React.FC<Props> = ({ initialJobDescription, onProfi
       setError('Informe uma descricao de vaga para analisar.');
       return;
     }
-    setAnalyzingJob(true);
     setError(null);
     setMessage(null);
     try {
-      const result = await BackendApi.analyzeJob({
+      const result = await analyzeJobMutation.mutateAsync({
         jobDescription,
         resumeTechnologies: currentPrimarySkills,
       });
@@ -407,17 +369,12 @@ const CandidateProfilePanel: React.FC<Props> = ({ initialJobDescription, onProfi
         },
         'Vaga analisada e perfil atualizado.',
       );
-      const page = await BackendApi.getCandidateProfileAudit({ limit: AUDIT_PAGE_SIZE, offset: 0 });
-      setAnalysisAudit(page.items || []);
-      setAuditOffset(page.nextOffset ?? (page.items?.length || 0));
-      setAuditHasMore(Boolean(page.hasMore));
       setExpandedContextStep('job');
     } catch (e: any) {
       setError(e?.message || 'Falha ao analisar descricao da vaga.');
-    } finally {
-      setAnalyzingJob(false);
     }
   };
+
 
   return (
     <section className="space-y-4">

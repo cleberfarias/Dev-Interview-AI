@@ -242,8 +242,8 @@ const TOUR_COPY: Record<LanguageCode, LocalizedTours> = {
         id: 'lobby-level',
         target: '[data-tour-id="lobby-level"]',
         placement: 'right',
-        title: 'Pick the difficulty',
-        description: 'Select the interview level to control how demanding the technical questions will be.',
+        title: 'Pick the interview format',
+        description: 'Select how much visual support the room should give while the interview is happening.',
       },
       {
         id: 'lobby-start',

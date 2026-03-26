@@ -44,6 +44,71 @@ logger = logging.getLogger('uvicorn.error')
 ai_router = AIRouter()
 FIXED_INTERVIEW_DURATION_MINUTES = 10
 FIXED_INTERVIEW_QUESTION_COUNT = 5
+_QUESTION_SIMILARITY_STOPWORDS = {
+    "como",
+    "voce",
+    "voces",
+    "you",
+    "your",
+    "would",
+    "could",
+    "should",
+    "with",
+    "from",
+    "para",
+    "sobre",
+    "esta",
+    "esse",
+    "essa",
+    "that",
+    "this",
+    "when",
+    "onde",
+    "would",
+    "qual",
+    "quais",
+    "what",
+    "which",
+    "tell",
+    "describe",
+    "fale",
+    "descreva",
+    "una",
+    "para",
+    "por",
+    "the",
+    "uma",
+    "um",
+    "and",
+    "com",
+    "sem",
+    "mais",
+    "less",
+    "using",
+    "usar",
+    "would",
+}
+_QUESTION_TOKEN_ALIASES = {
+    "apis": "api",
+    "endpoint": "api",
+    "endpoints": "api",
+    "servicos": "servico",
+    "services": "service",
+    "caching": "cache",
+    "cached": "cache",
+    "deploy": "rollout",
+    "release": "rollout",
+    "releases": "rollout",
+    "lentidao": "performance",
+    "lenta": "performance",
+    "lento": "performance",
+    "slow": "performance",
+    "slowness": "performance",
+    "incidentes": "incidente",
+    "incidents": "incident",
+    "erros": "erro",
+    "errors": "error",
+}
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -400,6 +465,129 @@ def _difficulty_range_from_level(level: Optional[int]) -> Optional[tuple[int, in
     return (4, 5)
 
 
+def _technical_difficulty_level_from_seniority(seniority: Optional[str]) -> int:
+    key = str(seniority or "").strip().lower()
+    if key in {"intern", "junior"}:
+        return 1
+    if key in {"senior", "staff"}:
+        return 3
+    return 2
+
+
+def _resolve_technical_difficulty_level(level: Optional[int], seniority: Optional[str] = None) -> int:
+    try:
+        normalized = int(level) if level is not None else None
+    except Exception:
+        normalized = None
+
+    if normalized is None:
+        return _technical_difficulty_level_from_seniority(seniority)
+    if normalized <= 1:
+        return 1
+    if normalized == 2:
+        return 2
+    return 3
+
+
+def _normalize_question_prompt(value: Optional[str]) -> str:
+    cleaned = re.sub(r"[\W_]+", " ", str(value or "").strip().lower(), flags=re.UNICODE)
+    return re.sub(r"\s+", " ", cleaned).strip()
+
+
+def _canonicalize_question_token(token: str) -> str:
+    value = str(token or "").strip().lower()
+    if value.endswith("s") and len(value) > 4:
+        value = value[:-1]
+    return _QUESTION_TOKEN_ALIASES.get(value, value)
+
+
+def _question_keywords(value: Optional[str]) -> set[str]:
+    keywords: set[str] = set()
+    for raw_token in _normalize_question_prompt(value).split():
+        token = _canonicalize_question_token(raw_token)
+        if len(token) <= 2 or token in _QUESTION_SIMILARITY_STOPWORDS:
+            continue
+        keywords.add(token)
+    return keywords
+
+
+def _question_similarity(prompt_a: Optional[str], prompt_b: Optional[str]) -> float:
+    normalized_a = _normalize_question_prompt(prompt_a)
+    normalized_b = _normalize_question_prompt(prompt_b)
+    if not normalized_a or not normalized_b:
+        return 0.0
+    if normalized_a == normalized_b:
+        return 1.0
+    if normalized_a in normalized_b or normalized_b in normalized_a:
+        return 0.92
+
+    keywords_a = _question_keywords(prompt_a)
+    keywords_b = _question_keywords(prompt_b)
+    if not keywords_a or not keywords_b:
+        return 0.0
+
+    overlap = keywords_a & keywords_b
+    if not overlap:
+        return 0.0
+
+    coverage = len(overlap) / max(1, min(len(keywords_a), len(keywords_b)))
+    union = keywords_a | keywords_b
+    jaccard = len(overlap) / max(1, len(union))
+    return max(coverage, jaccard if len(overlap) >= 3 else 0.0)
+
+
+def _asked_question_prompts(history: list, limit: Optional[int] = None) -> list[str]:
+    if not isinstance(history, list):
+        return []
+    prompts: list[str] = []
+    seen: set[str] = set()
+    for item in history:
+        if not isinstance(item, dict):
+            continue
+        question = str(item.get("question") or item.get("prompt") or "").strip()
+        normalized = _normalize_question_prompt(question)
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        prompts.append(question)
+    if limit and limit > 0:
+        return prompts[-limit:]
+    return prompts
+
+
+def _build_question_uniqueness_context(history: list, rejected_prompt: Optional[str] = None) -> str:
+    asked_questions = _asked_question_prompts(history, limit=8)
+    lines: list[str] = []
+    if asked_questions:
+        lines.append("Perguntas ja feitas nesta sessao (nao repetir nem reformular com o mesmo foco):")
+        lines.extend(f"- {question}" for question in asked_questions)
+    rejected = str(rejected_prompt or "").strip()
+    if rejected:
+        lines.append(f'Pergunta rejeitada por repeticao: "{rejected}"')
+        lines.append("A nova pergunta precisa mudar de tema ou subtema.")
+    if not lines:
+        return ""
+    return "\n" + "\n".join(lines) + "\n"
+
+
+def _find_similar_asked_question(prompt: Optional[str], history: list, threshold: float = 0.74) -> Optional[str]:
+    candidate = str(prompt or "").strip()
+    if not candidate:
+        return None
+    for asked in _asked_question_prompts(history):
+        if _question_similarity(candidate, asked) >= threshold:
+            return asked
+    return None
+
+
+def _ensure_next_question_is_fresh(question: Optional[InterviewQuestion], history: list) -> None:
+    if question is None:
+        return
+    matched = _find_similar_asked_question(question.prompt, history)
+    if matched:
+        raise ValueError(f"Repeated next question similar to: {matched}")
+
+
 def _summarize_history_for_next(history: list, limit: int = 4) -> list:
     if not isinstance(history, list):
         return []
@@ -449,6 +637,8 @@ def _build_next_question_prompt(
     avg_scores = score_summary[0].model_dump() if score_summary else {}
     diff_range = _difficulty_range_from_level(difficulty_level)
     diff_hint = f"{diff_range[0]}-{diff_range[1]}" if diff_range else "1-5"
+    uniqueness_context = _build_question_uniqueness_context(history)
+    prompt_context = f"{context}{uniqueness_context}"
     return next_question_prompt.build_next_question_prompt(
         config=config,
         history_summary=history_summary,
@@ -458,7 +648,7 @@ def _build_next_question_prompt(
         min_questions=min_q,
         max_questions=max_q,
         difficulty_hint=diff_hint,
-        context=context,
+        context=prompt_context,
     )
 
 
@@ -471,12 +661,15 @@ def _build_next_question_prompt_strict(
     max_q: int,
     difficulty_level: Optional[int] = None,
     context: str = "",
+    rejected_question_prompt: Optional[str] = None,
 ) -> str:
     history_summary = _summarize_history_for_next(history)
     score_summary = _summarize_scores(history)
     avg_scores = score_summary[0].model_dump() if score_summary else {}
     diff_range = _difficulty_range_from_level(difficulty_level)
     diff_hint = f"{diff_range[0]}-{diff_range[1]}" if diff_range else "1-5"
+    uniqueness_context = _build_question_uniqueness_context(history, rejected_prompt=rejected_question_prompt)
+    prompt_context = f"{context}{uniqueness_context}"
     return next_question_prompt.build_next_question_prompt_strict(
         config=config,
         history_summary=history_summary,
@@ -486,7 +679,7 @@ def _build_next_question_prompt_strict(
         min_questions=min_q,
         max_questions=max_q,
         difficulty_hint=diff_hint,
-        context=context,
+        context=prompt_context,
     )
 
 

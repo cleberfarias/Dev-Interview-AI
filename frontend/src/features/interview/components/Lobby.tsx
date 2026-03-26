@@ -8,15 +8,21 @@ import type {
   LanguageCode,
   Seniority,
 } from '../../../shared/types';
-import type { DifficultyLevel } from '../../../shared/types/interview';
+import type { DifficultyLevel, InterviewModeLevel } from '../../../shared/types/interview';
 import type { Track } from '../../../shared/types';
 import { clampDuration } from '../../../shared/constants';
 import { BackendApi } from '../../../shared/services/backendApi';
+import {
+  deriveTechnicalDifficultyLevel,
+  getInterviewModeLevelMeta,
+  normalizeInterviewModeLevel,
+} from '../../../shared/utils/interviewMode';
 import {
   getMissingCandidateProfileFields,
   hasCandidateJobProfileAnalysis,
   isCandidateProfileComplete,
 } from '../../../shared/utils/candidateProfile';
+import { primeSharedTtsAudio } from '../../../shared/utils/audioPlayback';
 import styles from './Lobby.module.css';
 
 interface Props {
@@ -28,7 +34,7 @@ interface Props {
     plan: InterviewPlan,
     sessionId: string,
     credits: number,
-    difficultyLevel?: DifficultyLevel,
+    interviewModeLevel?: InterviewModeLevel,
     initialAvatar?: AvatarResponse | null,
   ) => void;
   onBack: () => void;
@@ -96,7 +102,7 @@ const starterDifficulty = (level: DifficultyLevel): number => {
   return 4;
 };
 
-const buildStarterPlan = (config: InterviewConfig, level: DifficultyLevel): InterviewPlan => ({
+const buildStarterPlan = (config: InterviewConfig, technicalLevel: DifficultyLevel): InterviewPlan => ({
   roleTitleGuess: config.track || 'Entrevista',
   seniorityGuess: config.seniority,
   mustHaveSkills: config.stacks || [],
@@ -105,7 +111,7 @@ const buildStarterPlan = (config: InterviewConfig, level: DifficultyLevel): Inte
     {
       id: 'q1',
       section: 'technical',
-      difficulty: starterDifficulty(level),
+      difficulty: starterDifficulty(technicalLevel),
       prompt: starterPrompt(config.interviewLanguage),
     },
   ],
@@ -118,7 +124,9 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
   const [audioLevel, setAudioLevel] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [showNoJobModal, setShowNoJobModal] = useState(false);
-  const [selectedLevel, setSelectedLevel] = useState<DifficultyLevel>(config.difficultyLevel ?? 3);
+  const [selectedModeLevel, setSelectedModeLevel] = useState<InterviewModeLevel>(
+    normalizeInterviewModeLevel(config.interviewModeLevel),
+  );
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioIntervalRef = useRef<number | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -131,6 +139,8 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
   const cameraReady = Boolean(stream);
   const microphonePermissionReady = Boolean(stream?.getAudioTracks().length);
   const microphoneSignalDetected = audioLevel > 6;
+  const technicalDifficultyLevel = deriveTechnicalDifficultyLevel(config.seniority);
+  const selectedModeMeta = getInterviewModeLevelMeta(selectedModeLevel);
 
   useEffect(() => {
     let cancelled = false;
@@ -197,13 +207,16 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
     setError(null);
 
     try {
-      const { difficultyLevel, ...restConfig } = config;
-      const effectiveConfig = { ...restConfig, duration: clampDuration(config.duration, config.plan) };
+      const effectiveConfig = {
+        ...config,
+        duration: clampDuration(config.duration, config.plan),
+        interviewModeLevel: selectedModeLevel,
+      };
       const orchestratedStart = await BackendApi.orchestratorStart({
         config: effectiveConfig,
         jobDescription: effectiveConfig.jobDescription,
         includeContext: true,
-        difficultyLevel: selectedLevel,
+        difficultyLevel: technicalDifficultyLevel,
       });
       const res = orchestratedStart.session;
 
@@ -214,7 +227,7 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
           PLAN_GENERATE_TIMEOUT_MS,
         );
         if (generated?.plan?.questions?.length) {
-          onStart(generated.plan, generated.sessionId, generated.credits, selectedLevel, null);
+          onStart(generated.plan, generated.sessionId, generated.credits, selectedModeLevel, null);
           return;
         }
       } catch (planErr) {
@@ -231,12 +244,18 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
           blueprint: { hr: 15, technical: 50, design: 20, behavioral: 15 },
           questions: [nextRes.question],
         };
-        onStart(planStub, res.sessionId, res.credits, selectedLevel, orchestratedStart.initialAvatar || null);
+        onStart(planStub, res.sessionId, res.credits, selectedModeLevel, orchestratedStart.initialAvatar || null);
         return;
       }
 
       setLoadingStage('Usando roteiro inicial da sessao...');
-      onStart(buildStarterPlan(effectiveConfig, selectedLevel), res.sessionId, res.credits, selectedLevel, null);
+      onStart(
+        buildStarterPlan(effectiveConfig, technicalDifficultyLevel),
+        res.sessionId,
+        res.credits,
+        selectedModeLevel,
+        null,
+      );
     } catch (err) {
       console.error(err);
       const message = err instanceof Error ? err.message : 'Erro ao iniciar sessao.';
@@ -249,6 +268,7 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
   const handleEnter = async () => {
     if (!hasCredits || loading) return;
     setError(null);
+    await primeSharedTtsAudio().catch(() => false);
 
     if (!cameraReady) {
       setError('Libere a camera no navegador antes de iniciar a entrevista.');
@@ -282,6 +302,7 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
 
   const handleConfirmStartWithoutJob = async () => {
     setShowNoJobModal(false);
+    await primeSharedTtsAudio().catch(() => false);
     await startInterviewSession();
   };
 
@@ -321,6 +342,7 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
     { label: 'Trilha', value: roleLabel },
     { label: 'Senioridade', value: seniorityLabel },
     { label: 'Modo', value: modeLabel },
+    { label: 'Formato', value: selectedModeMeta.label },
     { label: 'Idioma', value: languageLabel },
     { label: 'Estilo', value: styleLabel },
     { label: 'Duracao', value: `${config.duration} min` },
@@ -337,7 +359,7 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
     hasJobAnalysisFromCache
       ? 'A descricao da vaga ja esta conectada ao contexto da entrevista.'
       : 'Sem analise de vaga, a entrevista segue com contexto mais generico.',
-    'Escolha o nivel que melhor representa a pressao desejada.',
+    'Escolha o formato que melhor representa o apoio visual desejado.',
     'Tenha um exemplo recente de projeto para abrir a conversa com seguranca.',
   ];
   const startHint = !hasCredits
@@ -350,7 +372,7 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
           ? 'Libere o microfone no navegador para seguir.'
           : !microphoneSignalDetected
             ? 'Microfone liberado. Se quiser testar antes, fale por alguns segundos.'
-          : 'Tudo certo. Voce ja pode entrar na sala.';
+          : `Tudo certo. Formato selecionado: ${selectedModeMeta.label}.`;
 
   return (
     <div className={styles.page}>
@@ -361,7 +383,7 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
           <span className={styles.heroEyebrow}>Pre-entrevista</span>
           <h1>Revise o setup e entre na sala</h1>
           <p>
-            Em menos de 1 minuto voce valida camera, microfone, nivel e o contexto da entrevista.
+            Em menos de 1 minuto voce valida camera, microfone, formato e o contexto da entrevista.
           </p>
         </header>
 
@@ -398,7 +420,7 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
 
               <div className={styles.previewBottom}>
                 <span>{roleLabel}</span>
-                <span>Nivel {selectedLevel}</span>
+                <span>Formato {selectedModeMeta.label}</span>
               </div>
             </div>
 
@@ -491,15 +513,15 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
             )}
 
             <div className={styles.levelBlock} data-tour-id="lobby-level">
-              <p>Nivel da entrevista</p>
+              <p>Formato da entrevista</p>
               <div className={styles.levelButtons}>
-                {([1, 2, 3] as DifficultyLevel[]).map((level) => (
+                {([1, 2, 3] as InterviewModeLevel[]).map((level) => (
                   <button
                     key={level}
                     type="button"
-                    onClick={() => setSelectedLevel(level)}
-                    aria-pressed={selectedLevel === level}
-                    className={`${styles.levelButton} ${selectedLevel === level ? styles.levelButtonActive : ''}`}
+                    onClick={() => setSelectedModeLevel(level)}
+                    aria-pressed={selectedModeLevel === level}
+                    className={`${styles.levelButton} ${selectedModeLevel === level ? styles.levelButtonActive : ''}`}
                   >
                     {level}
                   </button>

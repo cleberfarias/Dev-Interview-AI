@@ -128,11 +128,40 @@ const LOCAL_FALLBACK_QUESTIONS: Record<string, Record<string, string[]>> = {
   },
 };
 
-export const getLocalFallbackPrompt = (track: string, language: string, index: number): string | null => {
+const hashFallbackSeed = (value: string): number => {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+};
+
+export const getLocalFallbackPrompt = (
+  track: string,
+  language: string,
+  index: number,
+  options: {
+    askedPrompts?: Array<string | null | undefined>;
+    seed?: string;
+  } = {},
+): string | null => {
   const byLanguage = LOCAL_FALLBACK_QUESTIONS[language] || LOCAL_FALLBACK_QUESTIONS['pt-BR'];
   const list = byLanguage[track] || byLanguage.default;
   if (!list?.length) return null;
-  return list[index % list.length];
+  const askedPrompts = new Set(
+    (options.askedPrompts || []).map((prompt) => normalizeQuestionPrompt(prompt)).filter(Boolean),
+  );
+  const startIndex = hashFallbackSeed(`${track}|${language}|${options.seed || 'local-fallback'}|${index}`) % list.length;
+
+  for (let offset = 0; offset < list.length; offset += 1) {
+    const candidate = list[(startIndex + offset) % list.length];
+    if (!askedPrompts.has(normalizeQuestionPrompt(candidate))) {
+      return candidate;
+    }
+  }
+
+  return list[startIndex];
 };
 
 export const toUiQuestion = (
