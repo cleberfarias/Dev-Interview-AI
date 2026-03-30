@@ -1,4 +1,5 @@
 import { auth } from "../../lib/firebase";
+import { resolveApiBaseUrl } from "./apiBase";
 import type {
   InterviewConfig,
   InterviewPlan,
@@ -25,7 +26,7 @@ import type {
   AvatarResponse,
 } from "../types";
 
-const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || "/api";
+const API_BASE_URL = resolveApiBaseUrl((import.meta as any).env?.VITE_API_BASE_URL);
 const TOKEN_SKEW_MS = 60_000;
 const LIVE_COACH_WS_CONNECT_TIMEOUT_MS = 7000;
 const LIVE_COACH_WS_SUBPROTOCOL = "live-coach.v1";

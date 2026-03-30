@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ACTIONS,
-  EVENTS,
   Joyride,
   STATUS,
   type EventData,
@@ -59,18 +58,22 @@ const mapPlacement = (placement?: ProductTourStep['placement']): JoyrideStep['pl
 };
 
 type TooltipProps = TooltipRenderProps & {
+  compact: boolean;
   labels: (typeof LABELS)[LanguageCode];
   onPrimaryLastStep: () => void;
+  popoverWidth: number;
   targetFound: boolean;
 };
 
 const ProductTourTooltip: React.FC<TooltipProps> = ({
   backProps,
+  compact,
   continuous,
   index,
   isLastStep,
   labels,
   onPrimaryLastStep,
+  popoverWidth,
   primaryProps,
   skipProps,
   size,
@@ -78,7 +81,8 @@ const ProductTourTooltip: React.FC<TooltipProps> = ({
   targetFound,
   tooltipProps,
 }) => {
-  const { role: _role, 'aria-label': _ariaLabel, ...restTooltipProps } = tooltipProps;
+  const { role: _role, 'aria-label': _ariaLabel, style: tooltipStyle, ...restTooltipProps } =
+    tooltipProps as TooltipRenderProps & { style?: React.CSSProperties };
   const { children: _backChildren, onClick: onBackClick, 'data-action': backAction } = backProps;
   const { children: _primaryChildren, onClick: onPrimaryClick, 'data-action': primaryAction } = primaryProps;
   const { children: _skipChildren, onClick: onSkipClick, 'data-action': skipAction } = skipProps;
@@ -96,6 +100,11 @@ const ProductTourTooltip: React.FC<TooltipProps> = ({
       role="dialog"
       className={styles.popover}
       aria-label={String(step.title || step.content || labels.step)}
+      style={{
+        ...tooltipStyle,
+        width: `${popoverWidth}px`,
+        maxWidth: compact ? 'calc(100vw - 24px)' : 'calc(100vw - 24px)',
+      }}
     >
       <div className={styles.popoverHeader}>
         <span className={styles.kicker}>
@@ -148,20 +157,37 @@ const ProductTourTooltip: React.FC<TooltipProps> = ({
 };
 
 const ProductTour: React.FC<ProductTourProps> = ({ open, steps, locale = 'pt-BR', onClose, onComplete }) => {
-  const [stepIndex, setStepIndex] = useState(0);
+  const [tourInstanceKey, setTourInstanceKey] = useState(0);
+  const [viewportWidth, setViewportWidth] = useState(() => (typeof window === 'undefined' ? 1024 : window.innerWidth));
   const completionHandledRef = useRef(false);
   const labels = LABELS[locale] || LABELS['pt-BR'];
   const safeSteps = useMemo(() => steps.filter((step) => Boolean(step.title && step.description)), [steps]);
+  const isCompactViewport = viewportWidth <= 640;
+  const popoverWidth = isCompactViewport
+    ? Math.max(220, Math.min(280, viewportWidth - 24))
+    : 320;
 
   useEffect(() => {
-    completionHandledRef.current = false;
-
-    if (!open) {
-      setStepIndex(0);
+    if (typeof window === 'undefined') {
       return;
     }
 
-    setStepIndex((current) => Math.min(current, Math.max(0, safeSteps.length - 1)));
+    const updateViewport = () => {
+      setViewportWidth(window.innerWidth);
+    };
+
+    updateViewport();
+    window.addEventListener('resize', updateViewport);
+    return () => {
+      window.removeEventListener('resize', updateViewport);
+    };
+  }, []);
+
+  useEffect(() => {
+    completionHandledRef.current = false;
+    if (open && safeSteps.length > 0) {
+      setTourInstanceKey((current) => current + 1);
+    }
   }, [open, safeSteps.length]);
 
   const resolvedSteps = useMemo(() => {
@@ -172,31 +198,18 @@ const ProductTour: React.FC<ProductTourProps> = ({ open, steps, locale = 'pt-BR'
       return {
         content: step.description,
         data: { targetFound },
-        placement: mapPlacement(step.placement),
+        floatingOptions: isCompactViewport
+          ? {
+              hideArrow: true,
+            }
+          : undefined,
+        placement: isCompactViewport ? 'center' : mapPlacement(step.placement),
         skipBeacon: true,
         target: step.target && targetFound ? step.target : 'body',
         title: step.title,
       };
     });
-  }, [safeSteps]);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    const currentStep = safeSteps[stepIndex];
-
-    if (!currentStep?.target || typeof document === 'undefined') {
-      return;
-    }
-
-    const target = document.querySelector(currentStep.target);
-
-    if (target instanceof HTMLElement) {
-      target.scrollIntoView({ block: 'center', inline: 'nearest' });
-    }
-  }, [open, safeSteps, stepIndex]);
+  }, [isCompactViewport, safeSteps]);
 
   const completeTour = () => {
     if (completionHandledRef.current) {
@@ -204,28 +217,28 @@ const ProductTour: React.FC<ProductTourProps> = ({ open, steps, locale = 'pt-BR'
     }
 
     completionHandledRef.current = true;
-    setStepIndex(0);
     onComplete();
   };
 
-  const handleEvent = (event: EventData) => {
-    const { action, index, status, type } = event;
-    const isFinalAdvance = type === EVENTS.STEP_AFTER && action === ACTIONS.NEXT && index >= resolvedSteps.length - 1;
+  const closeTour = () => {
+    if (completionHandledRef.current) {
+      return;
+    }
 
-    if (status === STATUS.FINISHED || isFinalAdvance) {
+    completionHandledRef.current = true;
+    onClose();
+  };
+
+  const handleEvent = (event: EventData) => {
+    const { action, status } = event;
+
+    if (status === STATUS.FINISHED) {
       completeTour();
       return;
     }
 
     if (status === STATUS.SKIPPED || action === ACTIONS.CLOSE) {
-      setStepIndex(0);
-      onClose();
-      return;
-    }
-
-    if (type === EVENTS.STEP_AFTER || type === EVENTS.TARGET_NOT_FOUND) {
-      const delta = action === ACTIONS.PREV ? -1 : 1;
-      setStepIndex(Math.max(0, index + delta));
+      closeTour();
     }
   };
 
@@ -235,6 +248,7 @@ const ProductTour: React.FC<ProductTourProps> = ({ open, steps, locale = 'pt-BR'
 
   return (
     <Joyride
+      key={tourInstanceKey}
       callback={handleEvent}
       continuous
       disableCloseOnEsc={false}
@@ -244,11 +258,10 @@ const ProductTour: React.FC<ProductTourProps> = ({ open, steps, locale = 'pt-BR'
       run={open}
       scrollDuration={300}
       scrollOffset={20}
+      scrollToFirstStep
       showProgress={false}
       showSkipButton
       spotlightClicks={false}
-      spotlightPadding={10}
-      stepIndex={stepIndex}
       steps={resolvedSteps}
       styles={{
         options: {
@@ -256,15 +269,18 @@ const ProductTour: React.FC<ProductTourProps> = ({ open, steps, locale = 'pt-BR'
           overlayColor: 'rgba(2, 6, 23, 0.76)',
           primaryColor: '#0891b2',
           spotlightShadow: '0 0 0 1px rgba(103, 232, 249, 0.68), 0 0 32px rgba(34, 211, 238, 0.34)',
-          width: 320,
+          width: popoverWidth,
           zIndex: 220,
         },
       }}
+      spotlightPadding={isCompactViewport ? 6 : 10}
       tooltipComponent={(props) => (
         <ProductTourTooltip
           {...props}
+          compact={isCompactViewport}
           labels={labels}
           onPrimaryLastStep={completeTour}
+          popoverWidth={popoverWidth}
           targetFound={Boolean((resolvedSteps[props.index]?.data as { targetFound?: boolean } | undefined)?.targetFound)}
         />
       )}

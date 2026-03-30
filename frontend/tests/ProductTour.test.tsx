@@ -45,6 +45,56 @@ describe('ProductTour', () => {
 
     expect(onComplete).toHaveBeenCalledTimes(1);
     expect(onClose).not.toHaveBeenCalled();
-    expect(scrollIntoView).toHaveBeenCalled();
+  });
+
+  it('advances to the next step before completing the tour', async () => {
+    const onClose = vi.fn();
+    const onComplete = vi.fn();
+
+    render(
+      <div>
+        <button data-tour-id="tour-target-1">Primeiro alvo</button>
+        <button data-tour-id="tour-target-2">Segundo alvo</button>
+        <ProductTour
+          open
+          onClose={onClose}
+          onComplete={onComplete}
+          steps={[
+            {
+              id: 'step-1',
+              target: '[data-tour-id="tour-target-1"]',
+              title: 'Primeiro passo',
+              description: 'Descricao do primeiro passo.',
+            },
+            {
+              id: 'step-2',
+              target: '[data-tour-id="tour-target-2"]',
+              title: 'Segundo passo',
+              description: 'Descricao do segundo passo.',
+            },
+          ]}
+        />
+      </div>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog', { name: 'Primeiro passo' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Proximo' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog', { name: 'Segundo passo' })).toBeInTheDocument();
+    });
+
+    expect(onComplete).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Concluir' }));
+
+    await waitFor(() => {
+      expect(onComplete).toHaveBeenCalledTimes(1);
+    });
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

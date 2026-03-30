@@ -177,7 +177,6 @@ const Dashboard: React.FC<DashboardProps> = ({
             <button
               type="button"
               onClick={onOpenProfile}
-              data-tour-id="dashboard-resume-card"
               className={`${styles.heroActionButton} ${styles.heroSecondaryAction}`}
             >
               Ajustar perfil
@@ -189,7 +188,7 @@ const Dashboard: React.FC<DashboardProps> = ({
           <button
             type="button"
             onClick={onOpenProfile}
-            data-tour-id="dashboard-job-card"
+            data-tour-id="dashboard-resume-card"
             className={styles.quickCard}
           >
             <div className={styles.quickCardHeader}>
@@ -207,7 +206,7 @@ const Dashboard: React.FC<DashboardProps> = ({
             <span className={styles.quickAction}>Abrir perfil</span>
           </button>
 
-          <button type="button" onClick={onOpenProfile} className={styles.quickCard}>
+          <button type="button" onClick={onOpenProfile} data-tour-id="dashboard-job-card" className={styles.quickCard}>
             <div className={styles.quickCardHeader}>
               <span className={styles.quickIcon}>JD</span>
               <span className={`${styles.quickStatus} ${hasJobDescription ? styles.quickStatusReady : styles.quickStatusPending}`}>

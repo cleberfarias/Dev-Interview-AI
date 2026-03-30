@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useRef, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { AppState, AvatarResponse, CandidateProfile, InterviewConfig, InterviewPlan, FinalReport, User } from './src/shared/types';
 import { I18N, clampDuration, INTERVIEW_LIMITS } from './src/shared/constants';
@@ -375,6 +375,22 @@ const App: React.FC = () => {
     setSessionReportRequestId(targetSessionId);
   };
 
+  const handleUserUpdated = useCallback(
+    (nextUser: User) => {
+      setUser(nextUser);
+      queryClient.setQueryData(appQueryKeys.me(nextUser.uid), nextUser);
+    },
+    [queryClient],
+  );
+
+  const handleCandidateProfileUpdated = useCallback(
+    (profile: CandidateProfile) => {
+      setCandidateProfile(profile);
+      queryClient.setQueryData(appQueryKeys.candidateProfile(profile.userId), profile);
+    },
+    [queryClient],
+  );
+
   const handleInterviewFinish = async (finalReport: FinalReport) => {
     setReport(finalReport);
     setState(AppState.REPORT);
@@ -608,14 +624,8 @@ const App: React.FC = () => {
                 onAddCredits={addCredits}
                 onOpenInterviewReport={handleOpenInterviewReport}
                 onDeleteInterview={handleDeleteInterview}
-                onUserUpdated={(nextUser) => {
-                  setUser(nextUser);
-                  queryClient.setQueryData(appQueryKeys.me(nextUser.uid), nextUser);
-                }}
-                onCandidateProfileUpdated={(profile) => {
-                  setCandidateProfile(profile);
-                  queryClient.setQueryData(appQueryKeys.candidateProfile(profile.userId), profile);
-                }}
+                onUserUpdated={handleUserUpdated}
+                onCandidateProfileUpdated={handleCandidateProfileUpdated}
               />
             )}
 

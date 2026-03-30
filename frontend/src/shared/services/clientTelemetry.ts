@@ -1,4 +1,6 @@
-const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || "/api";
+import { resolveApiBaseUrl } from "./apiBase";
+
+const API_BASE_URL = resolveApiBaseUrl((import.meta as any).env?.VITE_API_BASE_URL);
 const TELEMETRY_ENABLED =
   ((import.meta as any).env?.VITE_CLIENT_TELEMETRY_ENABLED ?? "true") !== "false";
 const MAX_MESSAGE_LENGTH = 4000;

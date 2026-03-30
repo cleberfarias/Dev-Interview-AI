@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import threading
 from typing import Any, Dict, Optional
 
 import firebase_admin
@@ -11,6 +12,7 @@ from .request_context import set_context
 
 _app = None
 _db = None
+_init_lock = threading.Lock()
 logger = logging.getLogger("uvicorn.error")
 
 
@@ -38,61 +40,73 @@ def init_firebase():
     if _app and _db:
         return _app, _db
 
-    sa_path = os.environ.get("FIREBASE_SERVICE_ACCOUNT_PATH") or os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
-    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    if sa_path and not os.path.isabs(sa_path):
-        sa_path = os.path.abspath(os.path.join(base_dir, sa_path))
+    with _init_lock:
+        if _app and _db:
+            return _app, _db
 
-    sa_json = os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON")
+        sa_path = os.environ.get("FIREBASE_SERVICE_ACCOUNT_PATH") or os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        if sa_path and not os.path.isabs(sa_path):
+            sa_path = os.path.abspath(os.path.join(base_dir, sa_path))
 
-    cred = None
-    credential_source = None
-    if sa_json:
-        try:
-            info = json.loads(sa_json)
-            cred = credentials.Certificate(info)
-            credential_source = "env_json"
-        except Exception as exc:
-            raise RuntimeError("FIREBASE_SERVICE_ACCOUNT_JSON invalido") from exc
-    elif sa_path and os.path.exists(sa_path):
-        cred = credentials.Certificate(sa_path)
-        credential_source = "env_path"
-    else:
-        default_path = os.path.join(base_dir, "service-account.json")
-        if os.path.exists(default_path):
-            cred = credentials.Certificate(default_path)
-            credential_source = "local_file"
-        else:
+        sa_json = os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON")
+
+        cred = None
+        credential_source = None
+        if sa_json:
             try:
-                # Cloud Run and other GCP runtimes expose ADC for the attached service account.
-                cred = credentials.ApplicationDefault()
-                credential_source = "application_default"
+                info = json.loads(sa_json)
+                cred = credentials.Certificate(info)
+                credential_source = "env_json"
             except Exception as exc:
-                raise RuntimeError(
-                    "Credenciais do Firebase Admin nao configuradas. "
-                    "Defina FIREBASE_SERVICE_ACCOUNT_PATH (ou GOOGLE_APPLICATION_CREDENTIALS) "
-                    "ou FIREBASE_SERVICE_ACCOUNT_JSON, ou execute em um runtime com ADC habilitado."
-                ) from exc
+                raise RuntimeError("FIREBASE_SERVICE_ACCOUNT_JSON invalido") from exc
+        elif sa_path and os.path.exists(sa_path):
+            cred = credentials.Certificate(sa_path)
+            credential_source = "env_path"
+        else:
+            default_path = os.path.join(base_dir, "service-account.json")
+            if os.path.exists(default_path):
+                cred = credentials.Certificate(default_path)
+                credential_source = "local_file"
+            else:
+                try:
+                    # Cloud Run and other GCP runtimes expose ADC for the attached service account.
+                    cred = credentials.ApplicationDefault()
+                    credential_source = "application_default"
+                except Exception as exc:
+                    raise RuntimeError(
+                        "Credenciais do Firebase Admin nao configuradas. "
+                        "Defina FIREBASE_SERVICE_ACCOUNT_PATH (ou GOOGLE_APPLICATION_CREDENTIALS) "
+                        "ou FIREBASE_SERVICE_ACCOUNT_JSON, ou execute em um runtime com ADC habilitado."
+                    ) from exc
 
-    options = {}
-    project_id = _resolve_project_id()
-    if project_id:
-        options["projectId"] = project_id
-    storage_bucket = _resolve_storage_bucket_name()
-    if storage_bucket:
-        options["storageBucket"] = storage_bucket
+        options = {}
+        project_id = _resolve_project_id()
+        if project_id:
+            options["projectId"] = project_id
+        storage_bucket = _resolve_storage_bucket_name()
+        if storage_bucket:
+            options["storageBucket"] = storage_bucket
 
-    _app = firebase_admin.initialize_app(cred, options or None)
-    _db = firestore.client()
-    logger.info(
-        "Firebase Admin initialized",
-        extra={
-            "firebase_credential_source": credential_source,
-            "firebase_project_id": project_id,
-            "firebase_storage_bucket": storage_bucket,
-        },
-    )
-    return _app, _db
+        try:
+            _app = firebase_admin.initialize_app(cred, options or None)
+        except ValueError as exc:
+            # Concurrent cold-start requests can race while the default app is still being created.
+            if "already exists" not in str(exc):
+                raise
+            _app = firebase_admin.get_app()
+            credential_source = "existing_default_app"
+
+        _db = firestore.client()
+        logger.info(
+            "Firebase Admin initialized",
+            extra={
+                "firebase_credential_source": credential_source,
+                "firebase_project_id": project_id,
+                "firebase_storage_bucket": storage_bucket,
+            },
+        )
+        return _app, _db
 
 
 def get_firestore_client():
