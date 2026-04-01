@@ -1,6 +1,15 @@
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { AppState, AvatarResponse, CandidateProfile, InterviewConfig, InterviewPlan, FinalReport, User } from './src/shared/types';
+import {
+  AppState,
+  AvatarResponse,
+  CandidateProfile,
+  InterviewConfig,
+  InterviewPlan,
+  FinalReport,
+  OrchestratorContextResponse,
+  User,
+} from './src/shared/types';
 import { I18N, clampDuration, INTERVIEW_LIMITS } from './src/shared/constants';
 import { LandingPage, Login } from './src/features/auth';
 import { auth } from './src/lib/firebase';
@@ -103,6 +112,7 @@ const App: React.FC = () => {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [plan, setPlan] = useState<InterviewPlan | null>(null);
   const [initialAvatar, setInitialAvatar] = useState<AvatarResponse | null>(null);
+  const [interviewContext, setInterviewContext] = useState<OrchestratorContextResponse | null>(null);
   const [report, setReport] = useState<FinalReport | null>(null);
   const [candidateProfile, setCandidateProfile] = useState<CandidateProfile | null>(null);
   const [globalNotice, setGlobalNotice] = useState<string | null>(null);
@@ -171,6 +181,7 @@ const App: React.FC = () => {
         setUser(null);
         setCandidateProfile(null);
         setInitialAvatar(null);
+        setInterviewContext(null);
         setState(AppState.LOGIN);
         finishFirstLoad();
         return;
@@ -336,6 +347,7 @@ const App: React.FC = () => {
     setUser(newUser);
     setCandidateProfile(null);
     setInitialAvatar(null);
+    setInterviewContext(null);
     setState(AppState.DASHBOARD);
   };
 
@@ -344,6 +356,7 @@ const App: React.FC = () => {
     setUser(null);
     setCandidateProfile(null);
     setInitialAvatar(null);
+    setInterviewContext(null);
     setState(AppState.LOGIN);
   };
 
@@ -416,6 +429,7 @@ const App: React.FC = () => {
     setPlan(null);
     setSessionId(null);
     setInitialAvatar(null);
+    setInterviewContext(null);
     setState(AppState.LOBBY);
     showGlobalNotice('Entrevista interrompida.');
   };
@@ -649,10 +663,11 @@ const App: React.FC = () => {
                   userCredits={user?.credits || 0}
                   candidateProfile={candidateProfile}
                   onOpenProfile={() => setState(AppState.PROFILE)}
-                  onStart={(p, sid, credits, interviewModeLevel, nextAvatar) => {
+                  onStart={(p, sid, credits, interviewModeLevel, nextAvatar, context) => {
                     setPlan(p);
                     setSessionId(sid);
                     setInitialAvatar(nextAvatar || null);
+                    setInterviewContext(context || null);
                     setConfig((prev) => ({
                       ...prev,
                       interviewModeLevel: interviewModeLevel ?? prev.interviewModeLevel ?? 2,
@@ -676,6 +691,7 @@ const App: React.FC = () => {
                   plan={plan}
                   sessionId={sessionId || undefined}
                   initialAvatar={initialAvatar || undefined}
+                  context={interviewContext || undefined}
                   user={user}
                   onFinish={handleInterviewFinish}
                   onBack={handleInterviewBack}
@@ -693,6 +709,7 @@ const App: React.FC = () => {
                     setPlan(null);
                     setSessionId(null);
                     setInitialAvatar(null);
+                    setInterviewContext(null);
                     setState(AppState.DASHBOARD);
                   }}
                 />

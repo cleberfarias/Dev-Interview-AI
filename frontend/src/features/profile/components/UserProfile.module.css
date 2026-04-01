@@ -532,7 +532,158 @@
   gap: 6px;
 }
 
+.traceSection {
+  display: grid;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.traceSectionTitle {
+  color: var(--fd-text-primary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.traceMetaRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.traceMetaChip {
+  min-height: 26px;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--fd-text-secondary);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.traceEvidenceList {
+  display: grid;
+  gap: 8px;
+}
+
+.traceEvidenceItem {
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.traceEvidenceQuestion {
+  color: var(--fd-text-primary);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.traceEvidenceCopy {
+  color: var(--fd-text-secondary);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.traceEvidenceMeta {
+  color: var(--fd-text-muted);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
 .traceData strong {
+  color: var(--fd-text-primary);
+}
+
+.debuggerToolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.debuggerRefreshButton {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--fd-text-primary);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.debuggerToolList {
+  display: grid;
+  gap: 10px;
+}
+
+.debuggerToolCard {
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(11, 15, 26, 0.58);
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.debuggerToolHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.debuggerToolHeader strong {
+  color: var(--fd-text-primary);
+  font-size: 0.84rem;
+}
+
+.debuggerStatusBadge {
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--fd-text-secondary);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.debuggerSummary {
+  color: var(--fd-text-secondary);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.debuggerDetailList {
+  display: grid;
+  gap: 6px;
+}
+
+.debuggerDetailList p {
+  margin: 0;
+  color: var(--fd-text-muted);
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
+.debuggerDetailList strong {
   color: var(--fd-text-primary);
 }
 
@@ -635,6 +786,10 @@
 
   .panelMeta {
     align-self: flex-start;
+  }
+
+  .debuggerToolbar {
+    flex-direction: column;
   }
 
   .nameFormRow {

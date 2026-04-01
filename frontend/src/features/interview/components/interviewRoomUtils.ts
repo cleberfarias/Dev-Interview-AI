@@ -4,6 +4,7 @@ import type {
   FinalReport,
   InterviewConfig,
   InterviewPlan,
+  SessionClientRuntimeTrace,
   SpeechMetrics,
 } from '../../../shared/types';
 import type { DifficultyLevel, InterviewQuestion } from '../../../shared/types/interview';
@@ -23,6 +24,7 @@ export type HistoryItem = {
   transcript?: string;
   speechMetrics?: SpeechMetrics | null;
   communicationAnalysis?: CommunicationAnalysis | null;
+  clientRuntime?: SessionClientRuntimeTrace | null;
 };
 
 const mapDifficultyToLevel = (value?: number): DifficultyLevel => {

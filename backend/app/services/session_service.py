@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from fastapi import HTTPException
 
 from ..repositories import candidate_profile_repository, report_repository, session_repository
-from ..request_context import scoped_context
+from ..request_context import clear_tool_calls, consume_tool_calls, scoped_context
 from ..schemas import (
     FinalReport,
     InterviewConfig,
@@ -16,7 +16,10 @@ from ..schemas import (
     SessionReportResponse,
     SessionStartResponse,
 )
+from ..agent_runtime import build_context_agent_runtime
+from ..knowledge_retrieval import build_knowledge_retrieval
 from . import metrics_service, planning_service, usage_policy_service
+from . import memory_service
 
 logger = logging.getLogger("uvicorn.error")
 FIXED_INTERVIEW_DURATION_MINUTES = 10
@@ -57,7 +60,12 @@ def _normalize_config(config: InterviewConfig) -> InterviewConfig:
     return InterviewConfig(**data)
 
 
-def _session_analysis_trace_snapshot(user_uid: str, captured_at: str) -> dict | None:
+def _session_analysis_trace_snapshot(
+    user_uid: str,
+    captured_at: str,
+    auth_token: str | None = None,
+    config: InterviewConfig | None = None,
+) -> dict | None:
     try:
         profile = candidate_profile_repository.get_profile(user_uid) or {}
     except Exception:
@@ -67,10 +75,59 @@ def _session_analysis_trace_snapshot(user_uid: str, captured_at: str) -> dict | 
     if not isinstance(profile, dict):
         return None
 
+    try:
+        candidate_memory = memory_service.load_candidate_memory(user_uid)
+    except Exception:
+        logger.warning("Failed to read candidate memory snapshot for uid=%s", user_uid)
+        candidate_memory = {}
+    if not isinstance(candidate_memory, dict):
+        candidate_memory = {}
+
+    clear_tool_calls()
+    agent_runtime = build_context_agent_runtime(
+        profile=profile,
+        candidate_memory=candidate_memory,
+        candidate={
+            "skills": profile.get("primarySkills") or [],
+            "summary": profile.get("resumeSummary") or "",
+        },
+        job={
+            "requiredSkills": profile.get("requiredSkills") or [],
+            "roleTitleGuess": profile.get("targetRole") or "",
+        },
+        match={
+            "matchScore": profile.get("lastMatchScore"),
+        },
+        resume_text=profile.get("resumeSummary"),
+        job_description=profile.get("jobDescription"),
+        resume_analysis_trace=profile.get("lastResumeAnalysisTrace"),
+        job_analysis_trace=profile.get("lastJobAnalysisTrace"),
+    )
+    knowledge_retrieval = build_knowledge_retrieval(
+        user_id=user_uid,
+        auth_token=auth_token,
+        config=config,
+        profile=profile,
+        candidate_memory=candidate_memory,
+        candidate={
+            "skills": profile.get("primarySkills") or [],
+            "summary": profile.get("resumeSummary") or "",
+        },
+        job={
+            "requiredSkills": profile.get("requiredSkills") or [],
+            "roleTitleGuess": profile.get("targetRole") or "",
+        },
+        match={"matchScore": profile.get("lastMatchScore")},
+    )
+    context_tool_calls = consume_tool_calls()
+
     snapshot = {
         "capturedAt": captured_at,
         "lastResumeAnalysisTrace": profile.get("lastResumeAnalysisTrace"),
         "lastJobAnalysisTrace": profile.get("lastJobAnalysisTrace"),
+        "agentRuntime": agent_runtime,
+        "knowledgeRetrieval": knowledge_retrieval,
+        "contextToolCalls": context_tool_calls,
     }
     audit = profile.get("analysisAudit")
     if isinstance(audit, list):
@@ -80,6 +137,9 @@ def _session_analysis_trace_snapshot(user_uid: str, captured_at: str) -> dict | 
         snapshot.get("lastResumeAnalysisTrace")
         or snapshot.get("lastJobAnalysisTrace")
         or snapshot.get("analysisAuditRecent")
+        or snapshot.get("agentRuntime")
+        or snapshot.get("knowledgeRetrieval")
+        or snapshot.get("contextToolCalls")
     )
     return snapshot if has_trace_data else None
 
@@ -98,7 +158,12 @@ def start_session(config: InterviewConfig, user: dict) -> SessionStartResponse:
     try:
         ts = _now_iso()
         initial = _initial_credits()
-        trace_snapshot = _session_analysis_trace_snapshot(user["uid"], ts)
+        trace_snapshot = _session_analysis_trace_snapshot(
+            user["uid"],
+            ts,
+            auth_token=user.get("token"),
+            config=normalized_config,
+        )
         user_seed = {
             "uid": user["uid"],
             "name": user.get("name") or user.get("email", "Usuario").split("@")[0],
@@ -194,6 +259,27 @@ def store_answer_communication_analysis(session_id: str, answer_id: str, analysi
     if not session or session.get("uid") != user["uid"]:
         raise HTTPException(status_code=404, detail="Sessao nao encontrada")
     session_repository.merge_answer_communication_analysis(session_id, answer_id, analysis)
+
+
+def store_answer_episode(session_id: str, answer_id: str, episode: dict, user: dict) -> None:
+    session = session_repository.get_session(session_id)
+    if not session or session.get("uid") != user["uid"]:
+        raise HTTPException(status_code=404, detail="Sessao nao encontrada")
+    session_repository.merge_answer_episode(session_id, answer_id, episode)
+
+
+def store_turn_evidence_trace(session_id: str, answer_id: str, trace: dict, user: dict) -> None:
+    session = session_repository.get_session(session_id)
+    if not session or session.get("uid") != user["uid"]:
+        raise HTTPException(status_code=404, detail="Sessao nao encontrada")
+    session_repository.merge_turn_evidence_trace(session_id, answer_id, trace)
+
+
+def store_report_evidence_trace(session_id: str, trace: dict, user: dict) -> None:
+    session = session_repository.get_session(session_id)
+    if not session or session.get("uid") != user["uid"]:
+        raise HTTPException(status_code=404, detail="Sessao nao encontrada")
+    session_repository.merge_report_evidence_trace(session_id, trace)
 
 
 def delete_session(session_id: str, user: dict):

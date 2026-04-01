@@ -4,6 +4,8 @@ from fastapi import HTTPException
 
 from ..ai.router import AIProviderError
 from ..agents import behavior_agent, culture_fit_agent, job_agent, match_agent
+from ..interview_rag import build_report_rag_context, build_report_rag_trace
+from ..request_context import clear_tool_calls, consume_tool_calls
 from ..schemas import FinalReport
 from . import (
     ai_observability_service,
@@ -120,7 +122,30 @@ def final_report(payload, user):
     interview_core._ensure_credits(user["uid"], required=1)
 
     enriched_history = _enrich_history_for_final_report(payload, user)
-    report_context = interview_core._build_report_context(user.get("uid"), payload.config, auth_token=user.get("token"))
+    clear_tool_calls()
+    rag_context, rag_retrieval = build_report_rag_context(
+        user=user,
+        config=payload.config,
+        history=enriched_history,
+        session_id=payload.sessionId,
+    )
+    report_tool_calls = consume_tool_calls()
+    if payload.sessionId:
+        report_trace = build_report_rag_trace(history=enriched_history, retrieval=rag_retrieval)
+        report_trace["toolCalls"] = report_tool_calls
+        try:
+            from . import session_service
+
+            session_service.store_report_evidence_trace(payload.sessionId, report_trace, user)
+        except Exception:
+            interview_core.logger.exception(
+                "Failed to persist report evidence trace sessionId=%s",
+                payload.sessionId,
+            )
+    report_context = (
+        interview_core._build_report_context(user.get("uid"), payload.config, auth_token=user.get("token"))
+        + rag_context
+    )
     prompt = interview_core._build_report_prompt(payload.config, enriched_history, report_context)
     summary = interview_core._summarize_scores(enriched_history)
     metadata = ai_observability_service.build_metadata(

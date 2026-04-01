@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from app.ai.router import AIResult
 from app.firebase_admin import get_current_user
 from app.main import app
+from app.request_context import append_tool_call
 from app.schemas.analysis import BehaviorProfile, CandidateProfile, CultureFitSignals
 
 
@@ -339,5 +340,137 @@ def test_final_report_enriches_raw_history_without_inline_evaluation(monkeypatch
         assert data["communicationSignals"]["responseClarity"] > 0
         assert data["behaviorProfile"]["communicationStyle"] == "analitico-direto"
         assert data["cultureFitSignals"]["overallAlignment"] == 7.4
+    finally:
+        app.dependency_overrides = {}
+
+
+def test_final_report_includes_semantic_rag_context(monkeypatch):
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "test-user",
+        "email": "test@example.com",
+        "name": "Test User",
+        "picture": None,
+        "token": "test-token",
+    }
+
+    monkeypatch.setattr("app.main._get_user_credits", lambda uid: 1)
+    monkeypatch.setattr("app.main._debit_credits", lambda uid, amount=1: 0)
+    monkeypatch.setattr(
+        "app.interview_rag.candidate_profile_service.get_candidate_profile",
+        lambda user: CandidateProfile(
+            userId=user["uid"],
+            primarySkills=["react", "typescript"],
+            resumeSummary="Frontend engineer focused on React systems.",
+            jobDescription="Need a frontend engineer with React, TypeScript and observability.",
+        ),
+    )
+    monkeypatch.setattr(
+        "app.interview_rag.memory_service.load_candidate_memory",
+        lambda uid: {"recurringGaps": ["observability"], "strongSkills": ["react"]},
+    )
+    monkeypatch.setattr("app.knowledge_retrieval.user_repository.list_user_interviews", lambda uid, limit=3: [])
+    def _fake_rubric(**kwargs):
+        append_tool_call(
+            {
+                "toolName": "search_rubric_knowledge",
+                "status": "ready",
+                "transport": "local",
+                "summary": "Rubrica pronta para frontend / mid com 2 stack(s).",
+                "contractVersion": "mcp.devinterview.v1",
+            }
+        )
+        return {}
+
+    monkeypatch.setattr("app.knowledge_retrieval.mcp_search_rubric_knowledge", _fake_rubric)
+    monkeypatch.setattr("app.knowledge_retrieval.mcp_get_rubric", _fake_rubric)
+    captured = {}
+
+    def _store_report_trace(session_id, trace, user):
+        captured["sessionId"] = session_id
+        captured["trace"] = trace
+
+    monkeypatch.setattr("app.services.session_service.store_report_evidence_trace", _store_report_trace)
+
+    report_payload = {
+        "overallScore": 7.1,
+        "levelEstimate": "mid",
+        "jobMatch": {"covered": ["react"], "gaps": ["observability"]},
+        "feedback": {
+            "posture": [],
+            "communication": ["Continue trazendo exemplos concretos."],
+            "technical": ["Detalhe melhor observabilidade e monitoramento."],
+            "language": [],
+        },
+        "plan7Days": [{"day": 1, "task": "Revisar monitoramento de frontend."}],
+    }
+
+    def fake_generate(*args, **kwargs):
+        prompt = kwargs.get("prompt") or ""
+        assert "Contexto RAG semantico para o relatorio final" in prompt
+        assert "Evidencia da resposta 1" in prompt
+        assert "observability" in prompt or "observabilidade" in prompt
+        return AIResult(
+            output_text=json.dumps(report_payload),
+            provider_used="test",
+            model_used="test-model",
+            latency_ms=5,
+            tokens_used=10,
+        )
+
+    monkeypatch.setattr("app.main.ai_router.generate", fake_generate)
+
+    history = [
+        {
+            "answerId": "a1",
+            "question": "Como voce instrumenta observabilidade em frontend?",
+            "transcript": "Eu comeco com metricas, logs estruturados e tracing para detectar degradacao.",
+            "clientRuntime": {
+                "questionDeliveryLatencyMs": 1400,
+                "analysisLatencyMs": 3800,
+                "transportState": "avatar/tts em saida",
+                "avatarState": "voz ativa",
+                "coachState": "parcial ao vivo",
+            },
+            "evaluation": {
+                "scores": {
+                    "communication": 7,
+                    "technical": 6,
+                    "problemSolving": 6,
+                    "presence": 7,
+                },
+                "improvements": ["observability"],
+                "strengths": ["react"],
+            },
+        }
+    ]
+
+    try:
+        client = TestClient(app)
+        body = {
+            "config": {
+                "uiLanguage": "pt-BR",
+                "interviewLanguage": "pt-BR",
+                "track": "frontend",
+                "seniority": "mid",
+                "stacks": ["react", "typescript"],
+                "style": "friendly",
+                "duration": 20,
+                "plan": "free",
+                "jobDescription": "Need a frontend engineer with React, TypeScript and observability.",
+                "interviewMode": "candidate_coaching_mode",
+            },
+            "history": history,
+            "sessionId": "session-report-rag-1",
+        }
+        resp = client.post("/ai/final-report", json=body)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["jobMatch"]["gaps"] == ["observability"]
+        assert data["overallScore"] == 6.5
+        assert captured["sessionId"] == "session-report-rag-1"
+        assert captured["trace"]["retrievalMode"] == "semantic"
+        assert captured["trace"]["episodeHighlights"][0]["answerId"] == "a1"
+        assert captured["trace"]["episodeHighlights"][0]["clientRuntime"]["coachState"] == "parcial ao vivo"
+        assert captured["trace"]["toolCalls"][0]["toolName"] == "search_rubric_knowledge"
     finally:
         app.dependency_overrides = {}

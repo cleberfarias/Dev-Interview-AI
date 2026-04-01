@@ -2,7 +2,22 @@ import React, { useEffect, useState } from 'react';
 import { updateProfile } from 'firebase/auth';
 import { auth } from '../../../lib/firebase';
 import { BackendApi } from '../../../shared/services/backendApi';
-import type { CandidateProfile, InterviewConfig, SessionAnalysisTraceResponse, User } from '../../../shared/types';
+import type {
+  AnalysisTrace,
+  CandidateProfile,
+  InterviewConfig,
+  KnowledgeRetrievalContext,
+  MCPToolDebuggerItem,
+  MCPToolDebuggerResponse,
+  SessionAnalysisTraceResponse,
+  SessionAnalysisTraceSnapshot,
+  SessionClientRuntimeTrace,
+  SessionEvidenceHighlight,
+  SessionReportEvidenceTrace,
+  SessionToolCallTrace,
+  SessionTurnEvidenceTrace,
+  User,
+} from '../../../shared/types';
 import CandidateProfilePanel from './CandidateProfilePanel';
 import { LiveCoachPreviewCard } from '../../live-coach';
 import styles from './UserProfile.module.css';
@@ -21,6 +36,222 @@ interface Props {
 }
 
 const HISTORY_PAGE_SIZE = 5;
+const TRACE_QUALITY_LABELS: Record<string, string> = {
+  strong: 'Forte',
+  good: 'Bom',
+  moderate: 'Moderado',
+  initial: 'Inicial',
+};
+
+const TRACE_RETRIEVAL_MODE_LABELS: Record<string, string> = {
+  semantic: 'Semantico',
+};
+
+const DEBUGGER_STATUS_LABELS: Record<string, string> = {
+  ready: 'Ativo',
+  empty: 'Sem dado',
+  pending: 'Pendente',
+  error: 'Erro',
+};
+
+const formatRetrievalQuality = (value?: string | null) => {
+  if (!value) return 'Sem score';
+  return TRACE_QUALITY_LABELS[value] || value;
+};
+
+const formatRetrievalMode = (value?: string | null) => {
+  if (!value) return 'Modo indefinido';
+  return TRACE_RETRIEVAL_MODE_LABELS[value] || value;
+};
+
+const formatToolCallStatus = (value?: string | null) => {
+  if (!value) return 'Sem status';
+  if (value === 'ready') return 'Ativo';
+  if (value === 'empty') return 'Sem dado';
+  if (value === 'error') return 'Erro';
+  return value;
+};
+
+const formatToolCallTransport = (value?: string | null) => {
+  if (!value) return 'transporte indefinido';
+  if (value === 'local') return 'local';
+  if (value === 'http') return 'http';
+  return value;
+};
+
+const toTurnEvidenceEntries = (
+  answers?: Record<string, SessionTurnEvidenceTrace> | null,
+): Array<SessionTurnEvidenceTrace & { key: string }> =>
+  Object.entries(answers || {})
+    .map(([key, value]) => ({ key, ...(value || {}) }))
+    .sort((left, right) => {
+      const leftTime = left.capturedAt ? new Date(left.capturedAt).getTime() : 0;
+      const rightTime = right.capturedAt ? new Date(right.capturedAt).getTime() : 0;
+      return rightTime - leftTime;
+    });
+
+const renderHighlightSummary = (highlight?: SessionEvidenceHighlight | null) => {
+  if (!highlight) return '';
+  if (highlight.question) return highlight.question;
+  if (highlight.transcriptSnippet) return highlight.transcriptSnippet;
+  return highlight.answerId || '';
+};
+
+const formatRuntimeDuration = (value?: number | null) => {
+  if (typeof value !== 'number' || Number.isNaN(value) || value < 0) return '';
+  if (value >= 10000) return `${Math.round(value / 1000)}s`;
+  return `${(value / 1000).toFixed(1)}s`;
+};
+
+const renderClientRuntimeSummary = (runtime?: SessionClientRuntimeTrace | null) => {
+  if (!runtime) return '';
+
+  const parts = [
+    runtime.questionDeliveryLatencyMs != null ? `entrega ${formatRuntimeDuration(runtime.questionDeliveryLatencyMs)}` : '',
+    runtime.analysisLatencyMs != null ? `analise ${formatRuntimeDuration(runtime.analysisLatencyMs)}` : '',
+    runtime.transportState ? runtime.transportState : '',
+    runtime.avatarState ? `avatar ${runtime.avatarState}` : '',
+    runtime.coachState ? `coach ${runtime.coachState}` : '',
+    runtime.progressState ? runtime.progressState : '',
+  ].filter(Boolean);
+
+  if (parts.length > 0) {
+    return `Runtime do turno: ${parts.join(' | ')}`;
+  }
+  return runtime.headline || '';
+};
+
+const toToolCallEntries = (items?: SessionToolCallTrace[] | null): SessionToolCallTrace[] =>
+  (Array.isArray(items) ? items : []).filter(
+    (item): item is SessionToolCallTrace => Boolean(item && item.toolName),
+  );
+
+const toStringList = (value: unknown, limit = 5): string[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    .slice(0, limit);
+};
+
+const toRecord = (value: unknown): Record<string, unknown> | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+};
+
+const debuggerStatusLabel = (value?: string | null) => {
+  if (!value) return 'Indefinido';
+  return DEBUGGER_STATUS_LABELS[value] || value;
+};
+
+const formatTraceTimestampValue = (value?: string | null) => {
+  if (!value) return 'Sem data';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return new Intl.DateTimeFormat('pt-BR', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  }).format(parsed);
+};
+
+const renderDebuggerDetails = (item: MCPToolDebuggerItem) => {
+  const data = toRecord(item.data);
+  if (!data) return null;
+
+  if (item.name === 'get_candidate_memory') {
+    const memory = toRecord(data.memory);
+    if (!memory) return null;
+    const strongSkills = toStringList(memory.strongSkills);
+    const gaps = toStringList(memory.recurringGaps);
+    return (
+      <div className={styles.debuggerDetailList}>
+        {strongSkills.length > 0 && <p><strong>Skills fortes:</strong> {strongSkills.join(', ')}</p>}
+        {gaps.length > 0 && <p><strong>Gaps recorrentes:</strong> {gaps.join(', ')}</p>}
+      </div>
+    );
+  }
+
+  if (item.name === 'get_resume_analysis') {
+    const analysis = toRecord(data.analysis);
+    if (!analysis) return null;
+    const technologies = toStringList(analysis.technologies);
+    const match = toRecord(analysis.match);
+    const missingSkills = toStringList(match?.missingSkills);
+    return (
+      <div className={styles.debuggerDetailList}>
+        {analysis.experienceLevel && <p><strong>Nivel:</strong> {String(analysis.experienceLevel)}</p>}
+        {technologies.length > 0 && <p><strong>Tecnologias:</strong> {technologies.join(', ')}</p>}
+        {missingSkills.length > 0 && <p><strong>Skills faltantes:</strong> {missingSkills.join(', ')}</p>}
+      </div>
+    );
+  }
+
+  if (item.name === 'get_job_analysis') {
+    const analysis = toRecord(data.analysis);
+    if (!analysis) return null;
+    const requiredSkills = toStringList(analysis.requiredSkills);
+    const interviewFocus = toStringList(analysis.interviewFocus);
+    return (
+      <div className={styles.debuggerDetailList}>
+        {analysis.roleTitleGuess && <p><strong>Role:</strong> {String(analysis.roleTitleGuess)}</p>}
+        {requiredSkills.length > 0 && <p><strong>Required skills:</strong> {requiredSkills.join(', ')}</p>}
+        {interviewFocus.length > 0 && <p><strong>Foco tecnico:</strong> {interviewFocus.join(', ')}</p>}
+      </div>
+    );
+  }
+
+  if (item.name === 'get_session_trace') {
+    const snapshot = toRecord(data.analysisTraceSnapshot);
+    const workflowSummary = toRecord(data.workflowSummary);
+    const turnEvidenceTimeline = toRecord(snapshot?.turnEvidenceTimeline);
+    const answers = toRecord(turnEvidenceTimeline?.answers);
+    const answerCount = answers ? Object.keys(answers).length : 0;
+    const stages = Array.isArray(workflowSummary?.stages)
+      ? workflowSummary.stages.filter((stage): stage is Record<string, unknown> => Boolean(stage && typeof stage === 'object'))
+      : [];
+    const lastRuntime = toRecord(workflowSummary?.lastRuntime);
+    return (
+      <div className={styles.debuggerDetailList}>
+        {data.sessionId && <p><strong>Sessao:</strong> {String(data.sessionId)}</p>}
+        {snapshot?.capturedAt && <p><strong>Capturado em:</strong> {formatTraceTimestampValue(String(snapshot.capturedAt))}</p>}
+        {workflowSummary?.currentStageLabel && <p><strong>Etapa atual:</strong> {String(workflowSummary.currentStageLabel)}</p>}
+        <p><strong>Evidencias gravadas:</strong> {answerCount}</p>
+        {(workflowSummary?.retrievalMode || workflowSummary?.retrievalQuality) && (
+          <p>
+            <strong>Retrieval:</strong> {formatRetrievalMode(String(workflowSummary?.retrievalMode || ''))}
+            {workflowSummary?.retrievalQuality ? ` • ${formatRetrievalQuality(String(workflowSummary.retrievalQuality))}` : ''}
+          </p>
+        )}
+        {lastRuntime && (
+          <p><strong>Runtime recente:</strong> {renderClientRuntimeSummary(lastRuntime as SessionClientRuntimeTrace)}</p>
+        )}
+        {stages.length > 0 && (
+          <div className={styles.traceMetaRow}>
+            {stages.map((stage, index) => (
+              <span key={`${String(stage.key || stage.label || 'stage')}-${index}`} className={styles.traceMetaChip}>
+                {String(stage.label || 'Etapa')}: {debuggerStatusLabel(String(stage.status || ''))}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (item.name === 'search_rubric_knowledge') {
+    const focus = toStringList(data.focus);
+    const goodSignals = toStringList(data.goodSignals);
+    const redFlags = toStringList(data.redFlags);
+    return (
+      <div className={styles.debuggerDetailList}>
+        {focus.length > 0 && <p><strong>Foco:</strong> {focus.join(', ')}</p>}
+        {goodSignals.length > 0 && <p><strong>Bons sinais:</strong> {goodSignals.join(', ')}</p>}
+        {redFlags.length > 0 && <p><strong>Red flags:</strong> {redFlags.join(', ')}</p>}
+      </div>
+    );
+  }
+
+  return null;
+};
 
 const UserProfile: React.FC<Props> = ({
   user,
@@ -40,6 +271,9 @@ const UserProfile: React.FC<Props> = ({
   const [traceLoadingSessionId, setTraceLoadingSessionId] = useState<string | null>(null);
   const [traceErrorBySessionId, setTraceErrorBySessionId] = useState<Record<string, string>>({});
   const [traceBySessionId, setTraceBySessionId] = useState<Record<string, SessionAnalysisTraceResponse | null>>({});
+  const [toolDebugger, setToolDebugger] = useState<MCPToolDebuggerResponse | null>(null);
+  const [toolDebuggerLoading, setToolDebuggerLoading] = useState(false);
+  const [toolDebuggerError, setToolDebuggerError] = useState('');
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(user.name || '');
   const [nameError, setNameError] = useState('');
@@ -64,6 +298,8 @@ const UserProfile: React.FC<Props> = ({
   ];
 
   const firstName = user.name ? user.name.split(' ')[0] : 'Candidato';
+  const latestSessionId = user.interviews[0]?.id || null;
+  const debuggerStackKey = config.stacks.join('|');
 
   useEffect(() => {
     if (!isEditingName) {
@@ -77,6 +313,35 @@ const UserProfile: React.FC<Props> = ({
       return Math.min(Math.max(current, HISTORY_PAGE_SIZE), user.interviews.length);
     });
   }, [user.interviews.length]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setToolDebuggerLoading(true);
+    setToolDebuggerError('');
+
+    void BackendApi.getMcpToolDebugger({
+      sessionId: latestSessionId,
+      track: config.track,
+      seniority: config.seniority,
+      stacks: config.stacks,
+    })
+      .then((response) => {
+        if (cancelled) return;
+        setToolDebugger(response);
+      })
+      .catch((error: any) => {
+        if (cancelled) return;
+        setToolDebuggerError(error?.message || 'Falha ao carregar o debugger MCP.');
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setToolDebuggerLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [config.seniority, config.track, debuggerStackKey, latestSessionId]);
 
   const formatDate = (value?: string) => {
     if (!value) return '';
@@ -302,6 +567,70 @@ const UserProfile: React.FC<Props> = ({
             <article className={styles.panel}>
               <div className={styles.panelHeader}>
                 <div>
+                  <span className={styles.panelEyebrow}>MCP</span>
+                  <h3>Debugger de tools</h3>
+                </div>
+                <span className={styles.panelMeta}>
+                  {toolDebugger?.tools?.length || 0} tools
+                </span>
+              </div>
+
+              <div className={styles.debuggerToolbar}>
+                <p className={styles.note}>
+                  Visualiza as tools reais do MCP usadas para memoria, analise e rubrica aplicada.
+                </p>
+                <button
+                  type="button"
+                  className={styles.debuggerRefreshButton}
+                  onClick={() => {
+                    setToolDebugger(null);
+                    setToolDebuggerError('');
+                    setToolDebuggerLoading(true);
+                    void BackendApi.getMcpToolDebugger({
+                      sessionId: latestSessionId,
+                      track: config.track,
+                      seniority: config.seniority,
+                      stacks: config.stacks,
+                    })
+                      .then((response) => setToolDebugger(response))
+                      .catch((error: any) => setToolDebuggerError(error?.message || 'Falha ao atualizar o debugger MCP.'))
+                      .finally(() => setToolDebuggerLoading(false));
+                  }}
+                >
+                  Atualizar
+                </button>
+              </div>
+
+              {toolDebuggerLoading && !toolDebugger && <p className={styles.emptyText}>Carregando debugger MCP...</p>}
+              {!toolDebuggerLoading && toolDebuggerError && <p className={styles.traceError}>{toolDebuggerError}</p>}
+
+              {toolDebugger && (
+                <div className={styles.debuggerToolList}>
+                  {toolDebugger.tools.map((item) => (
+                    <article key={item.name} className={styles.debuggerToolCard}>
+                      <div className={styles.debuggerToolHeader}>
+                        <strong>{item.label}</strong>
+                        <span className={styles.debuggerStatusBadge}>{debuggerStatusLabel(item.status)}</span>
+                      </div>
+                      <div className={styles.traceMetaRow}>
+                        {item.contractVersion && (
+                          <span className={styles.traceMetaChip}>{item.contractVersion}</span>
+                        )}
+                        {item.data && toRecord(item.data)?.toolName && (
+                          <span className={styles.traceMetaChip}>{String(toRecord(item.data)?.toolName)}</span>
+                        )}
+                      </div>
+                      {item.summary && <p className={styles.debuggerSummary}>{item.summary}</p>}
+                      {renderDebuggerDetails(item)}
+                    </article>
+                  ))}
+                </div>
+              )}
+            </article>
+
+            <article className={styles.panel}>
+              <div className={styles.panelHeader}>
+                <div>
                   <span className={styles.panelEyebrow}>Historico</span>
                   <h3>Ultimas sessoes</h3>
                 </div>
@@ -377,9 +706,13 @@ const UserProfile: React.FC<Props> = ({
                         if (!trace || !trace.hasTrace || !trace.analysisTraceSnapshot) {
                           return <p>Sessao sem snapshot de trace.</p>;
                         }
-                        const snapshot = trace.analysisTraceSnapshot as any;
-                        const resumeTrace = snapshot?.lastResumeAnalysisTrace;
-                        const jobTrace = snapshot?.lastJobAnalysisTrace;
+                        const snapshot = trace.analysisTraceSnapshot as SessionAnalysisTraceSnapshot;
+                        const resumeTrace = snapshot?.lastResumeAnalysisTrace as AnalysisTrace | null | undefined;
+                        const jobTrace = snapshot?.lastJobAnalysisTrace as AnalysisTrace | null | undefined;
+                        const knowledgeRetrieval = snapshot?.knowledgeRetrieval as KnowledgeRetrievalContext | null | undefined;
+                        const contextToolCalls = toToolCallEntries(snapshot?.contextToolCalls);
+                        const turnEvidenceEntries = toTurnEvidenceEntries(snapshot?.turnEvidenceTimeline?.answers);
+                        const reportEvidence = snapshot?.reportEvidence as SessionReportEvidenceTrace | null | undefined;
                         return (
                           <div className={styles.traceData}>
                             <p>
@@ -400,6 +733,174 @@ const UserProfile: React.FC<Props> = ({
                                   ? `(${jobTrace.aiProvider}${jobTrace.aiModel ? ` / ${jobTrace.aiModel}` : ''})`
                                   : ''}
                               </p>
+                            )}
+                            {knowledgeRetrieval && (
+                              <section className={styles.traceSection}>
+                                <p className={styles.traceSectionTitle}>Retrieval inicial</p>
+                                <p>{knowledgeRetrieval.summary || 'Contexto inicial recuperado para abrir a sessao.'}</p>
+                                <div className={styles.traceMetaRow}>
+                                  <span className={styles.traceMetaChip}>
+                                    {formatRetrievalQuality(knowledgeRetrieval.quality)}
+                                  </span>
+                                  <span className={styles.traceMetaChip}>
+                                    {formatRetrievalMode(knowledgeRetrieval.retrievalMode)}
+                                  </span>
+                                  {knowledgeRetrieval.indexStats?.chunks ? (
+                                    <span className={styles.traceMetaChip}>
+                                      {knowledgeRetrieval.indexStats.chunks} chunk(s)
+                                    </span>
+                                  ) : null}
+                                </div>
+                              </section>
+                            )}
+                            {contextToolCalls.length > 0 && (
+                              <section className={styles.traceSection}>
+                                <p className={styles.traceSectionTitle}>Tools do contexto inicial</p>
+                                <div className={styles.traceEvidenceList}>
+                                  {contextToolCalls.map((call, index) => (
+                                    <article
+                                      key={`${call.toolName || 'tool'}-${call.calledAt || index}`}
+                                      className={styles.traceEvidenceItem}
+                                    >
+                                      <p className={styles.traceEvidenceQuestion}>{call.toolName}</p>
+                                      <div className={styles.traceMetaRow}>
+                                        <span className={styles.traceMetaChip}>{formatToolCallStatus(call.status)}</span>
+                                        <span className={styles.traceMetaChip}>{formatToolCallTransport(call.transport)}</span>
+                                        {call.contractVersion ? (
+                                          <span className={styles.traceMetaChip}>{call.contractVersion}</span>
+                                        ) : null}
+                                      </div>
+                                      {call.summary ? (
+                                        <p className={styles.traceEvidenceCopy}>{call.summary}</p>
+                                      ) : null}
+                                    </article>
+                                  ))}
+                                </div>
+                              </section>
+                            )}
+                            {turnEvidenceEntries.length > 0 && (
+                              <section className={styles.traceSection}>
+                                <p className={styles.traceSectionTitle}>Timeline de evidencias</p>
+                                <div className={styles.traceEvidenceList}>
+                                  {turnEvidenceEntries.slice(0, 3).map((entry) => (
+                                    <article key={entry.key} className={styles.traceEvidenceItem}>
+                                      <p className={styles.traceEvidenceQuestion}>
+                                        {entry.question || `Resposta ${entry.answerId}`}
+                                      </p>
+                                      {entry.transcriptSnippet ? (
+                                        <p className={styles.traceEvidenceCopy}>{entry.transcriptSnippet}</p>
+                                      ) : null}
+                                      <div className={styles.traceMetaRow}>
+                                        <span className={styles.traceMetaChip}>
+                                          {formatTraceTimestamp(entry.capturedAt)}
+                                        </span>
+                                        <span className={styles.traceMetaChip}>
+                                          {formatRetrievalMode(entry.nextQuestionContext?.retrievalMode)}
+                                        </span>
+                                        <span className={styles.traceMetaChip}>
+                                          {formatRetrievalQuality(entry.nextQuestionContext?.quality)}
+                                        </span>
+                                      </div>
+                                      {(entry.improvements?.length || entry.strengths?.length) && (
+                                        <p className={styles.traceEvidenceMeta}>
+                                          {entry.improvements?.length
+                                            ? `Melhorar: ${entry.improvements.join(', ')}`
+                                            : ''}
+                                          {entry.improvements?.length && entry.strengths?.length ? ' • ' : ''}
+                                          {entry.strengths?.length ? `Forcas: ${entry.strengths.join(', ')}` : ''}
+                                        </p>
+                                      )}
+                                      {entry.clientRuntime ? (
+                                        <p className={styles.traceEvidenceMeta}>
+                                          {renderClientRuntimeSummary(entry.clientRuntime)}
+                                        </p>
+                                      ) : null}
+                                      {!!entry.nextQuestionContext?.sources?.length && (
+                                        <p className={styles.traceEvidenceMeta}>
+                                          Proxima pergunta guiada por:{' '}
+                                          {entry.nextQuestionContext.sources
+                                            .map((source) => source.title)
+                                            .filter(Boolean)
+                                            .join(', ')}
+                                        </p>
+                                      )}
+                                      {!!entry.nextQuestionContext?.toolCalls?.length && (
+                                        <p className={styles.traceEvidenceMeta}>
+                                          Tools acionadas:{' '}
+                                          {entry.nextQuestionContext.toolCalls
+                                            .map((call) => {
+                                              const parts = [
+                                                call.toolName,
+                                                formatToolCallTransport(call.transport),
+                                                formatToolCallStatus(call.status),
+                                              ].filter(Boolean);
+                                              return parts.join(' / ');
+                                            })
+                                            .join(', ')}
+                                        </p>
+                                      )}
+                                    </article>
+                                  ))}
+                                </div>
+                              </section>
+                            )}
+                            {reportEvidence && (
+                              <section className={styles.traceSection}>
+                                <p className={styles.traceSectionTitle}>Contexto do relatorio final</p>
+                                <div className={styles.traceMetaRow}>
+                                  <span className={styles.traceMetaChip}>
+                                    {formatRetrievalMode(reportEvidence.retrievalMode)}
+                                  </span>
+                                  <span className={styles.traceMetaChip}>
+                                    {formatRetrievalQuality(reportEvidence.quality)}
+                                  </span>
+                                  {reportEvidence.capturedAt ? (
+                                    <span className={styles.traceMetaChip}>
+                                      {formatTraceTimestamp(reportEvidence.capturedAt)}
+                                    </span>
+                                  ) : null}
+                                </div>
+                                {!!reportEvidence.sources?.length && (
+                                  <p className={styles.traceEvidenceMeta}>
+                                    Fontes principais:{' '}
+                                    {reportEvidence.sources.map((source) => source.title).filter(Boolean).join(', ')}
+                                  </p>
+                                )}
+                                {!!reportEvidence.episodeHighlights?.length && (
+                                  <p className={styles.traceEvidenceMeta}>
+                                    Evidencias usadas:{' '}
+                                    {reportEvidence.episodeHighlights
+                                      .map((highlight) => renderHighlightSummary(highlight))
+                                      .filter(Boolean)
+                                      .join(' • ')}
+                                  </p>
+                                )}
+                                {!!reportEvidence.episodeHighlights?.length &&
+                                reportEvidence.episodeHighlights.some((item) => Boolean(renderClientRuntimeSummary(item.clientRuntime))) ? (
+                                  <p className={styles.traceEvidenceMeta}>
+                                    Runtime observado:{' '}
+                                    {reportEvidence.episodeHighlights
+                                      .map((item) => renderClientRuntimeSummary(item.clientRuntime))
+                                      .filter(Boolean)
+                                      .join(' | ')}
+                                  </p>
+                                ) : null}
+                                {!!reportEvidence.toolCalls?.length && (
+                                  <p className={styles.traceEvidenceMeta}>
+                                    Tools acionadas:{' '}
+                                    {reportEvidence.toolCalls
+                                      .map((call) => {
+                                        const parts = [
+                                          call.toolName,
+                                          formatToolCallTransport(call.transport),
+                                          formatToolCallStatus(call.status),
+                                        ].filter(Boolean);
+                                        return parts.join(' / ');
+                                      })
+                                      .join(', ')}
+                                  </p>
+                                )}
+                              </section>
                             )}
                           </div>
                         );

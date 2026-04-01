@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const backendApiMocks = vi.hoisted(() => ({
   generatePlan: vi.fn(),
   getCandidateProfile: vi.fn(),
+  orchestratorBuildContext: vi.fn(),
   orchestratorStart: vi.fn(),
 }));
 
@@ -16,6 +17,7 @@ vi.mock('../src/shared/services/backendApi', () => ({
   BackendApi: {
     generatePlan: backendApiMocks.generatePlan,
     getCandidateProfile: backendApiMocks.getCandidateProfile,
+    orchestratorBuildContext: backendApiMocks.orchestratorBuildContext,
     orchestratorStart: backendApiMocks.orchestratorStart,
   },
 }));
@@ -101,6 +103,41 @@ describe('Lobby', () => {
   beforeEach(() => {
     backendApiMocks.generatePlan.mockReset();
     backendApiMocks.getCandidateProfile.mockReset().mockResolvedValue(completeProfile);
+    backendApiMocks.orchestratorBuildContext.mockReset().mockResolvedValue({
+      profile: {},
+      candidate_memory: {},
+      candidate: {},
+      job: {},
+      match: {},
+      knowledgeRetrieval: {
+        summary: '3 fontes conectadas ao contexto ativo.',
+        quality: 'good',
+        retrievalMode: 'semantic',
+        indexStats: {
+          chunks: 5,
+          embeddingStrategy: 'local-hash-v1',
+        },
+        queryTerms: ['react', 'typescript', 'frontend'],
+        sources: [
+          {
+            id: 'resume-summary',
+            sourceType: 'resume',
+            title: 'Resumo do curriculo',
+            snippet: 'Perfil focado em frontend moderno.',
+            score: 0.82,
+            reason: 'Recuperado por sobreposicao de contexto: react, frontend.',
+          },
+          {
+            id: 'job-description',
+            sourceType: 'job',
+            title: 'Descricao da vaga',
+            snippet: 'Vaga frontend com foco em arquitetura.',
+            score: 0.78,
+            reason: 'Recuperado por sobreposicao de contexto: arquitetura.',
+          },
+        ],
+      },
+    });
     backendApiMocks.orchestratorStart.mockReset();
     audioPlaybackMocks.primeSharedTtsAudio.mockReset().mockResolvedValue(true);
     mockTrackStop.mockReset();
@@ -155,6 +192,9 @@ describe('Lobby', () => {
     expect(screen.getByLabelText('Resumo da sessao')).toBeInTheDocument();
     expect(screen.getByText('Senioridade')).toBeInTheDocument();
     expect(screen.getByText('Amigavel')).toBeInTheDocument();
+    expect(await screen.findByText('Fontes recuperadas')).toBeInTheDocument();
+    expect(screen.getByText(/Modo semantico/i)).toBeInTheDocument();
+    expect(screen.getByText('Resumo do curriculo')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Configuracoes' }));
 
@@ -281,6 +321,11 @@ describe('Lobby', () => {
         6,
         2,
         null,
+        expect.objectContaining({
+          knowledgeRetrieval: expect.objectContaining({
+            quality: 'good',
+          }),
+        }),
       );
     });
   });
@@ -337,6 +382,81 @@ describe('Lobby', () => {
         6,
         1,
         null,
+        expect.objectContaining({
+          knowledgeRetrieval: expect.objectContaining({
+            sources: expect.arrayContaining([
+              expect.objectContaining({
+                title: 'Resumo do curriculo',
+              }),
+            ]),
+          }),
+        }),
+      );
+    });
+  });
+
+  it('forwards orchestrator context to the next screen when available', async () => {
+    backendApiMocks.generatePlan.mockResolvedValue(null);
+    backendApiMocks.orchestratorStart.mockResolvedValue({
+      session: {
+        sessionId: 'sess-3',
+        credits: 6,
+      },
+      context: {
+        profile: {},
+        candidate: {},
+        job: {},
+        match: {},
+        agentRuntime: {
+          candidate_agent: {
+            name: 'candidate_agent',
+            status: 'completed',
+            source: 'heuristic',
+            confidence: 0.72,
+          },
+        },
+      },
+      initialNextQuestion: {
+        shouldFinish: false,
+        question: {
+          id: 'q1',
+          prompt: 'Conte sobre um projeto recente.',
+        },
+      },
+      initialAvatar: null,
+    });
+
+    const onStart = vi.fn();
+
+    render(
+      <Lobby
+        config={baseConfig}
+        userCredits={8}
+        candidateProfile={completeProfile}
+        onStart={onStart}
+        onBack={vi.fn()}
+      />,
+    );
+
+    const startButton = await screen.findByRole('button', { name: 'Iniciar entrevista' });
+    await waitFor(() => expect(startButton).toBeEnabled());
+
+    fireEvent.click(startButton);
+
+    await waitFor(() => {
+      expect(onStart).toHaveBeenCalledWith(
+        expect.anything(),
+        'sess-3',
+        6,
+        2,
+        null,
+        expect.objectContaining({
+          agentRuntime: expect.objectContaining({
+            candidate_agent: expect.objectContaining({
+              source: 'heuristic',
+            }),
+          }),
+        }),
       );
     });
   });

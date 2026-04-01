@@ -10,7 +10,14 @@ from mcp.server.fastmcp import FastMCP
 from . import mcp_tools
 from .firebase_admin import verify_bearer_token
 
-USER_BOUND_TOOLS = {"get_user_profile", "get_recent_interviews"}
+USER_BOUND_TOOLS = {
+    "get_user_profile",
+    "get_recent_interviews",
+    "get_session_trace",
+    "get_candidate_memory",
+    "get_resume_analysis",
+    "get_job_analysis",
+}
 
 
 class MCPFirebaseAuthMiddleware:
@@ -115,6 +122,36 @@ def get_user_profile(uid: str) -> Dict[str, Any]:
 def get_recent_interviews(uid: str, limit: int = 5) -> List[Dict[str, Any]]:
     """Fetch recent interview summaries for a user."""
     return mcp_tools.get_recent_interviews(uid=uid, limit=limit)
+
+
+@mcp.tool()
+def get_session_trace(uid: str, session_id: str) -> Dict[str, Any]:
+    """Fetch the saved analysis trace snapshot for a user-owned session."""
+    return mcp_tools.get_session_trace(uid=uid, session_id=session_id)
+
+
+@mcp.tool()
+def get_candidate_memory(uid: str) -> Dict[str, Any]:
+    """Fetch the consolidated candidate memory for a user."""
+    return mcp_tools.get_candidate_memory(uid=uid)
+
+
+@mcp.tool()
+def get_resume_analysis(uid: str) -> Dict[str, Any]:
+    """Fetch the latest resume analysis for a user."""
+    return mcp_tools.get_resume_analysis(uid=uid)
+
+
+@mcp.tool()
+def get_job_analysis(uid: str) -> Dict[str, Any]:
+    """Fetch the latest job analysis for a user."""
+    return mcp_tools.get_job_analysis(uid=uid)
+
+
+@mcp.tool()
+def search_rubric_knowledge(track: str, seniority: str, stacks: List[str], question: Optional[str] = None) -> Dict[str, Any]:
+    """Fetch rubric knowledge blocks for the current track, seniority and stacks."""
+    return mcp_tools.search_rubric_knowledge(track=track, seniority=seniority, stacks=stacks, question=question)
 
 
 @mcp.tool()

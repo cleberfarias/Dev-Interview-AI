@@ -5,7 +5,10 @@ from typing import Any
 
 from fastapi import HTTPException
 
+from ..agent_runtime import build_context_agent_runtime
+from ..interview_rag import build_episode_memory_entry
 from ..avatar_engine import avatar_controller
+from ..knowledge_retrieval import build_knowledge_retrieval
 from ..agents import (
     behavior_agent,
     candidate_agent,
@@ -19,6 +22,10 @@ from ..agents import (
     study_plan_agent,
 )
 from ..schemas import (
+    BehaviorProfile,
+    BehavioralSpeechSignals,
+    CultureFitSignals,
+    HiringCommunicationSignals,
     InterviewConfig,
     OrchestratorContextRequest,
     OrchestratorFinalizeRequest,
@@ -30,6 +37,47 @@ from . import candidate_profile_service, memory_service, session_service
 from . import communication_analysis_service
 
 logger = logging.getLogger("uvicorn.error")
+
+
+def _build_minimal_evaluation(transcript: str) -> dict[str, Any]:
+    return {
+        "transcript": transcript,
+        "scores": {},
+        "criteriaScores": {},
+        "strengths": [],
+        "improvements": [],
+        "followUp": [],
+        "reportStatus": "fallback",
+        "reportSource": "local_fallback",
+    }
+
+
+def _build_minimal_report(history: list[dict[str, Any]]) -> dict[str, Any]:
+    scores: list[float] = []
+    for item in (history or []):
+        if not isinstance(item, dict):
+            continue
+        eval_ = item.get("evaluation") or {}
+        cs = {**(eval_.get("criteriaScores") or {}), **(eval_.get("scores") or {})}
+        for v in cs.values():
+            try:
+                scores.append(float(v))
+            except (TypeError, ValueError):
+                pass
+    overall = round(sum(scores) / len(scores), 2) if scores else 0.0
+    return {
+        "overallScore": overall,
+        "levelEstimate": "unknown",
+        "jobMatch": {"covered": [], "gaps": []},
+        "feedbackByCategory": {},
+        "plan7Days": [],
+        "communicationScore": {},
+        "reportStatus": "fallback",
+        "reportSource": "local_fallback",
+        "reportWarnings": [
+            "Nao foi possivel gerar o relatorio com IA. Este resumo usa apenas dados locais da sessao."
+        ],
+    }
 
 
 def _avatar_for_question(*, question_payload: dict[str, Any] | None, config: InterviewConfig) -> dict[str, Any] | None:
@@ -82,12 +130,35 @@ def build_context(
             "cultureFitSignals": culture_fit_profile,
         },
     )
+    agent_runtime = build_context_agent_runtime(
+        profile=profile,
+        candidate_memory=candidate_memory,
+        candidate=candidate,
+        job=job,
+        match=match,
+        resume_text=resume_text,
+        job_description=effective_job_description,
+        resume_analysis_trace=profile.get("lastResumeAnalysisTrace"),
+        job_analysis_trace=profile.get("lastJobAnalysisTrace"),
+    )
+    knowledge_retrieval = build_knowledge_retrieval(
+        user_id=user_id,
+        auth_token=user.get("token"),
+        config=config,
+        profile=profile,
+        candidate_memory=candidate_memory,
+        candidate=candidate,
+        job=job,
+        match=match,
+    )
     return {
         "profile": profile,
         "candidate_memory": candidate_memory,
         "candidate": candidate,
         "job": job,
         "match": match,
+        "agentRuntime": agent_runtime,
+        "knowledgeRetrieval": knowledge_retrieval,
         "behaviorProfile": behavior_profile,
         "cultureFitProfile": culture_fit_profile,
     }
@@ -133,72 +204,129 @@ def run_turn(
     mime_type: str = "audio/webm",
     session_id: str | None = None,
     include_avatar: bool = False,
+    client_runtime: dict | None = None,
 ) -> dict[str, Any]:
     transcript_text = (transcript or "").strip()
     audio_text = (audio_base64 or "").strip()
-    if audio_text:
-        evaluation = evaluator_agent.run_audio(
-            config=config,
-            question=question,
-            audio_base64=audio_text,
-            mime_type=mime_type,
-            confirmed_name=confirmed_name,
-            user=user,
-            session_id=session_id,
-        )
-    elif transcript_text:
-        evaluation = evaluator_agent.run_text(
-            config=config,
-            question=question,
-            transcript=transcript_text,
-            confirmed_name=confirmed_name,
-            user=user,
-            session_id=session_id,
-        )
-    else:
+    if not transcript_text and not audio_text:
         raise ValueError("Either transcript or audio input is required")
 
+    evaluation: dict[str, Any] | None = None
+    if audio_text:
+        try:
+            evaluation = evaluator_agent.run_audio(
+                config=config,
+                question=question,
+                audio_base64=audio_text,
+                mime_type=mime_type,
+                confirmed_name=confirmed_name,
+                user=user,
+                session_id=session_id,
+            )
+        except Exception:
+            logger.exception("Audio evaluation failed, falling back to text uid=%s", user.get("uid"))
+            if transcript_text:
+                try:
+                    evaluation = evaluator_agent.run_text(
+                        config=config,
+                        question=question,
+                        transcript=transcript_text,
+                        confirmed_name=confirmed_name,
+                        user=user,
+                        session_id=session_id,
+                    )
+                except Exception:
+                    logger.exception("Text fallback evaluation also failed uid=%s", user.get("uid"))
+    elif transcript_text:
+        try:
+            evaluation = evaluator_agent.run_text(
+                config=config,
+                question=question,
+                transcript=transcript_text,
+                confirmed_name=confirmed_name,
+                user=user,
+                session_id=session_id,
+            )
+        except Exception:
+            logger.exception("Text evaluation failed uid=%s", user.get("uid"))
+
+    if evaluation is None:
+        logger.warning("All evaluation attempts failed, using minimal fallback uid=%s", user.get("uid"))
+        evaluation = _build_minimal_evaluation(transcript_text)
+
     effective_transcript = str(evaluation.get("transcript") or transcript_text).strip()
-    normalized_speech_metrics = communication_analysis_service.normalize_speech_metrics(speech_metrics)
-    communication_signals = communication_analysis_service.derive_communication_signals(
-        transcript=effective_transcript,
-        speech_metrics=normalized_speech_metrics,
-    )
-    behavioral_speech_signals = communication_analysis_service.derive_behavioral_speech_signals(
-        transcript=effective_transcript,
-        speech_metrics=normalized_speech_metrics,
-        communication_signals=communication_signals,
-    )
+
+    try:
+        normalized_speech_metrics = communication_analysis_service.normalize_speech_metrics(speech_metrics)
+        communication_signals = communication_analysis_service.derive_communication_signals(
+            transcript=effective_transcript,
+            speech_metrics=normalized_speech_metrics,
+        )
+        behavioral_speech_signals = communication_analysis_service.derive_behavioral_speech_signals(
+            transcript=effective_transcript,
+            speech_metrics=normalized_speech_metrics,
+            communication_signals=communication_signals,
+        )
+    except Exception:
+        logger.exception("Communication analysis failed uid=%s", user.get("uid"))
+        normalized_speech_metrics = None
+        communication_signals = HiringCommunicationSignals()
+        behavioral_speech_signals = BehavioralSpeechSignals()
 
     profile = candidate_profile_service.get_candidate_profile(user).model_dump()
     effective_job_description = (config.jobDescription or profile.get("jobDescription") or "").strip()
-    job_context = job_agent.run(job_description=effective_job_description)
-    match_context = match_agent.run(
-        resume_skills=profile.get("primarySkills") or config.stacks or [],
-        job_description=effective_job_description,
-        interview_signals={"communicationSignals": communication_signals.model_dump()},
-    )
-    behavior_profile = behavior_agent.run(
-        transcript=effective_transcript,
-        communication_signals=communication_signals,
-        behavioral_speech_signals=behavioral_speech_signals,
-        evaluation=evaluation,
-    )
-    culture_fit_signals = culture_fit_agent.run(
-        transcript=effective_transcript,
-        communication_signals=communication_signals,
-        behavioral_speech_signals=behavioral_speech_signals,
-        behavior_profile=behavior_profile,
-        evaluation=evaluation,
-        job_context=job_context,
-        match_context=match_context,
-    )
 
-    coach = (
-        coach_agent.run(evaluation=evaluation)
-        if str(interview_mode or "candidate_coaching_mode") == "candidate_coaching_mode"
-        else {"tips": [], "reinforce": [], "idealAnswerOutline": []}
-    )
+    try:
+        job_context = job_agent.run(job_description=effective_job_description)
+    except Exception:
+        logger.exception("Job agent failed in turn uid=%s", user.get("uid"))
+        job_context = {}
+
+    try:
+        match_context = match_agent.run(
+            resume_skills=profile.get("primarySkills") or config.stacks or [],
+            job_description=effective_job_description,
+            interview_signals={"communicationSignals": communication_signals.model_dump() if hasattr(communication_signals, "model_dump") else {}},
+        )
+    except Exception:
+        logger.exception("Match agent failed in turn uid=%s", user.get("uid"))
+        match_context = {}
+
+    try:
+        behavior_profile = behavior_agent.run(
+            transcript=effective_transcript,
+            communication_signals=communication_signals,
+            behavioral_speech_signals=behavioral_speech_signals,
+            evaluation=evaluation,
+        )
+    except Exception:
+        logger.exception("Behavior agent failed uid=%s", user.get("uid"))
+        behavior_profile = BehaviorProfile()
+
+    try:
+        culture_fit_signals = culture_fit_agent.run(
+            transcript=effective_transcript,
+            communication_signals=communication_signals,
+            behavioral_speech_signals=behavioral_speech_signals,
+            behavior_profile=behavior_profile,
+            evaluation=evaluation,
+            job_context=job_context,
+            match_context=match_context,
+        )
+    except Exception:
+        logger.exception("Culture fit agent failed uid=%s", user.get("uid"))
+        culture_fit_signals = CultureFitSignals()
+
+    _empty_coach = {"tips": [], "reinforce": [], "idealAnswerOutline": []}
+    try:
+        coach = (
+            coach_agent.run(evaluation=evaluation)
+            if str(interview_mode or "candidate_coaching_mode") == "candidate_coaching_mode"
+            else _empty_coach
+        )
+    except Exception:
+        logger.exception("Coach agent failed uid=%s", user.get("uid"))
+        coach = _empty_coach
 
     communication_analysis = None
     if answer_id:
@@ -211,25 +339,43 @@ def run_turn(
             "behaviorProfile": behavior_profile.model_dump(),
             "cultureFitSignals": culture_fit_signals.model_dump(),
         }
+    episode_memory = (
+        build_episode_memory_entry(
+            answer_id=str(answer_id or ""),
+            question=question,
+            transcript=effective_transcript,
+            evaluation=evaluation,
+            communication_analysis=communication_analysis,
+        )
+        if answer_id
+        else None
+    )
 
     normalized_history = [item for item in (history or []) if isinstance(item, dict)]
     next_history = [
         *normalized_history,
         {
+            "answerId": answer_id,
             "question": question,
+            "transcript": effective_transcript,
             "evaluation": evaluation,
             "communicationAnalysis": communication_analysis,
+            "clientRuntime": client_runtime if isinstance(client_runtime, dict) else None,
         },
     ]
 
-    next_question = interviewer_agent.run(
-        config=config,
-        history=next_history,
-        remaining_seconds=remaining_seconds,
-        difficulty_level=difficulty_level,
-        user=user,
-        session_id=session_id,
-    )
+    try:
+        next_question = interviewer_agent.run(
+            config=config,
+            history=next_history,
+            remaining_seconds=remaining_seconds,
+            difficulty_level=difficulty_level,
+            user=user,
+            session_id=session_id,
+        )
+    except Exception:
+        logger.exception("Interviewer agent failed, signaling finish uid=%s", user.get("uid"))
+        next_question = {"shouldFinish": True, "question": None}
     avatar = _avatar_for_question(question_payload=next_question, config=config) if include_avatar else None
 
     if answer_id:
@@ -238,6 +384,11 @@ def run_turn(
                 session_service.store_answer_communication_analysis(session_id, answer_id, communication_analysis, user)
             except Exception:
                 logger.exception("Failed to persist communication analysis sessionId=%s", session_id)
+            try:
+                if episode_memory:
+                    session_service.store_answer_episode(session_id, answer_id, episode_memory, user)
+            except Exception:
+                logger.exception("Failed to persist episodic memory sessionId=%s", session_id)
 
     return {
         "evaluation": evaluation,
@@ -255,8 +406,18 @@ def finalize(
     history: list[dict],
     session_id: str | None = None,
 ) -> dict[str, Any]:
-    report = report_agent.run(config=config, history=history, user=user, session_id=session_id)
-    study_plan = study_plan_agent.run(report=report)
+    try:
+        report = report_agent.run(config=config, history=history, user=user, session_id=session_id)
+    except Exception:
+        logger.exception("Report agent failed, using local fallback uid=%s", user.get("uid"))
+        report = _build_minimal_report(history)
+
+    study_plan: dict[str, Any] = {"weeklyPlan": []}
+    try:
+        study_plan = study_plan_agent.run(report=report)
+    except Exception:
+        logger.exception("Study plan agent failed uid=%s", user.get("uid"))
+
     return {
         "report": report,
         "studyPlan": study_plan,
@@ -336,6 +497,7 @@ def run_orchestrated_turn(*, payload: OrchestratorTurnRequest, user: dict) -> di
                 mime_type=payload.mimeType,
                 session_id=payload.sessionId,
                 include_avatar=payload.includeAvatar,
+                client_runtime=payload.clientRuntime,
             )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

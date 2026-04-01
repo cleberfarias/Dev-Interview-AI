@@ -7,6 +7,10 @@ from google.cloud import firestore
 from ..firebase_admin import get_firestore_client
 
 
+def _safe_key(value: str) -> str:
+    return str(value).strip().replace("/", "_").replace("\\", "_").replace(".", "_")
+
+
 def create_pending_session(
     *,
     uid: str,
@@ -62,12 +66,53 @@ def upsert_session(session_id: str, data: dict[str, Any], merge: bool = True) ->
 def merge_answer_communication_analysis(session_id: str, answer_id: str, data: dict[str, Any]) -> None:
     if not session_id or not answer_id:
         return
-    safe_answer_id = str(answer_id).strip().replace("/", "_").replace("\\", "_").replace(".", "_")
+    safe_answer_id = _safe_key(answer_id)
     payload = {
         "communicationAnalysis": {
             "answers": {
                 safe_answer_id: dict(data or {}),
             }
+        }
+    }
+    get_firestore_client().collection("sessions").document(session_id).set(payload, merge=True)
+
+
+def merge_answer_episode(session_id: str, answer_id: str, data: dict[str, Any]) -> None:
+    if not session_id or not answer_id:
+        return
+    safe_answer_id = _safe_key(answer_id)
+    payload = {
+        "episodicMemory": {
+            "answers": {
+                safe_answer_id: dict(data or {}),
+            }
+        }
+    }
+    get_firestore_client().collection("sessions").document(session_id).set(payload, merge=True)
+
+
+def merge_turn_evidence_trace(session_id: str, answer_id: str, data: dict[str, Any]) -> None:
+    if not session_id or not answer_id:
+        return
+    safe_answer_id = _safe_key(answer_id)
+    payload = {
+        "analysisTraceSnapshot": {
+            "turnEvidenceTimeline": {
+                "answers": {
+                    safe_answer_id: dict(data or {}),
+                }
+            }
+        }
+    }
+    get_firestore_client().collection("sessions").document(session_id).set(payload, merge=True)
+
+
+def merge_report_evidence_trace(session_id: str, data: dict[str, Any]) -> None:
+    if not session_id:
+        return
+    payload = {
+        "analysisTraceSnapshot": {
+            "reportEvidence": dict(data or {}),
         }
     }
     get_firestore_client().collection("sessions").document(session_id).set(payload, merge=True)

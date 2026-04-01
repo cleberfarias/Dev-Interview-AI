@@ -3,6 +3,8 @@ from __future__ import annotations
 from fastapi import HTTPException
 
 from ..ai.router import AIProviderError
+from ..interview_rag import build_next_question_rag_context, build_next_question_rag_trace
+from ..request_context import clear_tool_calls, consume_tool_calls
 from ..repositories import session_repository
 from ..schemas import (
     InterviewConfig,
@@ -144,7 +146,38 @@ def next_question(payload, user):
     if remaining_seconds <= 60 or asked_count >= max_q:
         return NextQuestionResponse(shouldFinish=True, reason="time_or_max")
 
-    context = interview_core._build_plan_context(user.get("uid"), config, auth_token=user.get("token"))
+    clear_tool_calls()
+    rag_context, rag_retrieval = build_next_question_rag_context(
+        user=user,
+        config=config,
+        history=history,
+        session_id=request.sessionId,
+    )
+    next_question_tool_calls = consume_tool_calls()
+    if request.sessionId:
+        next_question_trace = build_next_question_rag_trace(history=history, retrieval=rag_retrieval)
+        if next_question_trace and next_question_trace.get("answerId"):
+            next_question_context = next_question_trace.get("nextQuestionContext")
+            if isinstance(next_question_context, dict):
+                next_question_context["toolCalls"] = next_question_tool_calls
+            try:
+                from . import session_service
+
+                session_service.store_turn_evidence_trace(
+                    request.sessionId,
+                    str(next_question_trace.get("answerId") or ""),
+                    next_question_trace,
+                    user,
+                )
+            except Exception:
+                interview_core.logger.exception(
+                    "Failed to persist next-question trace sessionId=%s",
+                    request.sessionId,
+                )
+    context = (
+        interview_core._build_plan_context(user.get("uid"), config, auth_token=user.get("token"))
+        + rag_context
+    )
     prompt = interview_core._build_next_question_prompt(
         config=config,
         history=history,

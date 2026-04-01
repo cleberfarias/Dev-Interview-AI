@@ -245,6 +245,7 @@ Veja o plano tecnico em: docs/PLANO_CORRECOES.md
 - Stack tecnica: `docs/TECH_STACK.md`
 - Observabilidade: `docs/OBSERVABILITY.md`
 - Publicacao Android: `docs/PLAY_STORE_ANDROID.md`
+- Roadmap de evolucao para Engenharia de IA Aplicada: `docs/ROADMAP_ENGENHARIA_IA_APLICADA.md`
 
 ## Observabilidade
 

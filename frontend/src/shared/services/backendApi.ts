@@ -21,6 +21,7 @@ import type {
   ResumeAnalysisPageResponse,
   JobAnalyzeResponse,
   LiveCoachProcessResponse,
+  MCPToolDebuggerResponse,
   SessionAnalysisTraceResponse,
   SessionReportResponse,
   AvatarResponse,
@@ -444,6 +445,7 @@ export const BackendApi = {
     audioBase64?: string;
     mimeType?: string;
     includeAvatar?: boolean;
+    clientRuntime?: Record<string, unknown>;
   }) =>
     apiFetch<OrchestratorTurnResponse>("/interview/turn", {
       method: "POST",
@@ -488,6 +490,25 @@ export const BackendApi = {
 
   getSessionReport: (sessionId: string) =>
     apiFetch<SessionReportResponse>(`/sessions/${sessionId}/report`),
+
+  getMcpToolDebugger: (params?: {
+    sessionId?: string | null;
+    track?: string | null;
+    seniority?: string | null;
+    stacks?: string[];
+    question?: string | null;
+  }) => {
+    const query = new URLSearchParams();
+    if (params?.sessionId) query.set('sessionId', params.sessionId);
+    if (params?.track) query.set('track', params.track);
+    if (params?.seniority) query.set('seniority', params.seniority);
+    (params?.stacks || []).forEach((stack) => {
+      if (stack?.trim()) query.append('stacks', stack.trim());
+    });
+    if (params?.question) query.set('question', params.question);
+    const suffix = query.toString();
+    return apiFetch<MCPToolDebuggerResponse>(`/ai/tools/debugger${suffix ? `?${suffix}` : ''}`);
+  },
 
   devAddCredits: (amount = 3) =>
     apiFetch<{ credits: number }>(`/credits/dev-add?amount=${amount}`, { method: "POST" }),

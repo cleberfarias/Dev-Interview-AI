@@ -5,7 +5,9 @@ import type {
   InterviewConfig,
   InterviewPlan,
   InterviewStyle,
+  KnowledgeRetrievalContext,
   LanguageCode,
+  OrchestratorContextResponse,
   Seniority,
 } from '../../../shared/types';
 import type { DifficultyLevel, InterviewModeLevel } from '../../../shared/types/interview';
@@ -36,6 +38,7 @@ interface Props {
     credits: number,
     interviewModeLevel?: InterviewModeLevel,
     initialAvatar?: AvatarResponse | null,
+    context?: OrchestratorContextResponse | null,
   ) => void;
   onBack: () => void;
 }
@@ -76,6 +79,13 @@ const MODE_LABELS = {
   candidate_coaching_mode: 'Coaching do candidato',
   hiring_assessment_mode: 'Avaliacao de contratacao',
 } as const;
+
+const RETRIEVAL_QUALITY_LABELS: Record<string, string> = {
+  strong: 'Forte',
+  good: 'Bom',
+  moderate: 'Moderado',
+  initial: 'Inicial',
+};
 
 const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number): Promise<T | null> => {
   return Promise.race([
@@ -121,6 +131,9 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingStage, setLoadingStage] = useState<string | null>(null);
+  const [contextPreview, setContextPreview] = useState<OrchestratorContextResponse | null>(null);
+  const [contextPreviewLoading, setContextPreviewLoading] = useState(false);
+  const [contextPreviewError, setContextPreviewError] = useState<string | null>(null);
   const [audioLevel, setAudioLevel] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [showNoJobModal, setShowNoJobModal] = useState(false);
@@ -201,6 +214,68 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
     };
   }, []);
 
+  useEffect(() => {
+    const hasProfileSignal = Boolean(
+      candidateProfile?.resumeSummary?.trim() ||
+        candidateProfile?.jobDescription?.trim() ||
+        candidateProfile?.primarySkills?.length ||
+        candidateProfile?.weakSkills?.length ||
+        config.jobDescription?.trim(),
+    );
+    if (!hasProfileSignal) {
+      setContextPreview(null);
+      setContextPreviewError(null);
+      setContextPreviewLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setContextPreviewLoading(true);
+    setContextPreviewError(null);
+
+    const effectiveConfig = {
+      ...config,
+      duration: clampDuration(config.duration, config.plan),
+      interviewModeLevel: selectedModeLevel,
+    };
+
+    void BackendApi.orchestratorBuildContext({
+      config: effectiveConfig,
+      jobDescription: effectiveConfig.jobDescription,
+    })
+      .then((response) => {
+        if (cancelled) return;
+        setContextPreview(response || null);
+      })
+      .catch((previewError: any) => {
+        if (cancelled) return;
+        setContextPreviewError(previewError?.message || 'Falha ao carregar fontes do contexto.');
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setContextPreviewLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    candidateProfile?.resumeSummary,
+    candidateProfile?.jobDescription,
+    candidateProfile?.primarySkills?.join('|'),
+    candidateProfile?.weakSkills?.join('|'),
+    config.duration,
+    config.interviewLanguage,
+    config.jobDescription,
+    config.plan,
+    config.seniority,
+    config.stacks?.join('|'),
+    config.style,
+    config.track,
+    config.uiLanguage,
+    selectedModeLevel,
+  ]);
+
   const startInterviewSession = async () => {
     setLoading(true);
     setLoadingStage('Criando sessao com IA...');
@@ -227,7 +302,14 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
           PLAN_GENERATE_TIMEOUT_MS,
         );
         if (generated?.plan?.questions?.length) {
-          onStart(generated.plan, generated.sessionId, generated.credits, selectedModeLevel, null);
+          onStart(
+            generated.plan,
+            generated.sessionId,
+            generated.credits,
+            selectedModeLevel,
+            null,
+            orchestratedStart.context || contextPreview || null,
+          );
           return;
         }
       } catch (planErr) {
@@ -244,7 +326,14 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
           blueprint: { hr: 15, technical: 50, design: 20, behavioral: 15 },
           questions: [nextRes.question],
         };
-        onStart(planStub, res.sessionId, res.credits, selectedModeLevel, orchestratedStart.initialAvatar || null);
+        onStart(
+          planStub,
+          res.sessionId,
+          res.credits,
+          selectedModeLevel,
+          orchestratedStart.initialAvatar || null,
+          orchestratedStart.context || contextPreview || null,
+        );
         return;
       }
 
@@ -255,6 +344,7 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
         res.credits,
         selectedModeLevel,
         null,
+        orchestratedStart.context || contextPreview || null,
       );
     } catch (err) {
       console.error(err);
@@ -550,6 +640,74 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
           <aside className={styles.sideCard}>
             <h3>Antes de entrar</h3>
             <p className={styles.sideLead}>{profileContextLabel}</p>
+
+            <div className={styles.retrievalCard}>
+              <div className={styles.retrievalHeader}>
+                <div>
+                  <span className={styles.retrievalEyebrow}>Knowledge retrieval</span>
+                  <h4>Fontes recuperadas</h4>
+                </div>
+                <span className={styles.retrievalBadge}>
+                  {RETRIEVAL_QUALITY_LABELS[contextPreview?.knowledgeRetrieval?.quality || 'initial'] || 'Inicial'}
+                </span>
+              </div>
+
+              {contextPreviewLoading && <p className={styles.retrievalLead}>Carregando fontes do contexto...</p>}
+
+              {!contextPreviewLoading && contextPreviewError && (
+                <p className={styles.retrievalMuted}>{contextPreviewError}</p>
+              )}
+
+              {!contextPreviewLoading && !contextPreviewError && (() => {
+                const knowledgeRetrieval = contextPreview?.knowledgeRetrieval as KnowledgeRetrievalContext | null | undefined;
+                const retrievalSources = (knowledgeRetrieval?.sources || []).slice(0, 4);
+                const queryTerms = (knowledgeRetrieval?.queryTerms || []).slice(0, 6);
+                if (!retrievalSources.length) {
+                  return <p className={styles.retrievalMuted}>Sem fontes adicionais recuperadas ainda.</p>;
+                }
+
+                return (
+                  <>
+                    <p className={styles.retrievalLead}>
+                      {knowledgeRetrieval?.summary || 'Contexto recuperado para montar a entrevista.'}
+                    </p>
+
+                    {(knowledgeRetrieval?.retrievalMode || knowledgeRetrieval?.indexStats?.chunks) && (
+                      <p className={styles.retrievalMeta}>
+                        {knowledgeRetrieval?.retrievalMode === 'semantic' ? 'Modo semantico' : 'Modo estruturado'}
+                        {knowledgeRetrieval?.indexStats?.chunks
+                          ? ` • ${knowledgeRetrieval.indexStats.chunks} chunk(s) indexado(s)`
+                          : ''}
+                      </p>
+                    )}
+
+                    {queryTerms.length > 0 && (
+                      <div className={styles.queryTermRow}>
+                        {queryTerms.map((term) => (
+                          <span key={term} className={styles.queryTermChip}>
+                            {term}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className={styles.retrievalList}>
+                      {retrievalSources.map((source) => (
+                        <article key={source.id} className={styles.retrievalItem}>
+                          <div className={styles.retrievalItemTop}>
+                            <strong>{source.title}</strong>
+                            <span>{Math.round((source.score || 0) * 100)}%</span>
+                          </div>
+                          <p>{source.snippet}</p>
+                          {source.reason && <span className={styles.retrievalReason}>{source.reason}</span>}
+                        </article>
+                      ))}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+
             <ul className={styles.checkList}>
               {checklistItems.map((item) => (
                 <li key={item}>{item}</li>

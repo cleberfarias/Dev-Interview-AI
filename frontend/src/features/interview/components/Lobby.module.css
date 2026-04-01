@@ -555,6 +555,145 @@
   line-height: 1.55;
 }
 
+.retrievalCard {
+  margin-top: 14px;
+  border-radius: 20px;
+  padding: 14px;
+  background:
+    radial-gradient(circle at top right, rgba(34, 211, 238, 0.14), transparent 42%),
+    rgba(11, 15, 26, 0.56);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: grid;
+  gap: 12px;
+}
+
+.retrievalHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.retrievalEyebrow {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #9fdcff;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.retrievalHeader h4 {
+  margin: 8px 0 0;
+  font-family: var(--fd-font-heading);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.retrievalBadge {
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(34, 211, 238, 0.16);
+  border: 1px solid rgba(34, 211, 238, 0.2);
+  color: #9fdcff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.retrievalLead,
+.retrievalMuted {
+  margin: 0;
+  color: var(--fd-text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.retrievalMeta {
+  margin: -0.2rem 0 0;
+  color: rgba(159, 220, 255, 0.78);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.queryTermRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.queryTermChip {
+  min-height: 28px;
+  padding: 0.28rem 0.64rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--fd-text-primary);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.retrievalList {
+  display: grid;
+  gap: 10px;
+}
+
+.retrievalItem {
+  border-radius: 16px;
+  padding: 12px;
+  display: grid;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.retrievalItemTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.retrievalItemTop strong {
+  font-size: 0.9rem;
+  color: var(--fd-text-primary);
+}
+
+.retrievalItemTop span {
+  color: #9fdcff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.retrievalItem p {
+  margin: 0;
+  color: var(--fd-text-primary);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.retrievalReason {
+  color: var(--fd-text-secondary);
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
 .checkList {
   margin: 12px 0 0;
   padding-left: 18px;
@@ -665,6 +804,11 @@
 
   .sideCard {
     padding: 14px;
+  }
+
+  .retrievalHeader,
+  .retrievalItemTop {
+    display: grid;
   }
 }
 

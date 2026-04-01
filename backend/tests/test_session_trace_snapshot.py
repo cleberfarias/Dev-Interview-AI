@@ -1,4 +1,5 @@
 from app.schemas import InterviewConfig
+from app.request_context import append_tool_call
 from app.services import interview_core
 
 
@@ -42,10 +43,16 @@ def test_start_session_includes_profile_trace_snapshot(monkeypatch):
         "app.services.session_service.candidate_profile_repository.get_profile",
         lambda uid: {
             "userId": uid,
+            "targetRole": "Backend Engineer",
+            "primarySkills": ["python", "fastapi"],
+            "resumeSummary": "Python backend engineer focused on APIs.",
+            "jobDescription": "Backend role with APIs and observability.",
+            "lastMatchScore": 78,
             "lastResumeAnalysisTrace": {
                 "source": "hybrid",
                 "aiProvider": "openai",
                 "aiModel": "gpt-4o-mini",
+                "confidence": 0.82,
             },
             "lastJobAnalysisTrace": {
                 "source": "heuristic",
@@ -58,6 +65,36 @@ def test_start_session_includes_profile_trace_snapshot(monkeypatch):
             ],
         },
     )
+    monkeypatch.setattr(
+        "app.services.session_service.memory_service.load_candidate_memory",
+        lambda uid: {"strongSkills": ["python"], "recurringGaps": ["system design"]},
+    )
+    def _fake_build_knowledge_retrieval(**kwargs):
+        append_tool_call(
+            {
+                "toolName": "search_rubric_knowledge",
+                "status": "ready",
+                "transport": "local",
+                "summary": "Rubrica pronta para backend / mid com 2 stack(s).",
+                "contractVersion": "mcp.devinterview.v1",
+            }
+        )
+        return {
+            "summary": "5 fontes conectadas ao contexto inicial.",
+            "quality": "good",
+            "retrievalMode": "semantic",
+            "indexStats": {"chunks": 11},
+            "sources": [{"id": "source-1", "title": "Foco tecnico da vaga"}],
+        }
+    monkeypatch.setattr(
+        "app.services.session_service.build_knowledge_retrieval",
+        _fake_build_knowledge_retrieval,
+    )
+    monkeypatch.setattr(
+        "app.knowledge_retrieval.user_repository.list_user_interviews",
+        lambda uid, limit=3: [{"role": "Backend Engineer", "track": "backend", "style": "friendly", "score": 8.4}],
+    )
+    monkeypatch.setattr("app.knowledge_retrieval.mcp_get_rubric", lambda **kwargs: {})
     monkeypatch.setattr(
         "app.services.session_service.session_repository.create_pending_session",
         _fake_create_pending_session,
@@ -73,6 +110,12 @@ def test_start_session_includes_profile_trace_snapshot(monkeypatch):
     assert snapshot.get("lastJobAnalysisTrace", {}).get("source") == "heuristic"
     assert isinstance(snapshot.get("analysisAuditRecent"), list)
     assert len(snapshot.get("analysisAuditRecent")) == 2
+    assert snapshot.get("agentRuntime", {}).get("candidate_agent", {}).get("source") == "hybrid"
+    assert snapshot.get("agentRuntime", {}).get("candidate_memory", {}).get("status") == "completed"
+    assert snapshot.get("knowledgeRetrieval", {}).get("sources")
+    assert snapshot.get("knowledgeRetrieval", {}).get("retrievalMode") == "semantic"
+    assert snapshot.get("knowledgeRetrieval", {}).get("indexStats", {}).get("chunks", 0) >= 1
+    assert snapshot.get("contextToolCalls", [{}])[0].get("toolName") == "search_rubric_knowledge"
 
 
 def test_start_session_continues_without_trace_snapshot(monkeypatch):

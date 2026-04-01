@@ -237,3 +237,18 @@ class SessionAnalysisTraceResponse(BaseModel):
     sessionId: str
     hasTrace: bool = False
     analysisTraceSnapshot: Optional[dict[str, Any]] = None
+
+
+class MCPToolDebuggerItem(BaseModel):
+    name: str
+    label: str
+    contractVersion: Optional[str] = None
+    status: str = "ready"
+    summary: Optional[str] = None
+    data: Optional[dict[str, Any]] = None
+
+
+class MCPToolDebuggerResponse(BaseModel):
+    generatedAt: str
+    sessionId: Optional[str] = None
+    tools: List[MCPToolDebuggerItem] = Field(default_factory=list)

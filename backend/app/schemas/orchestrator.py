@@ -22,6 +22,8 @@ class OrchestratorContextResponse(BaseModel):
     candidate: Dict[str, Any] = Field(default_factory=dict)
     job: Dict[str, Any] = Field(default_factory=dict)
     match: Dict[str, Any] = Field(default_factory=dict)
+    agentRuntime: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    knowledgeRetrieval: Dict[str, Any] = Field(default_factory=dict)
     behaviorProfile: Optional[BehaviorProfile] = None
     cultureFitProfile: Optional[CultureFitSignals] = None
 
@@ -56,6 +58,7 @@ class OrchestratorTurnRequest(BaseModel):
     audioBase64: Optional[str] = None
     mimeType: str = "audio/webm"
     includeAvatar: bool = False
+    clientRuntime: Optional[Dict[str, Any]] = None
 
 
 class OrchestratorTurnResponse(BaseModel):

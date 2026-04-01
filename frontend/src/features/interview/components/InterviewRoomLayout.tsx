@@ -20,6 +20,7 @@ import { AvatarInterview } from '../../avatar';
 import { FIXED_INTERVIEW_DURATION_MINUTES, FIXED_INTERVIEW_QUESTION_COUNT, I18N } from '../../../shared/constants';
 import { BackendApi } from '../../../shared/services/backendApi';
 import type {
+  AgentRuntimeRecord,
   AvatarResponse,
   CommunicationAnalysis,
   FinalReport,
@@ -27,7 +28,9 @@ import type {
   InterviewMode,
   InterviewPlan,
   LiveCoachProcessResponse,
+  OrchestratorContextResponse,
   PartialFeedback,
+  SessionClientRuntimeTrace,
   SpeechMetrics,
   User,
 } from '../../../shared/types';
@@ -56,19 +59,13 @@ import {
   getInterviewModeLevelMeta,
   normalizeInterviewModeLevel,
 } from '../../../shared/utils/interviewMode';
+import {
+  deriveInterviewRuntimeState,
+  type ConversationState,
+  type InterviewFlowState,
+  type RuntimeTone,
+} from './interviewRuntimeState';
 
-type InterviewFlowState =
-  | 'idle'
-  | 'asking'
-  | 'awaiting_answer'
-  | 'recording'
-  | 'evaluating'
-  | 'finalizing'
-  | 'no_response'
-  | 'next_question'
-  | 'finished';
-
-type ConversationState = 'idle' | 'listening' | 'processing' | 'ai_speaking' | 'candidate_speaking';
 type AvatarInterviewState = 'idle' | 'avatar_listening' | 'avatar_thinking' | 'avatar_speaking';
 
 type AnswerMode = 'audio' | 'text';
@@ -115,11 +112,62 @@ const hasOpeningAcknowledgement = (input: {
   return (input.speechMetrics?.totalDurationMs || 0) >= 600 && input.audioSize >= 4000;
 };
 
+const AGENT_RUNTIME_ORDER = ['candidate_agent', 'job_agent', 'match_agent', 'candidate_memory'] as const;
+
+const AGENT_RUNTIME_LABELS: Record<string, string> = {
+  candidate_agent: 'Candidato',
+  job_agent: 'Vaga',
+  match_agent: 'Match',
+  candidate_memory: 'Memoria',
+};
+
+const AGENT_RUNTIME_SOURCE_LABELS: Record<string, string> = {
+  system: 'Sistema',
+  heuristic: 'Heuristico',
+  ai: 'IA',
+  hybrid: 'Hibrido',
+};
+
+const AGENT_RUNTIME_STATUS_LABELS: Record<string, string> = {
+  completed: 'Ativo',
+  fallback: 'Fallback',
+  skipped: 'Sem dados',
+  error: 'Erro',
+};
+
+const formatRuntimeConfidence = (value?: number | null): string => {
+  if (typeof value !== 'number' || Number.isNaN(value)) return 'n/a';
+  return `${Math.round(value * 100)}%`;
+};
+
+const summarizeRuntimeQuality = (value: number | null): string => {
+  if (value == null) return 'Inicial';
+  if (value >= 0.8) return 'Forte';
+  if (value >= 0.6) return 'Bom';
+  if (value >= 0.4) return 'Moderado';
+  return 'Inicial';
+};
+
+const getRuntimeToneClassName = (tone: RuntimeTone): string => {
+  switch (tone) {
+    case 'active':
+      return styles.runtimeToneActive;
+    case 'warning':
+      return styles.runtimeToneWarning;
+    case 'done':
+      return styles.runtimeToneDone;
+    case 'idle':
+    default:
+      return styles.runtimeToneIdle;
+  }
+};
+
 interface InterviewRoomLayoutProps {
   config: InterviewConfig;
   plan: InterviewPlan;
   sessionId?: string;
   initialAvatar?: AvatarResponse | null;
+  context?: OrchestratorContextResponse | null;
   user: User;
   onFinish?: (report: FinalReport) => void;
   onBack?: () => void;
@@ -144,6 +192,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
   plan,
   sessionId,
   initialAvatar,
+  context,
   user,
   onFinish,
   onBack,
@@ -164,6 +213,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
   const [remainingSeconds, setRemainingSeconds] = useState(() =>
     Math.max(0, Math.round((config.duration ?? 0) * 60)),
   );
+  const [runtimeClockMs, setRuntimeClockMs] = useState(() => Date.now());
   const [timeLimitReached, setTimeLimitReached] = useState(false);
   const [runtimeNotice, setRuntimeNotice] = useState<string | null>(null);
   const [questionAudioFallbackActive, setQuestionAudioFallbackActive] = useState(false);
@@ -195,6 +245,20 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
   const avatarCacheRef = useRef<Record<string, AvatarResponse>>({});
   const pendingAnswerInsightsRef = useRef(new Map<string, Promise<void>>());
   const liveCoachChunkHandlerRef = useRef<(chunk: Blob) => Promise<void>>(() => Promise.resolve());
+  const stageStartedAtRef = useRef(Date.now());
+  const previousRuntimePhaseRef = useRef<{
+    flowState: InterviewFlowState;
+    conversationState: ConversationState;
+    startedAtMs: number;
+  } | null>(null);
+  const runtimeLatencyRef = useRef<{
+    questionDeliveryMs: number | null;
+    analysisLatencyMs: number | null;
+  }>({
+    questionDeliveryMs: null,
+    analysisLatencyMs: null,
+  });
+  const currentTurnRuntimeTraceRef = useRef<SessionClientRuntimeTrace | null>(null);
   const liveCoachWsRef = useRef<WebSocket | null>(null);
   const liveCoachWsConnectRef = useRef<Promise<WebSocket | null> | null>(null);
   const liveCoachWsDisabledRef = useRef(false);
@@ -302,10 +366,106 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     isRecorderActiveRef.current = isRecorderActive;
   }, [isRecorderActive]);
 
+  useEffect(() => {
+    const now = Date.now();
+    const previousPhase = previousRuntimePhaseRef.current;
+
+    if (previousPhase) {
+      const durationMs = Math.max(0, now - previousPhase.startedAtMs);
+      const previousWasQuestionDelivery =
+        previousPhase.conversationState === 'ai_speaking' || previousPhase.flowState === 'asking';
+      const questionDeliverySettled =
+        conversationState === 'listening' ||
+        flowState === 'awaiting_answer' ||
+        flowState === 'recording' ||
+        conversationState === 'candidate_speaking';
+      if (previousWasQuestionDelivery && questionDeliverySettled) {
+        runtimeLatencyRef.current.questionDeliveryMs = durationMs;
+      }
+
+      const previousWasAnalysis =
+        previousPhase.conversationState === 'processing' ||
+        previousPhase.flowState === 'evaluating' ||
+        previousPhase.flowState === 'next_question' ||
+        previousPhase.flowState === 'finalizing';
+      const analysisSettled =
+        conversationState === 'ai_speaking' ||
+        conversationState === 'listening' ||
+        flowState === 'awaiting_answer' ||
+        flowState === 'finished';
+      if (previousWasAnalysis && analysisSettled) {
+        runtimeLatencyRef.current.analysisLatencyMs = durationMs;
+      }
+    }
+
+    previousRuntimePhaseRef.current = {
+      flowState,
+      conversationState,
+      startedAtMs: now,
+    };
+    stageStartedAtRef.current = now;
+    setRuntimeClockMs(now);
+  }, [conversationState, flowState]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const interviewFinished = flowState === 'finished';
+
+    if (interviewFinished) {
+      setRuntimeClockMs(Date.now());
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setRuntimeClockMs(Date.now());
+    }, 1000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [flowState]);
+
   const contextLabel = useMemo(
     () => (isOpeningStep ? 'Abertura da entrevista' : deriveContextLabel(currentQuestion, config.stacks)),
     [config.stacks, currentQuestion, isOpeningStep],
   );
+  const agentRuntimeEntries = useMemo(() => {
+    const runtime = context?.agentRuntime || {};
+    const orderedEntries = AGENT_RUNTIME_ORDER.map((key) => runtime[key]).filter(Boolean) as AgentRuntimeRecord[];
+    const extraEntries = Object.values(runtime).filter(
+      (entry) => entry && !AGENT_RUNTIME_ORDER.includes(entry.name as (typeof AGENT_RUNTIME_ORDER)[number]),
+    ) as AgentRuntimeRecord[];
+    return [...orderedEntries, ...extraEntries];
+  }, [context?.agentRuntime]);
+  const contextRuntimeSummary = useMemo(() => {
+    if (!agentRuntimeEntries.length) {
+      return {
+        qualityLabel: 'Inicial',
+        averageConfidence: null as number | null,
+        evidenceCount: 0,
+        activeCount: 0,
+      };
+    }
+
+    const activeEntries = agentRuntimeEntries.filter((entry) => entry.status !== 'skipped');
+    const confidenceValues = activeEntries
+      .map((entry) => (typeof entry.confidence === 'number' ? entry.confidence : null))
+      .filter((value): value is number => value != null);
+    const averageConfidence = confidenceValues.length
+      ? confidenceValues.reduce((total, value) => total + value, 0) / confidenceValues.length
+      : null;
+    const evidenceCount = agentRuntimeEntries.reduce(
+      (total, entry) => total + (Array.isArray(entry.evidence) ? entry.evidence.length : 0),
+      0,
+    );
+
+    return {
+      qualityLabel: summarizeRuntimeQuality(averageConfidence),
+      averageConfidence,
+      evidenceCount,
+      activeCount: activeEntries.length,
+    };
+  }, [agentRuntimeEntries]);
   const fallbackMaxQuestions = FIXED_INTERVIEW_QUESTION_COUNT;
   const totalSeconds = useMemo(
     () => Math.max(0, Math.round((config.duration ?? 0) * 60)),
@@ -1628,6 +1788,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
           interviewMode,
           speechMetrics: historyItem.speechMetrics || currentSpeechMetricsRef.current || undefined,
           transcript: historyItem.transcript,
+          clientRuntime: historyItem.clientRuntime || undefined,
           includeAvatar: true,
         });
 
@@ -1641,6 +1802,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
             currentSpeechMetricsRef.current ||
             null,
           communicationAnalysis: turnResponse.communicationAnalysis || null,
+          clientRuntime: historyItem.clientRuntime || null,
         };
 
         const nextHistory = [...historyRef.current, committedHistoryItem];
@@ -1775,6 +1937,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
           difficulty: currentQuestion.sourceDifficulty,
           transcript,
           speechMetrics,
+          clientRuntime: currentTurnRuntimeTraceRef.current || null,
         };
         await continueAfterAnswer(historyItem, {
           onHistoryCommitted: (nextHistory) => {
@@ -1855,6 +2018,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
         section: currentQuestion.section,
         difficulty: currentQuestion.sourceDifficulty,
         transcript,
+        clientRuntime: currentTurnRuntimeTraceRef.current || null,
       };
       await continueAfterAnswer(historyItem, {
         onHistoryCommitted: (nextHistory) => {
@@ -1925,6 +2089,11 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     currentSpeechMetricsRef.current = null;
     currentCommunicationAnalysisRef.current = null;
     answerMetricsRef.current = null;
+    previousRuntimePhaseRef.current = null;
+    runtimeLatencyRef.current = {
+      questionDeliveryMs: null,
+      analysisLatencyMs: null,
+    };
     liveCoachChunkIndexRef.current = 0;
     startTimeRef.current = Date.now();
     if (timerRef.current) {
@@ -2183,6 +2352,106 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
   const partialFeedbackVisible = Boolean(partialFeedback && inlineCoachEnabled);
   const showLiveCoachPanel = inlineCoachEnabled && !isFinished && (liveCoachLoading || liveCoachInsight || liveCoachError);
   const showPartialTranscript = inlineCoachEnabled && !isFinished && flowState === 'recording' && Boolean(partialTranscript);
+  const stageElapsedMs = Math.max(0, runtimeClockMs - stageStartedAtRef.current);
+  const sessionElapsedSeconds =
+    totalSeconds > 0
+      ? Math.max(0, totalSeconds - remainingSeconds)
+      : startTimeRef.current
+        ? Math.max(0, Math.floor((runtimeClockMs - startTimeRef.current) / 1000))
+        : 0;
+  const runtimeState = useMemo(
+    () =>
+      deriveInterviewRuntimeState({
+        flowState,
+        conversationState,
+        isOpeningStep,
+        isTextMode,
+        isFinished,
+        isMediaReady,
+        isMicrophoneReady: audioCapture.isMicrophoneReady,
+        isCandidateCoachingMode,
+        questionAudioFallbackActive,
+        runtimeNotice,
+        timeLimitReached,
+        textEntryEnabled,
+        candidateFirstName,
+        audioCaptureState: audioCapture.state,
+        audioUploadState: audioCapture.uploadState,
+        pendingChunkCount: audioCapture.pendingChunkCount,
+        partialTranscriptActive: showPartialTranscript,
+        partialFeedbackVisible,
+        showLiveCoachPanel,
+        liveCoachLoading,
+        liveCoachError,
+        hasLiveCoachInsight: Boolean(liveCoachInsight?.suggestion || liveCoachInsight?.keyPoints?.length),
+        liveCoachFeedCount: liveCoachFeed.length,
+        currentQuestionIndex: currentIndex,
+        totalQuestions: fallbackMaxQuestions,
+        stageElapsedMs,
+        sessionElapsedSeconds,
+        questionDeliveryLatencyMs: runtimeLatencyRef.current.questionDeliveryMs,
+        analysisLatencyMs: runtimeLatencyRef.current.analysisLatencyMs,
+      }),
+    [
+      audioCapture.isMicrophoneReady,
+      audioCapture.pendingChunkCount,
+      audioCapture.state,
+      audioCapture.uploadState,
+      candidateFirstName,
+      conversationState,
+      currentIndex,
+      fallbackMaxQuestions,
+      flowState,
+      isCandidateCoachingMode,
+      isFinished,
+      isMediaReady,
+      isOpeningStep,
+      isTextMode,
+      liveCoachError,
+      liveCoachFeed.length,
+      liveCoachInsight,
+      liveCoachLoading,
+      partialFeedbackVisible,
+      questionAudioFallbackActive,
+      runtimeNotice,
+      sessionElapsedSeconds,
+      showPartialTranscript,
+      showLiveCoachPanel,
+      stageElapsedMs,
+      textEntryEnabled,
+      timeLimitReached,
+    ],
+  );
+  const currentTurnRuntimeTrace = useMemo<SessionClientRuntimeTrace>(
+    () => ({
+      headline: runtimeState.headline,
+      tone: runtimeState.tone,
+      questionDeliveryLatencyMs: runtimeLatencyRef.current.questionDeliveryMs,
+      analysisLatencyMs: runtimeLatencyRef.current.analysisLatencyMs,
+      stageElapsedMs,
+      sessionElapsedSeconds,
+      pendingChunkCount: audioCapture.pendingChunkCount,
+      partialTranscriptActive: showPartialTranscript,
+      partialFeedbackVisible,
+      showLiveCoachPanel,
+      transportState: runtimeState.metrics.find((item) => item.label === 'Transporte')?.value || null,
+      progressState: runtimeState.metrics.find((item) => item.label === 'Progresso')?.value || null,
+      avatarState: runtimeState.signals.find((item) => item.label === 'Avatar')?.value || null,
+      coachState: runtimeState.signals.find((item) => item.label === 'Coach')?.value || null,
+    }),
+    [
+      audioCapture.pendingChunkCount,
+      partialFeedbackVisible,
+      runtimeState,
+      sessionElapsedSeconds,
+      showLiveCoachPanel,
+      showPartialTranscript,
+      stageElapsedMs,
+    ],
+  );
+  useEffect(() => {
+    currentTurnRuntimeTraceRef.current = currentTurnRuntimeTrace;
+  }, [currentTurnRuntimeTrace]);
   const textModePrompt = isOpeningStep
     ? 'Responda algo breve para confirmar que podemos comecar.'
     : currentQuestion?.title ?? 'A pergunta atual vai aparecer aqui assim que a IA concluir a transicao.';
@@ -2355,6 +2624,14 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
                   compact
                 />
               </div>
+              <div
+                className={`${styles.flowStateBar} ${getRuntimeToneClassName(runtimeState.tone)}`}
+                aria-live="polite"
+                aria-label="Estado atual da entrevista"
+              >
+                <span className={styles.flowStateDot} />
+                <span className={styles.flowStateHeadline}>{runtimeState.headline}</span>
+              </div>
             </div>
           ) : (
             <>
@@ -2376,6 +2653,17 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
                   topic={isOpeningStep ? undefined : currentQuestion?.topic}
                   contextLabel={contextLabel}
                 />
+                <div
+                  className={`${styles.flowStateBar} ${getRuntimeToneClassName(runtimeState.tone)}`}
+                  aria-live="polite"
+                  aria-label="Estado atual da entrevista"
+                >
+                  <span className={styles.flowStateDot} />
+                  <span className={styles.flowStateHeadline}>{runtimeState.headline}</span>
+                  {runtimeState.summary && (
+                    <span className={styles.flowStateSummary}>{runtimeState.summary}</span>
+                  )}
+                </div>
               </div>
             </>
           )}
@@ -2428,6 +2716,116 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
                   />
                 </div>
               )}
+            </div>
+
+            {agentRuntimeEntries.length > 0 && (
+              <div className={styles.runtimeCard} aria-label="Contexto ativo da entrevista">
+                <div className={styles.runtimeHeader}>
+                  <div>
+                    <span className={styles.runtimeEyebrow}>Contexto ativo</span>
+                    <h3 className={styles.runtimeTitle}>Motor de contexto inicial</h3>
+                  </div>
+                  <span className={styles.runtimeBadge}>
+                    {contextRuntimeSummary.qualityLabel}
+                    {contextRuntimeSummary.averageConfidence != null
+                      ? ` ${formatRuntimeConfidence(contextRuntimeSummary.averageConfidence)}`
+                      : ''}
+                  </span>
+                </div>
+
+                <p className={styles.runtimeSummary}>
+                  {contextRuntimeSummary.activeCount} blocos ativos, {contextRuntimeSummary.evidenceCount} evidencias
+                  aproveitadas para montar a entrevista.
+                </p>
+
+                <ul className={styles.runtimeList}>
+                  {agentRuntimeEntries.map((entry) => (
+                    <li key={entry.name} className={styles.runtimeItem}>
+                      <div className={styles.runtimeItemTop}>
+                        <strong className={styles.runtimeItemName}>
+                          {AGENT_RUNTIME_LABELS[entry.name] || entry.name}
+                        </strong>
+                        <div className={styles.runtimeMetaRow}>
+                          <span className={styles.runtimeMetaChip}>
+                            {AGENT_RUNTIME_STATUS_LABELS[entry.status] || entry.status}
+                          </span>
+                          <span className={styles.runtimeMetaChip}>
+                            {AGENT_RUNTIME_SOURCE_LABELS[entry.source] || entry.source}
+                          </span>
+                          <span className={styles.runtimeMetaChip}>
+                            {formatRuntimeConfidence(entry.confidence)}
+                          </span>
+                        </div>
+                      </div>
+                      {entry.summary && <p className={styles.runtimeItemSummary}>{entry.summary}</p>}
+                      {entry.evidence && entry.evidence.length > 0 && (
+                        <p className={styles.runtimeEvidence}>Base: {entry.evidence.slice(0, 3).join(', ')}</p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div
+              className={`${styles.runtimePulseCard} ${getRuntimeToneClassName(runtimeState.tone)}`}
+              aria-label="Estado ao vivo da entrevista"
+            >
+              <div className={styles.runtimePulseHeader}>
+                <div>
+                  <span className={styles.runtimePulseEyebrow}>Runtime ao vivo</span>
+                  <h3 className={styles.runtimePulseTitle}>Estado da sessao</h3>
+                </div>
+                <span
+                  className={`${styles.runtimePulseBadge} ${getRuntimeToneClassName(runtimeState.tone)}`}
+                >
+                  {runtimeState.headline}
+                </span>
+              </div>
+
+              <p className={styles.runtimePulseSummary}>{runtimeState.summary}</p>
+
+              <div className={styles.runtimeMetricsGrid}>
+                {runtimeState.metrics.map((item) => (
+                  <div key={item.label} className={`${styles.runtimeMetricCard} ${getRuntimeToneClassName(item.tone)}`}>
+                    <span className={styles.runtimeMetricLabel}>{item.label}</span>
+                    <strong className={styles.runtimeMetricValue}>{item.value}</strong>
+                    {item.hint && <span className={styles.runtimeMetricHint}>{item.hint}</span>}
+                  </div>
+                ))}
+              </div>
+
+              <div className={styles.runtimeSignalsRow} aria-label="Sinais do pipeline">
+                {runtimeState.signals.map((item) => (
+                  <div key={item.label} className={`${styles.runtimeSignalChip} ${getRuntimeToneClassName(item.tone)}`}>
+                    <span className={styles.runtimeSignalLabel}>{item.label}</span>
+                    <strong className={styles.runtimeSignalValue}>{item.value}</strong>
+                  </div>
+                ))}
+              </div>
+
+              <div className={styles.runtimePulseGrid}>
+                {runtimeState.statuses.map((item) => (
+                  <div
+                    key={item.label}
+                    className={`${styles.runtimePulseTile} ${getRuntimeToneClassName(item.tone)}`}
+                  >
+                    <span className={styles.runtimePulseLabel}>{item.label}</span>
+                    <strong className={styles.runtimePulseValue}>{item.value}</strong>
+                  </div>
+                ))}
+              </div>
+
+              <ul className={styles.runtimeTimeline} aria-label="Etapas do runtime">
+                {runtimeState.timeline.map((item) => (
+                  <li
+                    key={item.key}
+                    className={`${styles.runtimeTimelineItem} ${getRuntimeToneClassName(item.tone)}`}
+                  >
+                    {item.label}
+                  </li>
+                ))}
+              </ul>
             </div>
 
             <div className={styles.sideStatusCard}>

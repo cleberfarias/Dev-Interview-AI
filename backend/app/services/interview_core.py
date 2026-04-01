@@ -14,7 +14,11 @@ from dotenv import load_dotenv
 
 from ..ai.prompts import evaluate_prompt, next_question_prompt, plan_prompt, report_prompt
 from ..ai.router import AIRouter, AIProviderError
-from ..mcp_client import get_rubric as mcp_get_rubric, get_recent_interviews as mcp_get_recent_interviews
+from ..mcp_client import (
+    get_recent_interviews as mcp_get_recent_interviews,
+    get_rubric as mcp_get_rubric,
+    search_rubric_knowledge as mcp_search_rubric_knowledge,
+)
 from ..services import evaluation_service, usage_policy_service
 from ..schemas import (
     InterviewConfig,
@@ -149,9 +153,37 @@ def _mcp_context_enabled() -> bool:
     raw = (os.environ.get("MCP_CONTEXT_ENABLED") or "").strip().lower()
     return raw in {"1", "true", "yes", "on"}
 
-def _build_rubric_block(config: InterviewConfig, question: str, auth_token: Optional[str] = None) -> str:
-    if not _mcp_context_enabled():
-        return ""
+
+def _normalize_rubric_payload(value: dict | None) -> dict | None:
+    if not isinstance(value, dict):
+        return None
+    focus = value.get("focus") or []
+    good = value.get("goodSignals") or value.get("good_signals") or []
+    bad = value.get("redFlags") or value.get("red_flags") or []
+    if not any([focus, good, bad]):
+        return None
+    return {
+        "focus": focus,
+        "good_signals": good,
+        "red_flags": bad,
+    }
+
+
+def _load_rubric_payload(config: InterviewConfig, question: Optional[str], auth_token: Optional[str] = None) -> Optional[dict]:
+    try:
+        rubric = mcp_search_rubric_knowledge(
+            track=config.track,
+            seniority=config.seniority,
+            stacks=config.stacks,
+            question=question,
+            auth_token=auth_token,
+        )
+    except Exception:
+        rubric = None
+    normalized = _normalize_rubric_payload(rubric)
+    if normalized:
+        return normalized
+
     try:
         rubric = mcp_get_rubric(
             track=config.track,
@@ -160,6 +192,15 @@ def _build_rubric_block(config: InterviewConfig, question: str, auth_token: Opti
             question=question,
             auth_token=auth_token,
         )
+    except Exception:
+        return None
+    return _normalize_rubric_payload(rubric)
+
+def _build_rubric_block(config: InterviewConfig, question: str, auth_token: Optional[str] = None) -> str:
+    if not _mcp_context_enabled():
+        return ""
+    try:
+        rubric = _load_rubric_payload(config, question, auth_token=auth_token)
     except Exception:
         logger.exception("Failed to build rubric context")
         return ""
@@ -182,13 +223,7 @@ Rubrica de avaliacao (use como referencia):
 
 def _rubric_summary(config: InterviewConfig, auth_token: Optional[str] = None) -> Optional[dict]:
     try:
-        rubric = mcp_get_rubric(
-            track=config.track,
-            seniority=config.seniority,
-            stacks=config.stacks,
-            question=None,
-            auth_token=auth_token,
-        )
+        rubric = _load_rubric_payload(config, None, auth_token=auth_token)
     except Exception:
         return None
     if not rubric:

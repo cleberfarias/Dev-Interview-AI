@@ -24,7 +24,28 @@ def _config() -> InterviewConfig:
 def test_build_context_runs_candidate_job_and_match_agents(monkeypatch):
     monkeypatch.setattr(
         "app.services.interview_orchestrator.candidate_profile_service.get_candidate_profile",
-        lambda user: type("ProfileObj", (), {"model_dump": lambda self: {"resumeSummary": "Python", "jobDescription": "API"}})(),
+        lambda user: type(
+            "ProfileObj",
+            (),
+            {
+                "model_dump": lambda self: {
+                    "resumeSummary": "Python",
+                    "jobDescription": "API",
+                    "lastResumeAnalysisTrace": {
+                        "source": "hybrid",
+                        "aiProvider": "openai",
+                        "aiModel": "gpt-5.4-mini",
+                        "confidence": 0.84,
+                    },
+                    "lastJobAnalysisTrace": {
+                        "source": "ai",
+                        "aiProvider": "google",
+                        "aiModel": "gemini-2.5-pro",
+                        "confidence": 0.79,
+                    },
+                }
+            },
+        )(),
     )
     monkeypatch.setattr(
         "app.services.interview_orchestrator.candidate_agent.run",
@@ -41,20 +62,72 @@ def test_build_context_runs_candidate_job_and_match_agents(monkeypatch):
     monkeypatch.setattr(
         "app.services.interview_orchestrator.memory_service.load_candidate_memory",
         lambda user_id: {
+            "recurringGaps": ["system design"],
+            "strongSkills": ["python"],
             "behaviorProfile": {"communicationStyle": "balanced"},
             "cultureFitSignals": {"overallAlignment": 7.2},
         },
     )
+    monkeypatch.setattr(
+        "app.knowledge_retrieval.user_repository.list_user_interviews",
+        lambda uid, limit=3: [{"role": "Backend Engineer", "track": "backend", "style": "friendly", "score": 8.1}],
+    )
+    monkeypatch.setattr(
+        "app.knowledge_retrieval.mcp_get_rubric",
+        lambda **kwargs: {"focus": ["api design", "observability"], "good_signals": ["ownership"], "red_flags": []},
+    )
 
-    result = interview_orchestrator.build_context(user={"uid": "u1"}, config=_config())
+    result = interview_orchestrator.build_context(user={"uid": "u1", "token": "token-1"}, config=_config())
     assert result["candidate"]["skills"] == ["python"]
     assert result["job"]["roleTitleGuess"] == "Backend Engineer"
     assert result["match"]["matchScore"] == 80
+    assert result["agentRuntime"]["candidate_agent"]["source"] == "hybrid"
+    assert result["agentRuntime"]["candidate_agent"]["aiProvider"] == "openai"
+    assert result["agentRuntime"]["job_agent"]["source"] == "ai"
+    assert result["agentRuntime"]["job_agent"]["aiModel"] == "gemini-2.5-pro"
+    assert result["agentRuntime"]["match_agent"]["confidence"] >= 0.55
+    assert result["agentRuntime"]["candidate_memory"]["status"] == "completed"
+    assert result["knowledgeRetrieval"]["quality"] in {"good", "strong"}
+    assert result["knowledgeRetrieval"]["retrievalMode"] == "semantic"
+    assert result["knowledgeRetrieval"]["indexStats"]["chunks"] >= 4
+    assert any(source["sourceType"] == "rubric" for source in result["knowledgeRetrieval"]["sources"])
     assert result["behaviorProfile"]["communicationStyle"] == "balanced"
     assert result["cultureFitProfile"]["overallAlignment"] == 7.2
 
 
+def test_build_context_exposes_skipped_memory_when_empty(monkeypatch):
+    monkeypatch.setattr(
+        "app.services.interview_orchestrator.candidate_profile_service.get_candidate_profile",
+        lambda user: type("ProfileObj", (), {"model_dump": lambda self: {"resumeSummary": "", "jobDescription": ""}})(),
+    )
+    monkeypatch.setattr(
+        "app.services.interview_orchestrator.candidate_agent.run",
+        lambda **kwargs: {"skills": [], "seniority": "unknown", "summary": ""},
+    )
+    monkeypatch.setattr(
+        "app.services.interview_orchestrator.job_agent.run",
+        lambda **kwargs: {"requiredSkills": [], "roleTitleGuess": "Software Engineer"},
+    )
+    monkeypatch.setattr(
+        "app.services.interview_orchestrator.match_agent.run",
+        lambda **kwargs: {"matchScore": 0},
+    )
+    monkeypatch.setattr("app.services.interview_orchestrator.memory_service.load_candidate_memory", lambda user_id: {})
+    monkeypatch.setattr("app.knowledge_retrieval.user_repository.list_user_interviews", lambda uid, limit=3: [])
+    monkeypatch.setattr("app.knowledge_retrieval.mcp_get_rubric", lambda **kwargs: {})
+
+    result = interview_orchestrator.build_context(user={"uid": "u1"}, config=_config())
+
+    assert result["agentRuntime"]["candidate_memory"]["status"] == "skipped"
+    assert result["agentRuntime"]["candidate_memory"]["source"] == "system"
+    assert result["agentRuntime"]["candidate_agent"]["confidence"] <= 0.5
+    assert result["knowledgeRetrieval"]["retrievalMode"] == "semantic"
+    assert result["knowledgeRetrieval"]["quality"] in {"initial", "moderate"}
+
+
 def test_run_turn_returns_evaluation_coach_and_next_question(monkeypatch):
+    captured = {}
+
     monkeypatch.setattr(
         "app.services.interview_orchestrator.evaluator_agent.run_text",
         lambda **kwargs: {"scores": {"technical": 8}, "strengths": ["clear"], "improvements": ["detail"]},
@@ -100,6 +173,14 @@ def test_run_turn_returns_evaluation_coach_and_next_question(monkeypatch):
             summary="Resumo",
         ),
     )
+    monkeypatch.setattr(
+        "app.services.interview_orchestrator.session_service.store_answer_communication_analysis",
+        lambda session_id, answer_id, analysis, user: captured.setdefault("communication", analysis),
+    )
+    monkeypatch.setattr(
+        "app.services.interview_orchestrator.session_service.store_answer_episode",
+        lambda session_id, answer_id, episode, user: captured.setdefault("episode", episode),
+    )
     result = interview_orchestrator.run_turn(
         user={"uid": "u1"},
         config=_config(),
@@ -108,6 +189,7 @@ def test_run_turn_returns_evaluation_coach_and_next_question(monkeypatch):
         transcript="I usually start from constraints.",
         remaining_seconds=600,
         answer_id="answer-1",
+        session_id="session-1",
     )
     assert "evaluation" in result
     assert "coach" in result
@@ -115,6 +197,9 @@ def test_run_turn_returns_evaluation_coach_and_next_question(monkeypatch):
     assert result["avatar"] is None
     assert result["communicationAnalysis"]["behaviorProfile"]["communicationStyle"] == "analitico-direto"
     assert result["communicationAnalysis"]["cultureFitSignals"]["overallAlignment"] == 7.1
+    assert captured["episode"]["answerId"] == "answer-1"
+    assert captured["episode"]["improvements"] == ["detail"]
+    assert captured["episode"]["transcript"] == "I usually start from constraints."
 
 
 def test_run_turn_can_inline_avatar_when_requested(monkeypatch):

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, Query
 
 from ..firebase_admin import get_current_user
 from ..schemas import (
@@ -8,6 +10,7 @@ from ..schemas import (
     FinalReport,
     FinalReportRequest,
     InterviewConfig,
+    MCPToolDebuggerResponse,
     NameExtractRequest,
     NextQuestionRequest,
     NextQuestionResponse,
@@ -15,7 +18,7 @@ from ..schemas import (
     EvaluateTextRequest,
     SessionStartResponse,
 )
-from ..services import ai_service
+from ..services import ai_service, mcp_debugger_service
 
 router = APIRouter()
 
@@ -66,3 +69,22 @@ def evaluate_text(payload: EvaluateTextRequest, user=Depends(get_current_user)):
 @router.post("/ai/final-report", response_model=FinalReport, deprecated=True)
 def final_report(payload: FinalReportRequest, user=Depends(get_current_user)):
     return ai_service.final_report(payload, user)
+
+
+@router.get("/ai/tools/debugger", response_model=MCPToolDebuggerResponse)
+def get_ai_tools_debugger(
+    sessionId: Optional[str] = Query(default=None),
+    track: Optional[str] = Query(default=None),
+    seniority: Optional[str] = Query(default=None),
+    stacks: List[str] = Query(default=[]),
+    question: Optional[str] = Query(default=None),
+    user=Depends(get_current_user),
+):
+    return mcp_debugger_service.get_mcp_tool_debugger(
+        user,
+        session_id=sessionId,
+        track=track,
+        seniority=seniority,
+        stacks=stacks,
+        question=question,
+    )

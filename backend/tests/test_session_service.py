@@ -70,3 +70,52 @@ def test_get_session_report_returns_saved_report(monkeypatch):
     assert result.report.overallScore == 7.8
     assert result.config is not None
     assert result.config.track == "frontend"
+
+
+def test_store_trace_helpers_delegate_to_repository(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        "app.services.session_service.session_repository.get_session",
+        lambda session_id: {"uid": "user-1"},
+    )
+    monkeypatch.setattr(
+        "app.services.session_service.session_repository.merge_turn_evidence_trace",
+        lambda session_id, answer_id, data: captured.setdefault(
+            "turn",
+            {"sessionId": session_id, "answerId": answer_id, "data": data},
+        ),
+    )
+    monkeypatch.setattr(
+        "app.services.session_service.session_repository.merge_report_evidence_trace",
+        lambda session_id, data: captured.setdefault(
+            "report",
+            {"sessionId": session_id, "data": data},
+        ),
+    )
+
+    session_service.store_turn_evidence_trace(
+        "sess-1",
+        "answer-1",
+        {
+            "nextQuestionContext": {
+                "retrievalMode": "semantic",
+                "toolCalls": [{"toolName": "search_rubric_knowledge", "status": "ready"}],
+            }
+        },
+        {"uid": "user-1"},
+    )
+    session_service.store_report_evidence_trace(
+        "sess-1",
+        {
+            "retrievalMode": "semantic",
+            "toolCalls": [{"toolName": "search_rubric_knowledge", "status": "ready"}],
+        },
+        {"uid": "user-1"},
+    )
+
+    assert captured["turn"]["answerId"] == "answer-1"
+    assert captured["turn"]["data"]["nextQuestionContext"]["retrievalMode"] == "semantic"
+    assert captured["turn"]["data"]["nextQuestionContext"]["toolCalls"][0]["toolName"] == "search_rubric_knowledge"
+    assert captured["report"]["sessionId"] == "sess-1"
+    assert captured["report"]["data"]["retrievalMode"] == "semantic"
+    assert captured["report"]["data"]["toolCalls"][0]["toolName"] == "search_rubric_knowledge"

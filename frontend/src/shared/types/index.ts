@@ -238,12 +238,60 @@ export interface NextQuestionResponse {
   tokens_used?: number;
 }
 
+export interface AgentRuntimeRecord {
+  name: string;
+  status: 'completed' | 'fallback' | 'skipped' | 'error';
+  source: 'system' | 'heuristic' | 'ai' | 'hybrid';
+  confidence?: number | null;
+  promptVersion?: string | null;
+  aiProvider?: string | null;
+  aiModel?: string | null;
+  usedTools?: string[];
+  evidence?: string[];
+  summary?: string | null;
+}
+
+export interface KnowledgeRetrievalSource {
+  id: string;
+  sourceType: 'resume' | 'job' | 'memory' | 'history' | 'rubric' | string;
+  title: string;
+  snippet: string;
+  score: number;
+  reason?: string | null;
+  tags?: string[];
+  capturedAt?: string | null;
+}
+
+export interface KnowledgeRetrievalContext {
+  summary?: string | null;
+  quality?: 'strong' | 'good' | 'moderate' | 'initial' | string;
+  score?: number | null;
+  queryTerms?: string[];
+  coverage?: Record<string, boolean>;
+  sources?: KnowledgeRetrievalSource[];
+  matchScore?: number | null;
+  retrievalMode?: 'semantic' | string;
+  indexStats?: {
+    backend?: string;
+    chunks?: number;
+    embeddingStrategy?: string;
+    embeddingProvider?: string | null;
+    embeddingModel?: string | null;
+    reusedVectors?: number;
+    updatedVectors?: number;
+    persisted?: boolean;
+  } | null;
+  generatedAt?: string | null;
+}
+
 export interface OrchestratorContextResponse {
   profile: Record<string, unknown>;
   candidate_memory?: Record<string, unknown>;
   candidate: Record<string, unknown>;
   job: Record<string, unknown>;
   match: Record<string, unknown>;
+  agentRuntime?: Record<string, AgentRuntimeRecord>;
+  knowledgeRetrieval?: KnowledgeRetrievalContext | null;
   behaviorProfile?: BehaviorProfile | null;
   cultureFitProfile?: CultureFitSignals | null;
 }
@@ -370,7 +418,91 @@ export interface JobAnalysisPageResponse {
 export interface SessionAnalysisTraceResponse {
   sessionId: string;
   hasTrace: boolean;
-  analysisTraceSnapshot?: Record<string, unknown> | null;
+  analysisTraceSnapshot?: SessionAnalysisTraceSnapshot | null;
+}
+
+export interface SessionClientRuntimeTrace {
+  headline?: string | null;
+  tone?: 'idle' | 'active' | 'warning' | 'done' | string | null;
+  questionDeliveryLatencyMs?: number | null;
+  analysisLatencyMs?: number | null;
+  stageElapsedMs?: number | null;
+  sessionElapsedSeconds?: number | null;
+  pendingChunkCount?: number | null;
+  partialTranscriptActive?: boolean;
+  partialFeedbackVisible?: boolean;
+  showLiveCoachPanel?: boolean;
+  transportState?: string | null;
+  progressState?: string | null;
+  avatarState?: string | null;
+  coachState?: string | null;
+}
+
+export interface SessionEvidenceHighlight {
+  answerId: string;
+  question?: string | null;
+  transcriptSnippet?: string | null;
+  strengths?: string[];
+  improvements?: string[];
+  clientRuntime?: SessionClientRuntimeTrace | null;
+}
+
+export interface SessionToolCallTrace {
+  toolName: string;
+  contractVersion?: string | null;
+  transport?: 'http' | 'local' | string | null;
+  status?: 'ready' | 'empty' | 'error' | string | null;
+  calledAt?: string | null;
+  summary?: string | null;
+  arguments?: Record<string, unknown> | null;
+}
+
+export interface SessionTurnEvidenceTrace {
+  answerId: string;
+  capturedAt?: string | null;
+  question?: string | null;
+  transcriptSnippet?: string | null;
+  strengths?: string[];
+  improvements?: string[];
+  clientRuntime?: SessionClientRuntimeTrace | null;
+  scores?: {
+    communication?: number;
+    technical?: number;
+    problemSolving?: number;
+    presence?: number;
+  } | null;
+  nextQuestionContext?: {
+    quality?: KnowledgeRetrievalContext['quality'];
+    retrievalMode?: KnowledgeRetrievalContext['retrievalMode'];
+    queryTerms?: string[];
+    sources?: Array<Pick<KnowledgeRetrievalSource, 'title' | 'sourceType' | 'score' | 'reason'>>;
+    episodeHighlights?: SessionEvidenceHighlight[];
+    toolCalls?: SessionToolCallTrace[];
+  } | null;
+}
+
+export interface SessionReportEvidenceTrace {
+  capturedAt?: string | null;
+  quality?: KnowledgeRetrievalContext['quality'];
+  retrievalMode?: KnowledgeRetrievalContext['retrievalMode'];
+  queryTerms?: string[];
+  sources?: Array<Pick<KnowledgeRetrievalSource, 'title' | 'sourceType' | 'score' | 'reason'>>;
+  episodeHighlights?: SessionEvidenceHighlight[];
+  toolCalls?: SessionToolCallTrace[];
+}
+
+export interface SessionAnalysisTraceSnapshot {
+  capturedAt?: string | null;
+  lastResumeAnalysisTrace?: AnalysisTrace | null;
+  lastJobAnalysisTrace?: AnalysisTrace | null;
+  analysisAuditRecent?: ProfileAnalysisAuditItem[] | null;
+  agentRuntime?: Record<string, AgentRuntimeRecord> | null;
+  knowledgeRetrieval?: KnowledgeRetrievalContext | null;
+  contextToolCalls?: SessionToolCallTrace[] | null;
+  turnEvidenceTimeline?: {
+    answers?: Record<string, SessionTurnEvidenceTrace>;
+  } | null;
+  reportEvidence?: SessionReportEvidenceTrace | null;
 }
 
 export interface SessionReportResponse {
@@ -378,6 +510,21 @@ export interface SessionReportResponse {
   hasReport: boolean;
   config?: InterviewConfig | null;
   report?: FinalReport | null;
+}
+
+export interface MCPToolDebuggerItem {
+  name: string;
+  label: string;
+  contractVersion?: string | null;
+  status: 'ready' | 'empty' | 'error' | string;
+  summary?: string | null;
+  data?: Record<string, unknown> | null;
+}
+
+export interface MCPToolDebuggerResponse {
+  generatedAt: string;
+  sessionId?: string | null;
+  tools: MCPToolDebuggerItem[];
 }
 
 export interface ResumeAnalyzeResponse {
