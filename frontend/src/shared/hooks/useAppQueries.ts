@@ -37,6 +37,7 @@ const buildFallbackUser = (firebaseUser: FirebaseUser): User => ({
   credits: 0,
   provider: 'firebase',
   interviews: [],
+  tourCompletions: {},
 });
 
 const loadMe = async (firebaseUser: FirebaseUser): Promise<User> => {

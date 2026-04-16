@@ -78,6 +78,8 @@ def _merge_user_profile_defaults(user: dict, data: dict | None = None) -> dict:
         merged.setdefault("photoURL", avatar)
     merged.setdefault("plan", os.environ.get("DEFAULT_PLAN", "free"))
     merged["credits"] = int(merged.get("credits", _initial_credits()))
+    if not isinstance(merged.get("tourCompletions"), dict):
+        merged["tourCompletions"] = {}
     merged.setdefault("createdAt", now)
     merged.setdefault("updatedAt", merged.get("createdAt") or now)
     return merged
@@ -127,3 +129,20 @@ def update_me(user: dict, payload: UserProfileUpdateRequest) -> UserProfile:
     profile["updatedAt"] = now
     user_repository.upsert_user(user["uid"], profile, merge=True)
     return me({**user, "name": payload.name, "displayName": payload.name})
+
+
+def complete_tour(user: dict, tour_id: str) -> UserProfile:
+    safe_tour_id = " ".join((tour_id or "").split()).strip()
+    if not safe_tour_id or len(safe_tour_id) > 40:
+        raise ValueError("Invalid tour id")
+
+    now = _now_iso()
+    user_repository.upsert_user(
+        user["uid"],
+        {
+            "tourCompletions": {safe_tour_id: now},
+            "updatedAt": now,
+        },
+        merge=True,
+    )
+    return me(user)

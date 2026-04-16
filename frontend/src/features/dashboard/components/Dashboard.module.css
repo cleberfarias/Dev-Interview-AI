@@ -119,6 +119,7 @@
 .heroActionButton,
 .quickCard,
 .emptyStateAction,
+.panelPrimaryAction,
 .activityPrimaryButton,
 .activityMoreButton,
 .activityOverflowActions button {
@@ -139,6 +140,7 @@
 
 .heroActionButton:hover,
 .quickCard:hover,
+.panelPrimaryAction:hover,
 .activityPrimaryButton:hover,
 .activityMoreButton:hover,
 .activityOverflowActions button:hover,
@@ -311,6 +313,97 @@
   color: #c7d7f5;
   font-size: 0.92rem;
   line-height: 1.55;
+}
+
+.readinessGrid {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.readinessItem {
+  min-height: 86px;
+  border-radius: 20px;
+  padding: 14px;
+  display: grid;
+  align-content: space-between;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(11, 15, 26, 0.58);
+}
+
+.readinessItem span,
+.focusLabel {
+  color: #c7d7f5;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.readinessItem strong {
+  color: var(--fd-text-primary);
+  font-family: var(--fd-font-heading);
+  font-size: 1.2rem;
+}
+
+.readinessItemReady {
+  border-color: rgba(34, 197, 94, 0.22);
+  background: rgba(34, 197, 94, 0.09);
+}
+
+.readinessItemPending {
+  border-color: rgba(245, 158, 11, 0.22);
+  background: rgba(245, 158, 11, 0.09);
+}
+
+.focusSummary {
+  margin-top: 14px;
+  border-radius: 20px;
+  padding: 14px;
+  display: grid;
+  gap: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.focusSummary div {
+  display: grid;
+  gap: 4px;
+}
+
+.focusSummary strong {
+  color: var(--fd-text-primary);
+  font-size: 1rem;
+}
+
+.focusSummary p {
+  margin: 0;
+  color: #c7d7f5;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.panelActions {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.panelPrimaryAction {
+  min-height: 44px;
+  padding: 0.75rem 0.95rem;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: var(--fd-gradient);
+  color: var(--fd-text-primary);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  box-shadow: var(--fd-shadow-glow);
+  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
 }
 
 .chartCard {
@@ -494,6 +587,55 @@
   display: grid;
   align-content: flex-start;
   gap: 12px;
+}
+
+.engineDetails {
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(11, 15, 26, 0.58);
+}
+
+.engineDetailsSummary {
+  min-height: 56px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  color: var(--fd-text-primary);
+  font-weight: 700;
+  list-style: none;
+}
+
+.engineDetailsSummary::-webkit-details-marker {
+  display: none;
+}
+
+.engineDetailsSummary span {
+  color: #c7d7f5;
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.engineDetailsSummary strong {
+  color: #86efac;
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.engineDetails[open] {
+  background: transparent;
+  border-color: transparent;
+}
+
+.engineDetails[open] .engineDetailsSummary {
+  margin-bottom: 8px;
+  border-radius: 18px;
+  background: rgba(11, 15, 26, 0.58);
+  border: 1px solid rgba(255, 255, 255, 0.09);
 }
 
 .enginePanel {
@@ -848,6 +990,7 @@
 .heroActionButton:focus-visible,
 .quickCard:focus-visible,
 .emptyStateAction:focus-visible,
+.panelPrimaryAction:focus-visible,
 .profileReviewAction:focus-visible,
 .activityPrimaryButton:focus-visible,
 .activityMoreButton:focus-visible,
@@ -875,6 +1018,27 @@
   }
 }
 
+@media (min-width: 1040px) {
+  .shell {
+    width: min(1180px, 100%);
+  }
+
+  .hero {
+    grid-template-columns: minmax(0, 1.3fr) minmax(260px, 0.75fr);
+    align-items: center;
+  }
+
+  .heroActions {
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(220px, 0.35fr) minmax(180px, 0.25fr);
+    justify-content: start;
+  }
+
+  .panelGrid {
+    grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.72fr);
+  }
+}
+
 @media (max-width: 780px) {
   .page {
     background: var(--fd-page-backdrop), url('/img/fundo_mob.png');
@@ -890,6 +1054,10 @@
   }
 
   .heroActions {
+    grid-template-columns: 1fr;
+  }
+
+  .readinessGrid {
     grid-template-columns: 1fr;
   }
 

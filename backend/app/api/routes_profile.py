@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..firebase_admin import get_current_user
 from ..schemas import (
@@ -30,6 +30,13 @@ def me(user=Depends(get_current_user)):
 @router.patch("/me", response_model=UserProfile)
 def patch_me(payload: UserProfileUpdateRequest, user=Depends(get_current_user)):
     return profile_service.update_me(user, payload)
+
+
+@router.patch("/me/tours/{tour_id}", response_model=UserProfile)
+def complete_tour(tour_id: str, user=Depends(get_current_user)):
+    if tour_id not in {"dashboard", "profile", "onboarding", "lobby", "report"}:
+        raise HTTPException(status_code=400, detail="Invalid tour id")
+    return profile_service.complete_tour(user, tour_id)
 
 
 @router.get("/profile/candidate", response_model=CandidateProfile)

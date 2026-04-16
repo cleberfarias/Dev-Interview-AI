@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -21,6 +21,7 @@ class UserProfile(BaseModel):
     avatar: Optional[str] = None
     credits: int = 0
     interviews: List[InterviewHistoryItem] = Field(default_factory=list)
+    tourCompletions: Dict[str, str] = Field(default_factory=dict)
 
 
 class UserProfileUpdateRequest(BaseModel):

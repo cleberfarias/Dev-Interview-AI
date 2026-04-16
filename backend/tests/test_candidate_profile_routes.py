@@ -107,6 +107,46 @@ def test_patch_me_route(monkeypatch):
         app.dependency_overrides = {}
 
 
+def test_complete_tour_route(monkeypatch):
+    app.dependency_overrides[get_current_user] = _auth_user
+
+    def _fake_complete_tour(user, tour_id):
+        return {
+            "uid": user["uid"],
+            "name": user["name"],
+            "email": user["email"],
+            "avatar": None,
+            "credits": 3,
+            "interviews": [],
+            "tourCompletions": {tour_id: "2026-04-16T12:00:00+00:00"},
+        }
+
+    monkeypatch.setattr(
+        "app.api.routes_profile.profile_service.complete_tour",
+        _fake_complete_tour,
+    )
+
+    try:
+        client = TestClient(app)
+        resp = client.patch("/me/tours/dashboard")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["tourCompletions"]["dashboard"] == "2026-04-16T12:00:00+00:00"
+    finally:
+        app.dependency_overrides = {}
+
+
+def test_complete_tour_route_rejects_unknown_tour():
+    app.dependency_overrides[get_current_user] = _auth_user
+
+    try:
+        client = TestClient(app)
+        resp = client.patch("/me/tours/unknown")
+        assert resp.status_code == 400
+    finally:
+        app.dependency_overrides = {}
+
+
 def test_get_candidate_profile_audit_route(monkeypatch):
     app.dependency_overrides[get_current_user] = _auth_user
     monkeypatch.setattr(

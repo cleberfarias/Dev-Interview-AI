@@ -93,15 +93,20 @@ const AUTO_TOUR_BY_STATE: Partial<Record<AppState, ProductTourId>> = {
   [AppState.REPORT]: 'report',
 };
 
-const readCompletedTour = (tourId: ProductTourId): boolean => {
+const AUTO_TOUR_IDS = Object.values(AUTO_TOUR_BY_STATE) as ProductTourId[];
+
+const readLocalCompletedTour = (tourId: ProductTourId): boolean => {
   if (typeof window === 'undefined') return false;
   return window.localStorage.getItem(buildTourStorageKey(tourId)) === 'true';
 };
 
-const writeCompletedTour = (tourId: ProductTourId): void => {
+const writeLocalCompletedTour = (tourId: ProductTourId): void => {
   if (typeof window === 'undefined') return;
   window.localStorage.setItem(buildTourStorageKey(tourId), 'true');
 };
+
+const hasCompletedTour = (user: User, tourId: ProductTourId): boolean =>
+  Boolean(user.tourCompletions?.[tourId]) || readLocalCompletedTour(tourId);
 
 const App: React.FC = () => {
   const queryClient = useQueryClient();
@@ -291,6 +296,9 @@ const App: React.FC = () => {
       setActiveTourId(null);
       return;
     }
+    if (firebaseUser && meQuery.isPlaceholderData) {
+      return;
+    }
 
     const nextTourId = AUTO_TOUR_BY_STATE[state];
     if (!nextTourId) {
@@ -302,7 +310,7 @@ const App: React.FC = () => {
       return;
     }
 
-    if (readCompletedTour(nextTourId)) {
+    if (hasCompletedTour(user, nextTourId)) {
       return;
     }
 
@@ -313,7 +321,28 @@ const App: React.FC = () => {
     return () => {
       window.clearTimeout(timerId);
     };
-  }, [report, state, user]);
+  }, [firebaseUser, meQuery.isPlaceholderData, report, state, user]);
+
+  useEffect(() => {
+    if (!user || meQuery.isPlaceholderData) return;
+
+    const localOnlyCompletedTours = AUTO_TOUR_IDS.filter(
+      (tourId) => readLocalCompletedTour(tourId) && !user.tourCompletions?.[tourId],
+    );
+
+    if (localOnlyCompletedTours.length === 0) return;
+
+    void Promise.all(localOnlyCompletedTours.map((tourId) => BackendApi.completeTour(tourId)))
+      .then((profiles) => {
+        const latestProfile = profiles[profiles.length - 1];
+        if (!latestProfile) return;
+        setUser(latestProfile);
+        queryClient.setQueryData(appQueryKeys.me(latestProfile.uid), latestProfile);
+      })
+      .catch((error) => {
+        console.warn('Tour completion sync failed', error);
+      });
+  }, [meQuery.isPlaceholderData, queryClient, user]);
 
   useEffect(() => {
     if (!activeTourId) return;
@@ -506,6 +535,31 @@ const App: React.FC = () => {
     }
   };
 
+  const markTourCompleted = (tourId: ProductTourId) => {
+    const completedAt = new Date().toISOString();
+    writeLocalCompletedTour(tourId);
+    setUser((current) =>
+      current
+        ? {
+            ...current,
+            tourCompletions: {
+              ...(current.tourCompletions || {}),
+              [tourId]: completedAt,
+            },
+          }
+        : current,
+    );
+
+    void BackendApi.completeTour(tourId)
+      .then((nextUser) => {
+        setUser(nextUser);
+        queryClient.setQueryData(appQueryKeys.me(nextUser.uid), nextUser);
+      })
+      .catch((error) => {
+        console.warn('Tour completion save failed', error);
+      });
+  };
+
   const currentTourId = AUTO_TOUR_BY_STATE[state] || null;
   const activeTourSteps =
     activeTourId && user
@@ -514,7 +568,7 @@ const App: React.FC = () => {
 
   const closeActiveTour = () => {
     if (activeTourId) {
-      writeCompletedTour(activeTourId);
+      markTourCompleted(activeTourId);
     }
     setActiveTourId(null);
   };

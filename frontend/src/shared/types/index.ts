@@ -25,6 +25,7 @@ export interface User {
   credits: number;
   provider?: 'google' | 'github' | 'bio' | 'email' | 'firebase';
   interviews: InterviewHistoryItem[];
+  tourCompletions?: Record<string, string>;
 }
 
 export interface InterviewConfig {

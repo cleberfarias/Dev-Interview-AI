@@ -189,6 +189,11 @@ export const BackendApi = {
     });
   },
 
+  completeTour: (tourId: string) =>
+    apiFetch<User>(`/me/tours/${encodeURIComponent(tourId)}`, {
+      method: "PATCH",
+    }),
+
   getCandidateProfile: () =>
     apiFetch<CandidateProfile>("/profile/candidate"),
 

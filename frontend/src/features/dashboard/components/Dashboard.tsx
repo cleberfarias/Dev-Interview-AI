@@ -327,50 +327,17 @@ const Dashboard: React.FC<DashboardProps> = ({
   const firstName = user.name ? user.name.split(' ')[0] : 'Candidato';
   const lastInterview = interviews[0];
   const profilePrimarySkills = (candidateProfile?.primarySkills || []).slice(0, 4);
-  const profileWeakSkills = (candidateProfile?.weakSkills || []).slice(0, 3);
   const resumeSummary = (candidateProfile?.resumeSummary || '').trim();
   const hasResumeSummary = Boolean(resumeSummary);
   const hasJobDescription = Boolean((candidateProfile?.jobDescription || '').trim());
-
-  const hasProfileSignal = Boolean(
-    candidateProfile?.targetRole ||
-      candidateProfile?.experienceLevel ||
-      hasResumeSummary ||
-      hasJobDescription ||
-      profilePrimarySkills.length > 0 ||
-      profileWeakSkills.length > 0,
-  );
 
   const avgScore =
     interviews.length > 0
       ? Math.round((interviews.reduce((sum, item) => sum + (item.score || 0), 0) / interviews.length) * 10) / 10
       : null;
 
-  const trendScores = interviews.slice(0, 5).map((item) => Number(item.score) || 0).reverse();
-  const chartMax = Math.max(100, ...trendScores);
   const interviewCountLabel =
     interviews.length === 1 ? '1 entrevista' : `${interviews.length} entrevistas`;
-  const profileRows = [
-    {
-      label: 'Objetivo',
-      value: candidateProfile?.targetRole
-        ? `${candidateProfile.targetRole} - ${candidateProfile?.experienceLevel || 'Nao definido'}`
-        : 'Nao definido',
-    },
-    {
-      label: 'Skills principais',
-      value: profilePrimarySkills.join(', ') || 'Nao definido',
-    },
-    {
-      label: 'Gaps mapeados',
-      value: profileWeakSkills.join(', ') || 'Nenhum gap mapeado',
-    },
-    {
-      label: 'Resumo do curriculo',
-      value: hasResumeSummary ? 'Salvo no perfil e pronto para revisao.' : 'Pendente no perfil.',
-      emphasize: !hasResumeSummary,
-    },
-  ];
 
   const formatDate = (value?: string) => {
     if (!value) return '';
@@ -575,76 +542,58 @@ const Dashboard: React.FC<DashboardProps> = ({
         <section className={styles.panelGrid}>
           <article className={styles.mainPanel}>
             <div className={styles.panelHeader}>
-              <h3 className={styles.panelTitle}>Prontidao da entrevista</h3>
-              <span className={styles.panelMeta}>{interviewCountLabel}</span>
+              <h3 className={styles.panelTitle}>Proximo passo</h3>
+              <span className={styles.panelMeta}>{hasResumeSummary && hasJobDescription ? 'Pronto' : 'Revisar'}</span>
             </div>
             <p className={styles.panelLead}>
-              Use estes sinais para decidir se vale entrar em uma nova simulacao agora ou ajustar perfil e vaga antes.
+              Entre direto na simulacao quando curriculo e vaga estiverem alinhados. Se algo estiver pendente, ajuste antes.
             </p>
 
-            <div className={styles.chartCard}>
-              <div className={styles.chartHeader}>
-                <span>Evolucao de desempenho</span>
-                <span>{interviews.length} registro(s)</span>
+            <div className={styles.readinessGrid}>
+              <div className={`${styles.readinessItem} ${hasResumeSummary ? styles.readinessItemReady : styles.readinessItemPending}`}>
+                <span>Curriculo</span>
+                <strong>{hasResumeSummary ? 'Pronto' : 'Pendente'}</strong>
               </div>
-
-              {trendScores.length === 0 && (
-                <p className={styles.emptyText}>Ainda nao ha notas suficientes para montar o grafico.</p>
-              )}
-
-              {trendScores.length > 0 && (
-                <div className={styles.chartBars}>
-                  {trendScores.map((score, index) => {
-                    const height = Math.max(10, Math.round((score / chartMax) * 100));
-                    return (
-                      <div key={`${score}-${index}`} className={styles.barGroup}>
-                        <div className={styles.barTrack}>
-                          <span className={styles.barValue} style={{ height: `${height}%` }} />
-                        </div>
-                        <span className={styles.barLabel}>{score}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+              <div className={`${styles.readinessItem} ${hasJobDescription ? styles.readinessItemReady : styles.readinessItemPending}`}>
+                <span>Vaga alvo</span>
+                <strong>{hasJobDescription ? 'Pronta' : 'Pendente'}</strong>
+              </div>
             </div>
 
-            <div className={styles.profileSignals}>
-              <div className={styles.signalHeader}>
-                <h4>Sinais de preparacao</h4>
-                <span className={styles.signalHint}>{hasProfileSignal ? 'Perfil mapeado' : 'Perfil incompleto'}</span>
+            <div className={styles.focusSummary}>
+              <div>
+                <span className={styles.focusLabel}>Foco atual</span>
+                <strong>
+                  {candidateProfile?.targetRole
+                    ? `${candidateProfile.targetRole} - ${candidateProfile?.experienceLevel || 'nivel nao definido'}`
+                    : 'Perfil ainda sem cargo alvo'}
+                </strong>
               </div>
-              <div className={styles.signalRow}>
-                <span className={`${styles.signalChip} ${hasResumeSummary ? styles.signalOk : styles.signalWarn}`}>
-                  Curriculo {hasResumeSummary ? 'ok' : 'pendente'}
-                </span>
-                <span className={`${styles.signalChip} ${hasJobDescription ? styles.signalOk : styles.signalWarn}`}>
-                  Vaga {hasJobDescription ? 'ok' : 'pendente'}
-                </span>
-              </div>
+              <p>
+                {profilePrimarySkills.length > 0
+                  ? profilePrimarySkills.join(', ')
+                  : 'Adicione suas principais tecnologias para melhorar as perguntas.'}
+              </p>
+            </div>
 
-              {hasProfileSignal ? (
-                <div className={styles.profileTexts}>
-                  {profileRows.map((row) => (
-                    <div key={row.label} className={styles.profileRow}>
-                      <span className={styles.profileRowLabel}>{row.label}</span>
-                      <p className={`${styles.profileRowValue} ${row.emphasize ? styles.profileRowValueMuted : ''}`}>
-                        {row.value}
-                      </p>
-                    </div>
-                  ))}
-                  <button type="button" className={styles.profileReviewAction} onClick={onOpenProfile}>
-                    Revisar perfil completo
-                  </button>
-                </div>
-              ) : (
-                <p className={styles.emptyText}>Complete seu perfil para gerar entrevistas mais alinhadas.</p>
-              )}
+            <div className={styles.panelActions}>
+              <button type="button" className={styles.panelPrimaryAction} onClick={onStartInterview}>
+                Comecar entrevista
+              </button>
+              <button type="button" className={styles.profileReviewAction} onClick={onOpenProfile}>
+                Revisar perfil
+              </button>
             </div>
           </article>
 
           <aside className={styles.sidePanel} data-tour-id="dashboard-history-panel">
-            <article className={styles.enginePanel}>
+            <details className={styles.engineDetails}>
+              <summary className={styles.engineDetailsSummary}>
+                <span>Motor de IA</span>
+                <strong>{engineSummary.label}</strong>
+              </summary>
+
+              <article className={styles.enginePanel}>
               <div className={styles.engineHeader}>
                 <div className={styles.engineHeaderCopy}>
                   <span className={styles.engineEyebrow}>Applied AI Engine</span>
@@ -693,7 +642,8 @@ const Dashboard: React.FC<DashboardProps> = ({
                   </article>
                 ))}
               </div>
-            </article>
+              </article>
+            </details>
 
             <div className={styles.panelHeader}>
               <h3 className={styles.panelTitle}>Atividade recente</h3>
@@ -709,7 +659,7 @@ const Dashboard: React.FC<DashboardProps> = ({
               </div>
             )}
 
-            {interviews.slice(0, 5).map((item) => {
+            {interviews.slice(0, 3).map((item) => {
               const isMenuOpen = traceMenuSessionId === item.id;
               const isTraceOpen = expandedTraceSessionId === item.id;
 
