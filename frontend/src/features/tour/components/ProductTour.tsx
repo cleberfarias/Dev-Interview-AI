@@ -61,6 +61,7 @@ type TooltipProps = TooltipRenderProps & {
   compact: boolean;
   labels: (typeof LABELS)[LanguageCode];
   onPrimaryLastStep: () => void;
+  onSkipTour: () => void;
   popoverWidth: number;
   targetFound: boolean;
 };
@@ -73,6 +74,7 @@ const ProductTourTooltip: React.FC<TooltipProps> = ({
   isLastStep,
   labels,
   onPrimaryLastStep,
+  onSkipTour,
   popoverWidth,
   primaryProps,
   skipProps,
@@ -92,6 +94,10 @@ const ProductTourTooltip: React.FC<TooltipProps> = ({
     if (continuous && isLastStep) {
       onPrimaryLastStep();
     }
+  };
+  const handleSkipClick = (event: React.MouseEvent<HTMLElement>) => {
+    onSkipClick(event);
+    onSkipTour();
   };
 
   return (
@@ -113,7 +119,7 @@ const ProductTourTooltip: React.FC<TooltipProps> = ({
         <button
           type="button"
           className={styles.skipButton}
-          onClick={onSkipClick}
+          onClick={handleSkipClick}
           aria-label={labels.skip}
           data-action={skipAction}
         >
@@ -237,7 +243,7 @@ const ProductTour: React.FC<ProductTourProps> = ({ open, steps, locale = 'pt-BR'
       return;
     }
 
-    if (status === STATUS.SKIPPED || action === ACTIONS.CLOSE) {
+    if (status === STATUS.SKIPPED || action === ACTIONS.CLOSE || action === ACTIONS.SKIP) {
       closeTour();
     }
   };
@@ -280,6 +286,7 @@ const ProductTour: React.FC<ProductTourProps> = ({ open, steps, locale = 'pt-BR'
           compact={isCompactViewport}
           labels={labels}
           onPrimaryLastStep={completeTour}
+          onSkipTour={closeTour}
           popoverWidth={popoverWidth}
           targetFound={Boolean((resolvedSteps[props.index]?.data as { targetFound?: boolean } | undefined)?.targetFound)}
         />
