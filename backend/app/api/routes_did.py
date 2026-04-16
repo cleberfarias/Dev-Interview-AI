@@ -14,7 +14,7 @@ Segurança:
 """
 import logging
 import os
-from base64 import b64encode
+from base64 import b64decode, b64encode
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
@@ -60,9 +60,20 @@ def _normalize_client_key(client_key: str | None) -> str | None:
     # Se o usuario colar a URL de share/embed inteira, extraimos apenas o parametro key.
     if "://" in clean:
         key = parse_qs(urlparse(clean).query).get("key", [""])[0].strip()
-        return key or clean
+        return _normalize_client_key(key) or clean
     if clean.startswith("key="):
-        return clean.removeprefix("key=").strip()
+        return _normalize_client_key(clean.removeprefix("key=").strip())
+    if clean.startswith("ck_"):
+        return clean
+
+    try:
+        padded = clean + ("=" * (-len(clean) % 4))
+        decoded = b64decode(padded, validate=True).decode("utf-8").strip()
+    except (ValueError, UnicodeDecodeError):
+        decoded = ""
+
+    if decoded.startswith("ck_"):
+        return decoded
 
     return clean
 
