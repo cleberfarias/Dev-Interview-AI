@@ -10,7 +10,7 @@ com foco em boas praticas, custo e experiencia do usuario.
 - Preparar o deploy com checklist de risco.
 
 ## 2) Decisoes de Produto (aplicadas)
-- Teste gratuito: 1 credito por usuario (FREE_TRIAL_CREDITS=1).
+- Teste gratuito: 3 creditos por usuario (FREE_TRIAL_CREDITS=3).
 - Duracao da entrevista padronizada em 10 minutos.
 - Quantidade fixa de 5 perguntas por entrevista.
 
@@ -45,7 +45,7 @@ P2 (melhoria):
 
 ## 5) Parametros recomendados (.env)
 Backend:
-- FREE_TRIAL_CREDITS=1
+- FREE_TRIAL_CREDITS=3
 - INTERVIEW_FIXED_MINUTES=10
 - INTERVIEW_FIXED_QUESTION_COUNT=5
 

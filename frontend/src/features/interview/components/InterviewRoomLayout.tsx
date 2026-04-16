@@ -16,7 +16,7 @@ import {
   analyzeSpeechMetrics,
   useAudioCapture,
 } from '../../audio';
-import { AvatarInterview } from '../../avatar';
+import { AvatarInterview, DIDAvatar } from '../../avatar';
 import { FIXED_INTERVIEW_DURATION_MINUTES, FIXED_INTERVIEW_QUESTION_COUNT, I18N } from '../../../shared/constants';
 import { BackendApi } from '../../../shared/services/backendApi';
 import type {
@@ -84,6 +84,12 @@ const PENDING_ANSWER_INSIGHT_TIMEOUT_MS = 7000;
 const LONG_PAUSE_MS = 1200;
 const PARTIAL_FEEDBACK_ENABLED = true;
 const DEFER_ANSWER_REVIEW_TO_FINAL = true;
+
+// Feature flag: usa avatar D-ID real-time em vez do VRM 3D.
+// Ative com VITE_USE_DID_AVATAR=true no .env.local.
+// Para reverter: remover a variável (ou setar false) — zero outras mudanças necessárias.
+// NOTA: quando ativo, o áudio TTS é silenciado pois o D-ID já faz TTS internamente.
+const USE_DID_AVATAR = import.meta.env.VITE_USE_DID_AVATAR === 'true';
 
 const getPreferredCandidateName = (name?: string): string => {
   const raw = String(name || '').trim();
@@ -1118,8 +1124,9 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
 
       stopTTS();
       audioEl.preload = 'auto';
-      audioEl.muted = false;
-      audioEl.volume = 1;
+      // Quando D-ID está ativo, silencia o TTS local (D-ID já faz TTS internamente)
+      audioEl.muted = USE_DID_AVATAR;
+      audioEl.volume = USE_DID_AVATAR ? 0 : 1;
       setAudioElementSourceFromBase64(audioEl, payload);
       audioEl.load();
 
@@ -2609,11 +2616,19 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
         <div className={styles.grid}>
           {isCompactLayout ? (
             <div className={styles.mobileStage}>
-              <AvatarInterview
-                avatar={currentAvatar}
-                state={avatarInterviewState}
-                mouthOpen={isAvatarSpeaking ? mouthOpen : 0}
-              />
+              {USE_DID_AVATAR ? (
+                <DIDAvatar
+                  question={currentQuestion?.title}
+                  videoHeight={320}
+                  videoWidth={320}
+                />
+              ) : (
+                <AvatarInterview
+                  avatar={currentAvatar}
+                  state={avatarInterviewState}
+                  mouthOpen={isAvatarSpeaking ? mouthOpen : 0}
+                />
+              )}
               <div className={styles.mobileSelfView}>
                 <UserCameraCard
                   label="Voce"
@@ -2636,11 +2651,19 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
           ) : (
             <>
               <div className={styles.leftColumn}>
-                <AvatarInterview
-                  avatar={currentAvatar}
-                  state={avatarInterviewState}
-                  mouthOpen={isAvatarSpeaking ? mouthOpen : 0}
-                />
+                {USE_DID_AVATAR ? (
+                  <DIDAvatar
+                    question={currentQuestion?.title}
+                    videoHeight={480}
+                    videoWidth={480}
+                  />
+                ) : (
+                  <AvatarInterview
+                    avatar={currentAvatar}
+                    state={avatarInterviewState}
+                    mouthOpen={isAvatarSpeaking ? mouthOpen : 0}
+                  />
+                )}
               </div>
               <div className={styles.centerColumn}>
                 <div className={styles.presentationChip} aria-label="Tela de apresentacao">
