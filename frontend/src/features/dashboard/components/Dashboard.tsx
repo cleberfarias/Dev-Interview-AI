@@ -577,11 +577,8 @@ const Dashboard: React.FC<DashboardProps> = ({
             </div>
 
             <div className={styles.panelActions}>
-              <button type="button" className={styles.panelPrimaryAction} onClick={onStartInterview}>
-                Comecar entrevista
-              </button>
               <button type="button" className={styles.profileReviewAction} onClick={onOpenProfile}>
-                Revisar perfil
+                Revisar perfil completo
               </button>
             </div>
           </article>

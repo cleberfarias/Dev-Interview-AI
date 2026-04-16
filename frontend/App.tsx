@@ -23,6 +23,8 @@ import {
   useMe,
   useSessionReport,
   useUpsertCandidateProfile,
+  writeCachedCandidateProfile,
+  writeCachedUser,
 } from './src/shared/hooks/useAppQueries';
 import { getMissingCandidateProfileFields } from './src/shared/utils/candidateProfile';
 import { ProductTour, buildTourStorageKey, getTourSteps, type ProductTourId } from './src/features/tour';
@@ -223,12 +225,15 @@ const App: React.FC = () => {
     if (!meQuery.data) return;
     setUser(meQuery.data);
 
+    if (meQuery.isPlaceholderData) return;
+    writeCachedUser(meQuery.data);
+
     if (audioRetryUidRef.current === meQuery.data.uid) return;
     audioRetryUidRef.current = meQuery.data.uid;
     void retryAudioChunksInBackground().catch((error) => {
       console.warn('Audio chunk retry bootstrap failed', error);
     });
-  }, [meQuery.data]);
+  }, [meQuery.data, meQuery.isPlaceholderData]);
 
   useEffect(() => {
     if (firebaseUser) return;
@@ -238,7 +243,10 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!candidateProfileQuery.data) return;
     setCandidateProfile(candidateProfileQuery.data);
-  }, [candidateProfileQuery.data]);
+    if (!candidateProfileQuery.isPlaceholderData) {
+      writeCachedCandidateProfile(candidateProfileQuery.data);
+    }
+  }, [candidateProfileQuery.data, candidateProfileQuery.isPlaceholderData]);
 
   useEffect(() => {
     if (!candidateProfileQuery.error) return;
@@ -395,6 +403,7 @@ const App: React.FC = () => {
       const res = await BackendApi.devAddCredits(amount);
       const nextUser = { ...user, credits: res.credits };
       setUser(nextUser);
+      writeCachedUser(nextUser);
       queryClient.setQueryData(appQueryKeys.me(user.uid), nextUser);
     } catch (e: any) {
       showGlobalNotice(e?.message || 'Nao foi possivel adicionar creditos.');
@@ -407,6 +416,7 @@ const App: React.FC = () => {
       await deleteSessionMutation.mutateAsync(targetSessionId);
       const nextUser = { ...user, interviews: user.interviews.filter((item) => item.id !== targetSessionId) };
       setUser(nextUser);
+      writeCachedUser(nextUser);
       queryClient.setQueryData(appQueryKeys.me(user.uid), nextUser);
     } catch (e: any) {
       showGlobalNotice(e?.message || 'Nao foi possivel excluir a entrevista.');
@@ -420,6 +430,7 @@ const App: React.FC = () => {
   const handleUserUpdated = useCallback(
     (nextUser: User) => {
       setUser(nextUser);
+      writeCachedUser(nextUser);
       queryClient.setQueryData(appQueryKeys.me(nextUser.uid), nextUser);
     },
     [queryClient],
@@ -428,6 +439,7 @@ const App: React.FC = () => {
   const handleCandidateProfileUpdated = useCallback(
     (profile: CandidateProfile) => {
       setCandidateProfile(profile);
+      writeCachedCandidateProfile(profile);
       queryClient.setQueryData(appQueryKeys.candidateProfile(profile.userId), profile);
     },
     [queryClient],
@@ -506,6 +518,7 @@ const App: React.FC = () => {
 
       const saved = await upsertCandidateProfileMutation.mutateAsync(payload);
       setCandidateProfile(saved);
+      writeCachedCandidateProfile(saved);
     } catch (e) {
       console.error('Failed to sync candidate profile from onboarding', e);
     }
@@ -538,21 +551,23 @@ const App: React.FC = () => {
   const markTourCompleted = (tourId: ProductTourId) => {
     const completedAt = new Date().toISOString();
     writeLocalCompletedTour(tourId);
-    setUser((current) =>
-      current
-        ? {
-            ...current,
-            tourCompletions: {
-              ...(current.tourCompletions || {}),
-              [tourId]: completedAt,
-            },
-          }
-        : current,
-    );
+    setUser((current) => {
+      if (!current) return current;
+      const nextUser = {
+        ...current,
+        tourCompletions: {
+          ...(current.tourCompletions || {}),
+          [tourId]: completedAt,
+        },
+      };
+      writeCachedUser(nextUser);
+      return nextUser;
+    });
 
     void BackendApi.completeTour(tourId)
       .then((nextUser) => {
         setUser(nextUser);
+        writeCachedUser(nextUser);
         queryClient.setQueryData(appQueryKeys.me(nextUser.uid), nextUser);
       })
       .catch((error) => {

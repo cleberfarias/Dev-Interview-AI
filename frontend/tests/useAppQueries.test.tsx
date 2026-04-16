@@ -2,7 +2,7 @@ import { screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { User as FirebaseUser } from 'firebase/auth';
 
-import { useMe } from '../src/shared/hooks/useAppQueries';
+import { useMe, writeCachedUser } from '../src/shared/hooks/useAppQueries';
 import { renderWithQueryClient } from './renderWithQueryClient';
 
 const backendApiMocks = vi.hoisted(() => ({
@@ -41,6 +41,7 @@ describe('useMe', () => {
     backendApiMocks.me.mockReset();
     backendApiMocks.meWithToken.mockReset();
     (firebaseUser.getIdToken as unknown as ReturnType<typeof vi.fn>).mockClear();
+    window.localStorage.clear();
   });
 
   it('shows placeholder data but still fetches the real /me payload immediately', async () => {
@@ -65,6 +66,36 @@ describe('useMe', () => {
     await waitFor(() => {
       expect(screen.getByTestId('name')).toHaveTextContent('Cleber Farias');
       expect(screen.getByTestId('credits')).toHaveTextContent('105');
+    });
+  });
+
+  it('uses the cached profile as placeholder while revalidating /me', async () => {
+    writeCachedUser({
+      uid: 'user-1',
+      name: 'Cleber Cache',
+      email: 'cleber_afd@hotmail.com',
+      credits: 74,
+      interviews: [],
+      provider: 'firebase',
+      tourCompletions: { dashboard: '2026-04-16T00:00:00.000Z' },
+    });
+    backendApiMocks.meWithToken.mockResolvedValue({
+      uid: 'user-1',
+      name: 'Cleber Atualizado',
+      email: 'cleber_afd@hotmail.com',
+      credits: 75,
+      interviews: [],
+      provider: 'firebase',
+    });
+
+    renderWithQueryClient(<QueryProbe firebaseUser={firebaseUser} />);
+
+    expect(screen.getByTestId('name')).toHaveTextContent('Cleber Cache');
+    expect(screen.getByTestId('credits')).toHaveTextContent('74');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('name')).toHaveTextContent('Cleber Atualizado');
+      expect(screen.getByTestId('credits')).toHaveTextContent('75');
     });
   });
 });

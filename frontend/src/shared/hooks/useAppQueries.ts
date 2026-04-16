@@ -20,6 +20,8 @@ import type {
 } from '../types';
 
 const CANDIDATE_PROFILE_AUDIT_DEFAULT_LIMIT = 6;
+const USER_CACHE_KEY_PREFIX = 'dev-interview-user-cache:v1:';
+const CANDIDATE_PROFILE_CACHE_KEY_PREFIX = 'dev-interview-candidate-profile-cache:v1:';
 
 export const appQueryKeys = {
   me: (uid?: string | null) => ['me', uid || 'anonymous'] as const,
@@ -29,7 +31,7 @@ export const appQueryKeys = {
   sessionReport: (sessionId?: string | null) => ['session-report', sessionId || 'unknown'] as const,
 };
 
-const buildFallbackUser = (firebaseUser: FirebaseUser): User => ({
+const buildBaseFallbackUser = (firebaseUser: FirebaseUser): User => ({
   uid: firebaseUser.uid,
   name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Usuario',
   email: firebaseUser.email || '',
@@ -39,6 +41,57 @@ const buildFallbackUser = (firebaseUser: FirebaseUser): User => ({
   interviews: [],
   tourCompletions: {},
 });
+
+const readJsonCache = <T,>(key: string): T | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch {
+    return null;
+  }
+};
+
+const writeJsonCache = (key: string, value: unknown): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Local cache is best-effort only.
+  }
+};
+
+export const readCachedUser = (firebaseUser: FirebaseUser): User | null => {
+  const cached = readJsonCache<Partial<User>>(`${USER_CACHE_KEY_PREFIX}${firebaseUser.uid}`);
+  if (!cached || cached.uid !== firebaseUser.uid) return null;
+
+  const fallback = buildBaseFallbackUser(firebaseUser);
+  return {
+    ...fallback,
+    ...cached,
+    uid: fallback.uid,
+    email: cached.email || fallback.email,
+    interviews: Array.isArray(cached.interviews) ? cached.interviews : [],
+    tourCompletions: cached.tourCompletions || {},
+  };
+};
+
+export const writeCachedUser = (user: User): void => {
+  writeJsonCache(`${USER_CACHE_KEY_PREFIX}${user.uid}`, user);
+};
+
+export const readCachedCandidateProfile = (userUid?: string | null): CandidateProfile | null => {
+  if (!userUid) return null;
+  const cached = readJsonCache<CandidateProfile>(`${CANDIDATE_PROFILE_CACHE_KEY_PREFIX}${userUid}`);
+  return cached?.userId === userUid ? cached : null;
+};
+
+export const writeCachedCandidateProfile = (profile: CandidateProfile): void => {
+  writeJsonCache(`${CANDIDATE_PROFILE_CACHE_KEY_PREFIX}${profile.userId}`, profile);
+};
+
+const buildFallbackUser = (firebaseUser: FirebaseUser): User =>
+  readCachedUser(firebaseUser) || buildBaseFallbackUser(firebaseUser);
 
 const loadMe = async (firebaseUser: FirebaseUser): Promise<User> => {
   const token = await firebaseUser.getIdToken(false).catch(() => null);
@@ -67,6 +120,7 @@ export const useCandidateProfile = (userUid?: string | null) =>
     queryFn: () => BackendApi.getCandidateProfile(),
     enabled: Boolean(userUid),
     staleTime: 60_000,
+    placeholderData: readCachedCandidateProfile(userUid) || undefined,
   });
 
 export const useCandidateProfileAudit = (

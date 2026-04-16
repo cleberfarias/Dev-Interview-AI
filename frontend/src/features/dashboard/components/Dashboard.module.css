@@ -119,7 +119,6 @@
 .heroActionButton,
 .quickCard,
 .emptyStateAction,
-.panelPrimaryAction,
 .activityPrimaryButton,
 .activityMoreButton,
 .activityOverflowActions button {
@@ -140,7 +139,6 @@
 
 .heroActionButton:hover,
 .quickCard:hover,
-.panelPrimaryAction:hover,
 .activityPrimaryButton:hover,
 .activityMoreButton:hover,
 .activityOverflowActions button:hover,
@@ -391,165 +389,6 @@
   gap: 10px;
 }
 
-.panelPrimaryAction {
-  min-height: 44px;
-  padding: 0.75rem 0.95rem;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: var(--fd-gradient);
-  color: var(--fd-text-primary);
-  font-size: 0.76rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  box-shadow: var(--fd-shadow-glow);
-  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
-}
-
-.chartCard {
-  margin-top: 16px;
-  border-radius: 22px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(11, 15, 26, 0.6);
-  padding: 16px;
-}
-
-.chartHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  color: #c7d7f5;
-  font-size: 0.82rem;
-}
-
-.chartBars {
-  margin-top: 16px;
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
-  height: 132px;
-}
-
-.barGroup {
-  flex: 1;
-  display: grid;
-  justify-items: center;
-  gap: 8px;
-}
-
-.barTrack {
-  width: 100%;
-  height: 108px;
-  border-radius: 14px;
-  padding: 6px;
-  display: flex;
-  align-items: flex-end;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.barValue {
-  width: 100%;
-  border-radius: 10px;
-  background: var(--fd-gradient);
-  box-shadow:
-    0 0 18px rgba(34, 211, 238, 0.2),
-    0 0 24px rgba(139, 92, 246, 0.18);
-}
-
-.barLabel {
-  font-size: 0.76rem;
-  color: #c7d7f5;
-}
-
-.profileSignals {
-  margin-top: 16px;
-}
-
-.signalHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.profileSignals h4 {
-  margin: 0;
-  font-size: 0.94rem;
-  font-weight: 700;
-  color: var(--fd-text-primary);
-}
-
-.signalHint {
-  color: #c7d7f5;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.signalRow {
-  margin-top: 10px;
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.signalChip {
-  min-height: 30px;
-  padding: 0.45rem 0.75rem;
-  border-radius: 999px;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.signalOk {
-  background: rgba(34, 197, 94, 0.2);
-  color: #22c55e;
-}
-
-.signalWarn {
-  background: rgba(245, 158, 11, 0.2);
-  color: #f59e0b;
-}
-
-.profileTexts {
-  margin-top: 12px;
-  display: grid;
-  gap: 10px;
-  color: #c7d7f5;
-  font-size: 0.88rem;
-  line-height: 1.6;
-}
-
-.profileRow {
-  display: grid;
-  gap: 4px;
-}
-
-.profileTexts p {
-  margin: 0;
-}
-
-.profileRowLabel {
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #c7d7f5;
-}
-
-.profileRowValue {
-  color: var(--fd-text-primary);
-}
-
-.profileRowValueMuted {
-  color: #fcd34d;
-}
-
 .profileReviewAction {
   width: fit-content;
   min-height: 44px;
@@ -571,7 +410,6 @@
   background: rgba(255, 255, 255, 0.08);
 }
 
-.profileTexts strong,
 .traceData strong {
   color: var(--fd-text-primary);
 }
@@ -990,7 +828,6 @@
 .heroActionButton:focus-visible,
 .quickCard:focus-visible,
 .emptyStateAction:focus-visible,
-.panelPrimaryAction:focus-visible,
 .profileReviewAction:focus-visible,
 .activityPrimaryButton:focus-visible,
 .activityMoreButton:focus-visible,
