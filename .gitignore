@@ -26,6 +26,7 @@ dist-ssr
 *.local
 .firebase/
 .gcloud/
+.playwright-mcp/
 
 # Editor directories and files
 .vscode/*
