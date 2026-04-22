@@ -1,19 +1,6 @@
-/**
- * Testes para DIDAvatar + useDIDSession
- *
- * Cobre os bugs corrigidos:
- *  - double-speak por rerender com mesma question (spokenQuestionRef)
- *  - stale closure em onVideoStateChange (idleVideoUrlRef)
- *  - race condition: unmount antes de createAgentManager completar
- *  - retry após erro
- *  - fallback para AvatarInterview (via flag USE_DID_AVATAR)
- *  - disconnect chamado no unmount
- */
 import React from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-
-// ---- Mocks ----
 
 const didApiMocks = vi.hoisted(() => ({
   getDIDCredentials: vi.fn(),
@@ -33,11 +20,12 @@ const mockAgentManager = {
 };
 
 vi.mock('@d-id/client-sdk', () => ({
-  createAgentManager: vi.fn(async (_id: string, { callbacks }: { callbacks: Record<string, (...args: unknown[]) => void> }) => {
-    capturedCallbacks = callbacks;
-    return mockAgentManager;
-  }),
-  // Real enum values from @d-id/client-sdk dist types
+  createAgentManager: vi.fn(
+    async (_id: string, { callbacks }: { callbacks: Record<string, (...args: unknown[]) => void> }) => {
+      capturedCallbacks = callbacks;
+      return mockAgentManager;
+    },
+  ),
   ConnectionState: {
     New: 'new',
     Fail: 'fail',
@@ -60,11 +48,29 @@ import { AvatarInterview } from '../src/features/avatar';
 function emitConnectionState(state: string) {
   capturedCallbacks.onConnectionStateChange?.(state);
 }
+
 function emitVideoState(state: string) {
   capturedCallbacks.onVideoStateChange?.(state);
 }
+
 function emitError(error: Error) {
   capturedCallbacks.onError?.(error);
+}
+
+function expectSpeakPayload(callIndex: number, expectedText: string) {
+  const payload = mockAgentManager.speak.mock.calls[callIndex]?.[0];
+  expect(payload).toEqual(
+    expect.objectContaining({
+      type: 'text',
+      ssml: true,
+      provider: expect.objectContaining({
+        type: 'microsoft',
+        voice_id: 'pt-BR-FranciscaNeural',
+      }),
+    }),
+  );
+  expect(payload.input).toContain('<speak');
+  expect(payload.input).toContain(expectedText);
 }
 
 beforeEach(() => {
@@ -79,7 +85,6 @@ beforeEach(() => {
   mockAgentManager.speak.mockClear();
 });
 
-// Helper que renderiza e avança até 'connected'
 async function renderConnected(props: Partial<React.ComponentProps<typeof DIDAvatar>> = {}) {
   const result = render(<DIDAvatar question="Pergunta inicial" {...props} />);
   const { createAgentManager } = await import('@d-id/client-sdk');
@@ -89,9 +94,7 @@ async function renderConnected(props: Partial<React.ComponentProps<typeof DIDAva
   return result;
 }
 
-// ---- Renderização ----
-
-describe('Renderização inicial', () => {
+describe('Renderizacao inicial', () => {
   it('exibe overlay de conectando ao montar', async () => {
     render(<DIDAvatar />);
     await waitFor(() =>
@@ -99,15 +102,13 @@ describe('Renderização inicial', () => {
     );
   });
 
-  it('elemento <video> está sempre no DOM', () => {
+  it('elemento video fica sempre no DOM', () => {
     render(<DIDAvatar />);
     expect(screen.getByTestId('did-video')).toBeInTheDocument();
   });
 });
 
-// ---- Conexão ----
-
-describe('Fluxo de conexão', () => {
+describe('Fluxo de conexao', () => {
   it('chama getDIDCredentials ao montar', async () => {
     render(<DIDAvatar />);
     await waitFor(() => expect(didApiMocks.getDIDCredentials).toHaveBeenCalledTimes(1));
@@ -131,26 +132,19 @@ describe('Fluxo de conexão', () => {
   });
 });
 
-// ---- Fala e double-speak ----
-
-describe('Fala da pergunta — sem double-speak', () => {
+describe('Fala da pergunta - sem double-speak', () => {
   it('chama speak() com a pergunta quando conecta', async () => {
-    await renderConnected({ question: 'Qual é sua experiência?' });
-    await waitFor(() =>
-      expect(mockAgentManager.speak).toHaveBeenCalledWith({
-        type: 'text',
-        input: 'Qual é sua experiência?',
-      }),
-    );
+    await renderConnected({ question: 'Qual e sua experiencia?' });
+    await waitFor(() => expect(mockAgentManager.speak).toHaveBeenCalledTimes(1));
+    expectSpeakPayload(0, 'Qual e sua experiencia?');
   });
 
-  it('NÃO repete speak() se question não mudou num rerender', async () => {
+  it('nao repete speak() se question nao mudou num rerender', async () => {
     const { rerender } = await renderConnected({ question: 'Mesma pergunta' });
     await waitFor(() => expect(mockAgentManager.speak).toHaveBeenCalledTimes(1));
 
-    // Rerender com mesma pergunta — não deve chamar speak novamente
     rerender(<DIDAvatar question="Mesma pergunta" />);
-    await new Promise((r) => setTimeout(r, 50)); // aguarda possível disparo indevido
+    await new Promise((resolve) => setTimeout(resolve, 50));
 
     expect(mockAgentManager.speak).toHaveBeenCalledTimes(1);
   });
@@ -161,20 +155,18 @@ describe('Fala da pergunta — sem double-speak', () => {
 
     rerender(<DIDAvatar question="Pergunta 2" />);
     await waitFor(() => expect(mockAgentManager.speak).toHaveBeenCalledTimes(2));
-    expect(mockAgentManager.speak).toHaveBeenLastCalledWith({ type: 'text', input: 'Pergunta 2' });
+    expectSpeakPayload(1, 'Pergunta 2');
   });
 
-  it('não chama speak() com string vazia', async () => {
+  it('nao chama speak() com string vazia', async () => {
     await renderConnected({ question: '' });
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
     expect(mockAgentManager.speak).not.toHaveBeenCalled();
   });
 });
 
-// ---- Indicador de fala ----
-
 describe('Estado de fala do avatar', () => {
-  it('exibe indicador quando video state é START', async () => {
+  it('exibe indicador quando video state e START', async () => {
     await renderConnected();
     act(() => emitVideoState('START'));
     await waitFor(() =>
@@ -187,12 +179,10 @@ describe('Estado de fala do avatar', () => {
     act(() => emitVideoState('START'));
     await waitFor(() => expect(screen.getByTestId('did-speaking-indicator')).toBeInTheDocument());
     act(() => emitVideoState('STOP'));
-    await waitFor(() =>
-      expect(screen.queryByTestId('did-speaking-indicator')).toBeNull(),
-    );
+    await waitFor(() => expect(screen.queryByTestId('did-speaking-indicator')).toBeNull());
   });
 
-  it('chama onSpeakEnd quando video state é STOP', async () => {
+  it('chama onSpeakEnd quando video state e STOP', async () => {
     const onSpeakEnd = vi.fn();
     await renderConnected({ onSpeakEnd });
     act(() => emitVideoState('START'));
@@ -200,7 +190,7 @@ describe('Estado de fala do avatar', () => {
     await waitFor(() => expect(onSpeakEnd).toHaveBeenCalledTimes(1));
   });
 
-  it('pode chamar onSpeakEnd múltiplas vezes (uma por pergunta)', async () => {
+  it('pode chamar onSpeakEnd multiplas vezes', async () => {
     const onSpeakEnd = vi.fn();
     await renderConnected({ onSpeakEnd });
     act(() => emitVideoState('START'));
@@ -211,8 +201,6 @@ describe('Estado de fala do avatar', () => {
   });
 });
 
-// ---- Erros e retry ----
-
 describe('Tratamento de erro e retry', () => {
   it('exibe mensagem de erro quando getDIDCredentials falha', async () => {
     didApiMocks.getDIDCredentials.mockRejectedValue(new Error('DID service unavailable'));
@@ -222,7 +210,7 @@ describe('Tratamento de erro e retry', () => {
     );
   });
 
-  it('exibe botão de retry após erro de credencial', async () => {
+  it('exibe botao de retry apos erro de credencial', async () => {
     didApiMocks.getDIDCredentials.mockRejectedValue(new Error('timeout'));
     render(<DIDAvatar />);
     await waitFor(() => expect(screen.getByTestId('did-btn-retry')).toBeInTheDocument());
@@ -249,8 +237,6 @@ describe('Tratamento de erro e retry', () => {
   });
 });
 
-// ---- Race condition e cleanup ----
-
 describe('Race condition e cleanup', () => {
   it('chama disconnect ao desmontar', async () => {
     const { unmount } = await renderConnected();
@@ -264,56 +250,39 @@ describe('Race condition e cleanup', () => {
     await waitFor(() => expect(mockAgentManager.disconnect).toHaveBeenCalled());
   });
 
-  it('não chama setState após unmount (race condition)', async () => {
-    // Simula: connect() é chamado, componente desmonta antes de completar
+  it('nao chama setState apos unmount', async () => {
     let resolveCredentials!: () => void;
     didApiMocks.getDIDCredentials.mockImplementation(
-      () => new Promise<{ clientKey: string; agentId: string }>((res) => {
-        resolveCredentials = () => res({ clientKey: 'k', agentId: 'a' });
-      }),
+      () =>
+        new Promise<{ clientKey: string; agentId: string }>((resolve) => {
+          resolveCredentials = () => resolve({ clientKey: 'k', agentId: 'a' });
+        }),
     );
 
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const { unmount } = render(<DIDAvatar />);
 
-    // Desmonta ANTES das credenciais chegarem
     unmount();
-
-    // Resolve as credenciais depois do unmount
     act(() => resolveCredentials());
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
 
-    // React não deve ter registrado warning de setState em unmounted component
-    expect(consoleSpy).not.toHaveBeenCalledWith(
-      expect.stringContaining('unmounted'),
-    );
+    expect(consoleSpy).not.toHaveBeenCalledWith(expect.stringContaining('unmounted'));
     consoleSpy.mockRestore();
   });
 });
 
-// ---- Fallback AvatarInterview ----
-
 describe('Fallback para AvatarInterview', () => {
   it('AvatarInterview renderiza independentemente do DIDAvatar', () => {
-    // Verifica que AvatarInterview pode ser renderizado sem interferência
-    const { container } = render(
-      <AvatarInterview
-        avatar={null}
-        state="idle"
-        mouthOpen={0}
-      />,
-    );
+    const { container } = render(<AvatarInterview avatar={null} state="idle" mouthOpen={0} />);
     expect(container).toBeTruthy();
   });
 
-  it('DIDAvatar e AvatarInterview têm data-testid distintos', () => {
-    const { unmount: unmount1 } = render(<DIDAvatar />);
+  it('DIDAvatar e AvatarInterview tem data-testid distintos', () => {
+    const { unmount } = render(<DIDAvatar />);
     expect(screen.getByTestId('did-avatar-section')).toBeInTheDocument();
-    unmount1();
+    unmount();
 
-    render(
-      <AvatarInterview avatar={null} state="idle" mouthOpen={0} />,
-    );
+    render(<AvatarInterview avatar={null} state="idle" mouthOpen={0} />);
     expect(screen.queryByTestId('did-avatar-section')).toBeNull();
   });
 });

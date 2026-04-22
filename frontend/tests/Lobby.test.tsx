@@ -177,7 +177,7 @@ describe('Lobby', () => {
     });
   });
 
-  it('shows a structured readiness summary and session facts', async () => {
+  it('shows the simplified readiness summary and retrieval preview', async () => {
     render(
       <Lobby
         config={baseConfig}
@@ -188,21 +188,24 @@ describe('Lobby', () => {
       />,
     );
 
-    expect(await screen.findByText('Tudo pronto para entrar?')).toBeInTheDocument();
-    expect(screen.getByLabelText('Resumo da sessao')).toBeInTheDocument();
-    expect(screen.getByText('Senioridade')).toBeInTheDocument();
-    expect(screen.getByText('Amigavel')).toBeInTheDocument();
+    expect(await screen.findByText('Revise o setup e entre na sala')).toBeInTheDocument();
+    expect(
+      screen.getByText((_, node) => {
+        const text = node?.textContent || '';
+        return (
+          node?.tagName === 'P'
+          && text.includes('Frontend')
+          && text.includes('Pleno')
+          && text.includes('Portugues')
+          && text.includes('Amigavel')
+          && text.includes('10')
+          && text.includes('min')
+        );
+      }),
+    ).toBeInTheDocument();
     expect(await screen.findByText('Fontes recuperadas')).toBeInTheDocument();
-    expect(screen.getByText(/Modo semantico/i)).toBeInTheDocument();
-    expect(screen.getByText('Resumo do curriculo')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Configuracoes' }));
-
-    await waitFor(() => {
-      expect(
-        screen.getByText('Ajuste permissoes de camera e microfone nas configuracoes do navegador.'),
-      ).toBeInTheDocument();
-    });
+    expect(screen.getByText('3 fontes conectadas ao contexto ativo.')).toBeInTheDocument();
+    expect(screen.getByText('Bom')).toBeInTheDocument();
   });
 
   it('guides the user back to the profile when candidate data is incomplete', async () => {
@@ -255,10 +258,7 @@ describe('Lobby', () => {
     );
 
     expect(
-      await screen.findByText(/Microfone liberado, mas ainda sem atividade detectada\./),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/Microfone liberado\. Se quiser testar antes, fale por alguns segundos\./),
+      await screen.findByText(/Microfone liberado\. Se quiser testar antes, fale por alguns segundos\./),
     ).toBeInTheDocument();
 
     await waitFor(() => {
