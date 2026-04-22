@@ -57,6 +57,7 @@ jobs:
       SERVICE_NAME: dev-interview-backend
       IMAGE: gcr.io/dev-interview-ai/dev-interview-backend
       BUILD_SERVICE_ACCOUNT: cloud-run-admin-179@dev-interview-ai.iam.gserviceaccount.com
+      RUNTIME_SERVICE_ACCOUNT: cloud-run-admin-179@dev-interview-ai.iam.gserviceaccount.com
       BUILD_LOG_DIR: gs://dev-interview-ai_cloudbuild/logs
     steps:
       - name: Checkout
@@ -86,5 +87,6 @@ jobs:
           gcloud run deploy ${{ env.SERVICE_NAME }} \
             --image ${{ env.IMAGE }} \
             --region ${{ env.REGION }} \
+            --service-account ${{ env.RUNTIME_SERVICE_ACCOUNT }} \
             --allow-unauthenticated \
             --project ${{ env.PROJECT_ID }}
