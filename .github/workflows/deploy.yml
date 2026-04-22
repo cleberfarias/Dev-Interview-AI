@@ -57,6 +57,7 @@ jobs:
       SERVICE_NAME: dev-interview-backend
       IMAGE: gcr.io/dev-interview-ai/dev-interview-backend
       BUILD_SERVICE_ACCOUNT: cloud-run-admin-179@dev-interview-ai.iam.gserviceaccount.com
+      BUILD_LOG_DIR: gs://dev-interview-ai_cloudbuild/logs
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -77,6 +78,7 @@ jobs:
         run: |
           gcloud builds submit backend \
             --tag ${{ env.IMAGE }} \
+            --gcs-log-dir ${{ env.BUILD_LOG_DIR }} \
             --service-account projects/${{ env.PROJECT_ID }}/serviceAccounts/${{ env.BUILD_SERVICE_ACCOUNT }}
 
       - name: Deploy to Cloud Run
