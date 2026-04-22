@@ -25,6 +25,7 @@ def test_plan_context_disabled_skips_mcp(monkeypatch):
         raise AssertionError("MCP should not be called when disabled")
 
     monkeypatch.setattr(main_module, "mcp_get_recent_interviews", _boom)
+    monkeypatch.setattr(main_module, "mcp_search_rubric_knowledge", _boom)
     monkeypatch.setattr(main_module, "mcp_get_rubric", _boom)
 
     ctx = main_module._build_plan_context("user-1", _config(), auth_token="token")
@@ -41,12 +42,17 @@ def test_plan_context_enabled_includes_context(monkeypatch):
     )
     monkeypatch.setattr(
         main_module,
-        "mcp_get_rubric",
+        "mcp_search_rubric_knowledge",
         lambda track, seniority, stacks, question=None, auth_token=None: {
             "focus": ["clarity"],
-            "good_signals": ["structure"],
-            "red_flags": ["vague"],
+            "goodSignals": ["structure"],
+            "redFlags": ["vague"],
         },
+    )
+    monkeypatch.setattr(
+        main_module,
+        "mcp_get_rubric",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("fallback not expected")),
     )
 
     ctx = main_module._build_plan_context("user-1", _config(), auth_token="token")
@@ -64,12 +70,17 @@ def test_report_context_enabled_includes_context(monkeypatch):
     )
     monkeypatch.setattr(
         main_module,
-        "mcp_get_rubric",
+        "mcp_search_rubric_knowledge",
         lambda track, seniority, stacks, question=None, auth_token=None: {
             "focus": ["tradeoffs"],
-            "good_signals": ["assumptions"],
-            "red_flags": ["no edge cases"],
+            "goodSignals": ["assumptions"],
+            "redFlags": ["no edge cases"],
         },
+    )
+    monkeypatch.setattr(
+        main_module,
+        "mcp_get_rubric",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("fallback not expected")),
     )
 
     ctx = main_module._build_report_context("user-1", _config(), auth_token="token")
@@ -85,11 +96,16 @@ def test_eval_prompt_includes_rubric_and_passes_token(monkeypatch):
         seen["token"] = auth_token
         return {
             "focus": ["clarity"],
-            "good_signals": ["structure"],
-            "red_flags": ["vague"],
+            "goodSignals": ["structure"],
+            "redFlags": ["vague"],
         }
 
-    monkeypatch.setattr(main_module, "mcp_get_rubric", _fake_rubric)
+    monkeypatch.setattr(main_module, "mcp_search_rubric_knowledge", _fake_rubric)
+    monkeypatch.setattr(
+        main_module,
+        "mcp_get_rubric",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("fallback not expected")),
+    )
 
     prompt = main_module._build_eval_prompt(
         _config(),

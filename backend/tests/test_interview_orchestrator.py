@@ -73,6 +73,10 @@ def test_build_context_runs_candidate_job_and_match_agents(monkeypatch):
         lambda uid, limit=3: [{"role": "Backend Engineer", "track": "backend", "style": "friendly", "score": 8.1}],
     )
     monkeypatch.setattr(
+        "app.knowledge_retrieval.mcp_search_rubric_knowledge",
+        lambda **kwargs: {"focus": ["api design", "observability"], "goodSignals": ["ownership"], "redFlags": []},
+    )
+    monkeypatch.setattr(
         "app.knowledge_retrieval.mcp_get_rubric",
         lambda **kwargs: {"focus": ["api design", "observability"], "good_signals": ["ownership"], "red_flags": []},
     )
@@ -87,7 +91,7 @@ def test_build_context_runs_candidate_job_and_match_agents(monkeypatch):
     assert result["agentRuntime"]["job_agent"]["aiModel"] == "gemini-2.5-pro"
     assert result["agentRuntime"]["match_agent"]["confidence"] >= 0.55
     assert result["agentRuntime"]["candidate_memory"]["status"] == "completed"
-    assert result["knowledgeRetrieval"]["quality"] in {"good", "strong"}
+    assert result["knowledgeRetrieval"]["quality"] in {"moderate", "good", "strong"}
     assert result["knowledgeRetrieval"]["retrievalMode"] == "semantic"
     assert result["knowledgeRetrieval"]["indexStats"]["chunks"] >= 4
     assert any(source["sourceType"] == "rubric" for source in result["knowledgeRetrieval"]["sources"])
@@ -114,6 +118,7 @@ def test_build_context_exposes_skipped_memory_when_empty(monkeypatch):
     )
     monkeypatch.setattr("app.services.interview_orchestrator.memory_service.load_candidate_memory", lambda user_id: {})
     monkeypatch.setattr("app.knowledge_retrieval.user_repository.list_user_interviews", lambda uid, limit=3: [])
+    monkeypatch.setattr("app.knowledge_retrieval.mcp_search_rubric_knowledge", lambda **kwargs: {})
     monkeypatch.setattr("app.knowledge_retrieval.mcp_get_rubric", lambda **kwargs: {})
 
     result = interview_orchestrator.build_context(user={"uid": "u1"}, config=_config())

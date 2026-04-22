@@ -80,9 +80,9 @@ def get_session_id() -> str | None:
 
 
 def append_tool_call(tool_call: dict[str, Any]) -> None:
-    current = _tool_calls_var.get() or []
+    current = _tool_calls_var.get()
     normalized = dict(tool_call) if isinstance(tool_call, dict) else {}
-    if not normalized:
+    if current is None or not normalized:
         return
     _tool_calls_var.set([*current, normalized])
 
@@ -93,10 +93,14 @@ def peek_tool_calls() -> list[dict[str, Any]]:
 
 
 def consume_tool_calls() -> list[dict[str, Any]]:
+    if _tool_calls_var.get() is None:
+        return []
     current = peek_tool_calls()
     _tool_calls_var.set([])
     return current
 
 
 def clear_tool_calls() -> None:
+    if _tool_calls_var.get() is None:
+        return
     _tool_calls_var.set([])

@@ -83,43 +83,44 @@ def _session_analysis_trace_snapshot(
     if not isinstance(candidate_memory, dict):
         candidate_memory = {}
 
-    clear_tool_calls()
-    agent_runtime = build_context_agent_runtime(
-        profile=profile,
-        candidate_memory=candidate_memory,
-        candidate={
-            "skills": profile.get("primarySkills") or [],
-            "summary": profile.get("resumeSummary") or "",
-        },
-        job={
-            "requiredSkills": profile.get("requiredSkills") or [],
-            "roleTitleGuess": profile.get("targetRole") or "",
-        },
-        match={
-            "matchScore": profile.get("lastMatchScore"),
-        },
-        resume_text=profile.get("resumeSummary"),
-        job_description=profile.get("jobDescription"),
-        resume_analysis_trace=profile.get("lastResumeAnalysisTrace"),
-        job_analysis_trace=profile.get("lastJobAnalysisTrace"),
-    )
-    knowledge_retrieval = build_knowledge_retrieval(
-        user_id=user_uid,
-        auth_token=auth_token,
-        config=config,
-        profile=profile,
-        candidate_memory=candidate_memory,
-        candidate={
-            "skills": profile.get("primarySkills") or [],
-            "summary": profile.get("resumeSummary") or "",
-        },
-        job={
-            "requiredSkills": profile.get("requiredSkills") or [],
-            "roleTitleGuess": profile.get("targetRole") or "",
-        },
-        match={"matchScore": profile.get("lastMatchScore")},
-    )
-    context_tool_calls = consume_tool_calls()
+    with scoped_context(tool_calls=[]):
+        clear_tool_calls()
+        agent_runtime = build_context_agent_runtime(
+            profile=profile,
+            candidate_memory=candidate_memory,
+            candidate={
+                "skills": profile.get("primarySkills") or [],
+                "summary": profile.get("resumeSummary") or "",
+            },
+            job={
+                "requiredSkills": profile.get("requiredSkills") or [],
+                "roleTitleGuess": profile.get("targetRole") or "",
+            },
+            match={
+                "matchScore": profile.get("lastMatchScore"),
+            },
+            resume_text=profile.get("resumeSummary"),
+            job_description=profile.get("jobDescription"),
+            resume_analysis_trace=profile.get("lastResumeAnalysisTrace"),
+            job_analysis_trace=profile.get("lastJobAnalysisTrace"),
+        )
+        knowledge_retrieval = build_knowledge_retrieval(
+            user_id=user_uid,
+            auth_token=auth_token,
+            config=config,
+            profile=profile,
+            candidate_memory=candidate_memory,
+            candidate={
+                "skills": profile.get("primarySkills") or [],
+                "summary": profile.get("resumeSummary") or "",
+            },
+            job={
+                "requiredSkills": profile.get("requiredSkills") or [],
+                "roleTitleGuess": profile.get("targetRole") or "",
+            },
+            match={"matchScore": profile.get("lastMatchScore")},
+        )
+        context_tool_calls = consume_tool_calls()
 
     snapshot = {
         "capturedAt": captured_at,

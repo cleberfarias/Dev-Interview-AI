@@ -185,6 +185,7 @@ app.include_router(kiwify_webhook_router)
 # Compatibility exports for tests/legacy imports from app.main
 ai_router = interview_core.ai_router
 mcp_get_recent_interviews = interview_core.mcp_get_recent_interviews
+mcp_search_rubric_knowledge = interview_core.mcp_search_rubric_knowledge
 mcp_get_rubric = interview_core.mcp_get_rubric
 _get_user_credits = interview_core._get_user_credits
 _debit_credits = interview_core._debit_credits
@@ -192,6 +193,10 @@ _debit_credits = interview_core._debit_credits
 
 def _mcp_get_recent_interviews_proxy(*args, **kwargs):
     return mcp_get_recent_interviews(*args, **kwargs)
+
+
+def _mcp_search_rubric_knowledge_proxy(*args, **kwargs):
+    return mcp_search_rubric_knowledge(*args, **kwargs)
 
 
 def _mcp_get_rubric_proxy(*args, **kwargs):
@@ -207,6 +212,7 @@ def _debit_credits_proxy(*args, **kwargs):
 
 
 interview_core.mcp_get_recent_interviews = _mcp_get_recent_interviews_proxy
+interview_core.mcp_search_rubric_knowledge = _mcp_search_rubric_knowledge_proxy
 interview_core.mcp_get_rubric = _mcp_get_rubric_proxy
 interview_core._get_user_credits = _get_user_credits_proxy
 interview_core._debit_credits = _debit_credits_proxy

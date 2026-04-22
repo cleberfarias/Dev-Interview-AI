@@ -40,6 +40,10 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Install Rollup Linux native package
+        working-directory: frontend
+        run: npm install --no-save @rollup/rollup-linux-x64-gnu@4.56.0
+
       - name: Run frontend tests
         working-directory: frontend
         run: npm test
@@ -69,6 +73,10 @@ jobs:
       - name: Install frontend deps
         working-directory: frontend
         run: npm ci
+
+      - name: Install Rollup Linux native package
+        working-directory: frontend
+        run: npm install --no-save @rollup/rollup-linux-x64-gnu@4.56.0
 
       - name: Build Android web bundle
         working-directory: frontend
