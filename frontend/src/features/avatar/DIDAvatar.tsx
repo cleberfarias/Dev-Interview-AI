@@ -24,6 +24,11 @@ export interface DIDAvatarProps {
    * Use para ativar a gravação do candidato.
    */
   onSpeakEnd?: () => void;
+  /**
+   * Chamado quando o SDK falha ao iniciar ou reproduzir a fala.
+   * Use para destravar a entrevista com fallback local.
+   */
+  onSpeakError?: (error: Error) => void;
   /** Idioma para seleção de voz e SSML. Ex: 'pt-BR', 'en', 'es'. */
   language?: string;
   videoHeight?: number;
@@ -34,6 +39,7 @@ export interface DIDAvatarProps {
 const DIDAvatar: React.FC<DIDAvatarProps> = ({
   question,
   onSpeakEnd,
+  onSpeakError,
   language = 'pt-BR',
   videoHeight = 480,
   videoWidth = 640,
@@ -58,6 +64,10 @@ const DIDAvatar: React.FC<DIDAvatarProps> = ({
     actions.onSpeakEnd(onSpeakEnd ?? (() => {}));
   }, [onSpeakEnd, actions]);
 
+  useEffect(() => {
+    actions.onSpeakError(onSpeakError ?? (() => {}));
+  }, [onSpeakError, actions]);
+
   // Anexa <video> ao hook uma vez
   useEffect(() => {
     if (videoRef.current) {
@@ -67,8 +77,12 @@ const DIDAvatar: React.FC<DIDAvatarProps> = ({
 
   // Fala a pergunta quando muda E sessão está pronta E não foi falada ainda
   useEffect(() => {
+    if (!question) {
+      spokenQuestionRef.current = null;
+      return;
+    }
+
     if (
-      question &&
       state.status === 'connected' &&
       question !== spokenQuestionRef.current
     ) {

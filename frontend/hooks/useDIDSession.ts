@@ -53,6 +53,7 @@ export interface DIDSessionActions {
    * Re-registre se o callback mudar entre perguntas.
    */
   onSpeakEnd: (cb: () => void) => void;
+  onSpeakError: (cb: (error: Error) => void) => void;
   attachVideo: (el: HTMLVideoElement) => void;
 }
 
@@ -61,6 +62,8 @@ export function useDIDSession(language = 'pt-BR'): [DIDSessionState, DIDSessionA
   const videoElRef = useRef<HTMLVideoElement | null>(null);
   const srcObjectRef = useRef<MediaStream | null>(null);
   const speakEndCbRef = useRef<(() => void) | null>(null);
+  const speakErrorCbRef = useRef<((error: Error) => void) | null>(null);
+  const speakWatchdogRef = useRef<number | null>(null);
 
   // Refs lidas pelos callbacks do SDK — sem stale closure
   const isMountedRef = useRef(true);
@@ -84,6 +87,10 @@ export function useDIDSession(language = 'pt-BR'): [DIDSessionState, DIDSessionA
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
+      if (typeof window !== 'undefined' && speakWatchdogRef.current != null) {
+        window.clearTimeout(speakWatchdogRef.current);
+        speakWatchdogRef.current = null;
+      }
       agentManagerRef.current?.disconnect().catch(() => {});
     };
   }, []);
@@ -96,13 +103,41 @@ export function useDIDSession(language = 'pt-BR'): [DIDSessionState, DIDSessionA
     [],
   );
 
+  const clearSpeakWatchdog = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    if (speakWatchdogRef.current != null) {
+      window.clearTimeout(speakWatchdogRef.current);
+      speakWatchdogRef.current = null;
+    }
+  }, []);
+
+  const emitSpeakError = useCallback((error: unknown) => {
+    const normalized = error instanceof Error
+      ? error
+      : new Error(String(error || 'Falha desconhecida ao falar com o D-ID.'));
+
+    clearSpeakWatchdog();
+    if (isMountedRef.current) {
+      setIsSpeaking(false);
+    }
+    console.error('[D-ID] speak failed:', normalized);
+    speakErrorCbRef.current?.(normalized);
+  }, [clearSpeakWatchdog]);
+
+  const playVideo = useCallback((el: HTMLVideoElement, onFailure?: (error: unknown) => void) => {
+    el.play().catch((error) => {
+      console.warn('[D-ID] video.play() failed:', error);
+      onFailure?.(error);
+    });
+  }, []);
+
   const applyIdleVideo = useCallback((el: HTMLVideoElement) => {
     const idle = idleVideoUrlRef.current;
     if (!idle) return;
     el.loop = true;
     el.src = idle;
-    el.play().catch(() => {}); // autoplay pode falhar antes de interação do usuário
-  }, []);
+    playVideo(el);
+  }, [playVideo]);
 
   const connect = useCallback(async () => {
     if (statusRef.current !== 'idle' && statusRef.current !== 'error') return;
@@ -130,6 +165,7 @@ export function useDIDSession(language = 'pt-BR'): [DIDSessionState, DIDSessionA
             if (myConnectionId !== connectionIdRef.current) return;
 
             if (state === StreamingState.Stop) {
+              clearSpeakWatchdog();
               if (isMountedRef.current) setIsSpeaking(false);
               const el = videoElRef.current;
               if (el) {
@@ -140,12 +176,16 @@ export function useDIDSession(language = 'pt-BR'): [DIDSessionState, DIDSessionA
               speakEndCbRef.current?.();
             } else {
               // StreamingState.Start
+              clearSpeakWatchdog();
               if (isMountedRef.current) setIsSpeaking(true);
               const el = videoElRef.current;
               if (el && srcObjectRef.current) {
                 el.loop = false;
                 el.src = '';
                 el.srcObject = srcObjectRef.current;
+                playVideo(el, (error) => {
+                  emitSpeakError(new Error(`Falha ao reproduzir o video do avatar: ${String(error)}`));
+                });
               }
             }
           },
@@ -170,6 +210,7 @@ export function useDIDSession(language = 'pt-BR'): [DIDSessionState, DIDSessionA
               state === ConnectionState.Closed ||
               state === ConnectionState.Fail
             ) {
+              clearSpeakWatchdog();
               safeSet(setStatus, 'idle');
               statusRef.current = 'idle';
               safeSet(setIsSpeaking, false);
@@ -182,10 +223,13 @@ export function useDIDSession(language = 'pt-BR'): [DIDSessionState, DIDSessionA
 
           onError(err: Error) {
             if (!isMountedRef.current) return;
+            clearSpeakWatchdog();
             console.error('[D-ID] Agent error:', err);
+            safeSet(setIsSpeaking, false);
             safeSet(setError, err?.message ?? 'Erro desconhecido no avatar D-ID');
             safeSet(setStatus, 'error');
             statusRef.current = 'error';
+            speakErrorCbRef.current?.(err);
           },
         },
       };
@@ -207,7 +251,7 @@ export function useDIDSession(language = 'pt-BR'): [DIDSessionState, DIDSessionA
       statusRef.current = 'error';
       safeSet(setError, msg);
     }
-  }, [safeSet, applyIdleVideo]);
+  }, [safeSet, applyIdleVideo, clearSpeakWatchdog, emitSpeakError, playVideo]);
 
   const disconnect = useCallback(async () => {
     connectionIdRef.current++; // invalida conexão em andamento
@@ -218,6 +262,7 @@ export function useDIDSession(language = 'pt-BR'): [DIDSessionState, DIDSessionA
     try {
       await mgr.disconnect();
     } finally {
+      clearSpeakWatchdog();
       agentManagerRef.current = null;
       srcObjectRef.current = null;
       idleVideoUrlRef.current = null;
@@ -228,30 +273,59 @@ export function useDIDSession(language = 'pt-BR'): [DIDSessionState, DIDSessionA
         statusRef.current = 'idle';
       }
     }
-  }, [safeSet]);
+  }, [clearSpeakWatchdog, safeSet]);
 
   const speak = useCallback((text: string) => {
-    if (!text.trim()) return;
+    const normalizedText = text.trim();
+    if (!normalizedText) return;
     if (statusRef.current !== 'connected') return; // ref síncrona — sem closure stale
-    agentManagerRef.current?.speak(buildDIDSpeakPayload(text, languageRef.current));
-  }, []);
+    const manager = agentManagerRef.current;
+    if (!manager) {
+      emitSpeakError(new Error('Sessão D-ID indisponível.'));
+      return;
+    }
+
+    clearSpeakWatchdog();
+    if (typeof window !== 'undefined') {
+      speakWatchdogRef.current = window.setTimeout(() => {
+        emitSpeakError(new Error('O avatar não iniciou a fala a tempo.'));
+      }, 9000);
+    }
+
+    Promise.resolve(manager.speak(buildDIDSpeakPayload(normalizedText, languageRef.current))).catch((error) => {
+      emitSpeakError(error);
+    });
+  }, [clearSpeakWatchdog, emitSpeakError]);
 
   const onSpeakEnd = useCallback((cb: () => void) => {
     speakEndCbRef.current = cb;
   }, []);
 
+  const onSpeakError = useCallback((cb: (error: Error) => void) => {
+    speakErrorCbRef.current = cb;
+  }, []);
+
   const attachVideo = useCallback(
     (el: HTMLVideoElement) => {
       videoElRef.current = el;
+      if (srcObjectRef.current) {
+        el.loop = false;
+        el.src = '';
+        el.srcObject = srcObjectRef.current;
+        playVideo(el, (error) => {
+          emitSpeakError(new Error(`Falha ao anexar o vídeo do avatar: ${String(error)}`));
+        });
+        return;
+      }
       applyIdleVideo(el);
     },
-    [applyIdleVideo],
+    [applyIdleVideo, emitSpeakError, playVideo],
   );
 
   // Objeto actions estabilizado: ref só muda quando uma função mudar
   const actions = useMemo<DIDSessionActions>(
-    () => ({ connect, disconnect, speak, onSpeakEnd, attachVideo }),
-    [connect, disconnect, speak, onSpeakEnd, attachVideo],
+    () => ({ connect, disconnect, speak, onSpeakEnd, onSpeakError, attachVideo }),
+    [attachVideo, connect, disconnect, onSpeakEnd, onSpeakError, speak],
   );
 
   return [{ status, isSpeaking, idleVideoUrl, error }, actions];

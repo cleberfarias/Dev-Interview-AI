@@ -161,6 +161,16 @@ describe('Fala da pergunta - sem double-speak', () => {
     expectSpeakPayload(1, 'Pergunta 2');
   });
 
+  it('permite repetir a mesma pergunta depois de limpar o valor', async () => {
+    const { rerender } = await renderConnected({ question: 'Repita a pergunta' });
+    await waitFor(() => expect(mockAgentManager.speak).toHaveBeenCalledTimes(1));
+
+    rerender(<DIDAvatar question={undefined} />);
+    rerender(<DIDAvatar question="Repita a pergunta" />);
+
+    await waitFor(() => expect(mockAgentManager.speak).toHaveBeenCalledTimes(2));
+  });
+
   it('nao chama speak() com string vazia', async () => {
     await renderConnected({ question: '' });
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -225,6 +235,16 @@ describe('Tratamento de erro e retry', () => {
     await waitFor(() =>
       expect(screen.getByTestId('did-status-overlay')).toHaveTextContent('WebRTC ICE failed'),
     );
+  });
+
+  it('propaga onSpeakError quando speak() rejeita', async () => {
+    const onSpeakError = vi.fn();
+    mockAgentManager.speak.mockRejectedValueOnce(new Error('DID speak failed'));
+
+    await renderConnected({ question: 'Pergunta com erro', onSpeakError });
+
+    await waitFor(() => expect(onSpeakError).toHaveBeenCalledTimes(1));
+    expect(onSpeakError.mock.calls[0]?.[0]).toEqual(expect.objectContaining({ message: 'DID speak failed' }));
   });
 
   it('tenta reconectar ao clicar em retry', async () => {

@@ -233,6 +233,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
   const [avatarByQuestionId, setAvatarByQuestionId] = useState<Record<string, AvatarResponse>>({});
   const [currentAvatar, setCurrentAvatar] = useState<AvatarResponse | null>(null);
   const [didSpokenText, setDidSpokenText] = useState<string | undefined>();
+  const didFallbackHandledRef = useRef<string | null>(null);
   const historyRef = useRef<HistoryItem[]>([]);
   const partialTranscriptRef = useRef('');
   const partialFeedbackShownRef = useRef(false);
@@ -1195,6 +1196,8 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
   );
 
   const handleDIDSpeakEnd = useCallback(() => {
+    didFallbackHandledRef.current = null;
+    setDidSpokenText(undefined);
     setFlowState('awaiting_answer');
     setConversationState('listening');
   }, []);
@@ -1225,6 +1228,36 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     },
     [isCompactLayout, showRuntimeNotice, speakWithBrowserVoice, stopTTS],
   );
+
+  const handleDIDSpeakError = useCallback((error: Error) => {
+    const prompt = didSpokenText?.trim();
+    const isQuestionDeliveryActive = flowState === 'asking' || conversationState === 'ai_speaking';
+
+    if (!prompt || !isQuestionDeliveryActive) {
+      return;
+    }
+
+    if (didFallbackHandledRef.current === prompt) {
+      return;
+    }
+    didFallbackHandledRef.current = prompt;
+
+    console.warn('D-ID speak failed during interview, using fallback question delivery', error);
+
+    void (async () => {
+      await speakQuestion(prompt, undefined, {
+        openTextFallback: true,
+        suppressNotice: true,
+      }).catch(() => {});
+
+      setDidSpokenText(undefined);
+      setFlowState('awaiting_answer');
+      setConversationState('listening');
+      showRuntimeNotice(
+        'O avatar nao conseguiu falar esta pergunta. Continuamos com audio local para nao travar a entrevista.',
+      );
+    })();
+  }, [conversationState, didSpokenText, flowState, showRuntimeNotice, speakQuestion]);
 
   const resolveAvatarForQuestion = useCallback(
     async (questionId: string, prompt: string): Promise<AvatarResponse | null> => {
@@ -1283,6 +1316,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     });
 
     if (USE_DID_AVATAR) {
+      didFallbackHandledRef.current = null;
       setDidSpokenText(prompt);
       return;
     }
@@ -1568,6 +1602,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
       );
 
       if (USE_DID_AVATAR) {
+        didFallbackHandledRef.current = null;
         setDidSpokenText(prompt);
         return;
       }
@@ -2639,6 +2674,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
                 <DIDAvatar
                   question={didSpokenText}
                   onSpeakEnd={handleDIDSpeakEnd}
+                  onSpeakError={handleDIDSpeakError}
                   language={config.interviewLanguage}
                   videoHeight={320}
                   videoWidth={320}
@@ -2676,6 +2712,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
                   <DIDAvatar
                     question={didSpokenText}
                     onSpeakEnd={handleDIDSpeakEnd}
+                    onSpeakError={handleDIDSpeakError}
                     language={config.interviewLanguage}
                     videoHeight={480}
                     videoWidth={480}
