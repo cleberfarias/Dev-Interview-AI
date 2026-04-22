@@ -232,6 +232,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
   const [activeAnswerId, setActiveAnswerId] = useState<string | null>(null);
   const [avatarByQuestionId, setAvatarByQuestionId] = useState<Record<string, AvatarResponse>>({});
   const [currentAvatar, setCurrentAvatar] = useState<AvatarResponse | null>(null);
+  const [didSpokenText, setDidSpokenText] = useState<string | undefined>();
   const historyRef = useRef<HistoryItem[]>([]);
   const partialTranscriptRef = useRef('');
   const partialFeedbackShownRef = useRef(false);
@@ -1193,6 +1194,11 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     [audioEl, stopTTS],
   );
 
+  const handleDIDSpeakEnd = useCallback(() => {
+    setFlowState('awaiting_answer');
+    setConversationState('listening');
+  }, []);
+
   const speakQuestion = useCallback(
     async (text: string, _voiceId?: string, options: QuestionSpeechOptions = {}) => {
       stopTTS();
@@ -1275,6 +1281,12 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
       seniority: config.seniority,
       stacks: config.stacks,
     });
+
+    if (USE_DID_AVATAR) {
+      setDidSpokenText(prompt);
+      return;
+    }
+
     const avatarPayload = await resolveAvatarForQuestion('__opening__', prompt);
     if (avatarPayload) {
       setCurrentAvatar(avatarPayload);
@@ -1539,11 +1551,6 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
       if (!currentQuestion) return;
       setFlowState('asking');
       setConversationState('ai_speaking');
-      if (!audioEl) {
-        setFlowState('awaiting_answer');
-        setConversationState('listening');
-        return;
-      }
       const prompt = overridePrompt || buildSpokenPrompt(
         currentQuestion.title,
         currentIndex,
@@ -1559,6 +1566,18 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
           isLastQuestion: currentIndex === fallbackMaxQuestions - 1,
         },
       );
+
+      if (USE_DID_AVATAR) {
+        setDidSpokenText(prompt);
+        return;
+      }
+
+      if (!audioEl) {
+        setFlowState('awaiting_answer');
+        setConversationState('listening');
+        return;
+      }
+
       const cachedAvatar = avatarCacheRef.current[currentQuestion.id];
       const avatarPayload = cachedAvatar || await resolveAvatarForQuestion(currentQuestion.id, prompt);
       const playableAvatar = avatarPayload || (currentIndex === 0 ? initialAvatar || null : null);
@@ -2618,7 +2637,9 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
             <div className={styles.mobileStage}>
               {USE_DID_AVATAR ? (
                 <DIDAvatar
-                  question={currentQuestion?.title}
+                  question={didSpokenText}
+                  onSpeakEnd={handleDIDSpeakEnd}
+                  language={config.interviewLanguage}
                   videoHeight={320}
                   videoWidth={320}
                 />
@@ -2653,7 +2674,9 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
               <div className={styles.leftColumn}>
                 {USE_DID_AVATAR ? (
                   <DIDAvatar
-                    question={currentQuestion?.title}
+                    question={didSpokenText}
+                    onSpeakEnd={handleDIDSpeakEnd}
+                    language={config.interviewLanguage}
                     videoHeight={480}
                     videoWidth={480}
                   />

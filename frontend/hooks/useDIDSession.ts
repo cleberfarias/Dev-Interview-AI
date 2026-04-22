@@ -24,6 +24,7 @@ import {
   type AgentManagerOptions,
 } from '@d-id/client-sdk';
 import { getDIDCredentials } from '../services/didApi';
+import { buildDIDSpeakPayload } from '../src/features/avatar/didTextHumanizer';
 
 export type DIDSessionStatus =
   | 'idle'
@@ -55,7 +56,7 @@ export interface DIDSessionActions {
   attachVideo: (el: HTMLVideoElement) => void;
 }
 
-export function useDIDSession(): [DIDSessionState, DIDSessionActions] {
+export function useDIDSession(language = 'pt-BR'): [DIDSessionState, DIDSessionActions] {
   const agentManagerRef = useRef<AgentManager | null>(null);
   const videoElRef = useRef<HTMLVideoElement | null>(null);
   const srcObjectRef = useRef<MediaStream | null>(null);
@@ -67,6 +68,8 @@ export function useDIDSession(): [DIDSessionState, DIDSessionActions] {
   const idleVideoUrlRef = useRef<string | null>(null);
   // Incrementado a cada connect(); callbacks verificam se ainda são donos da sessão atual
   const connectionIdRef = useRef(0);
+  const languageRef = useRef(language);
+  useEffect(() => { languageRef.current = language; }, [language]);
 
   const [status, setStatus] = useState<DIDSessionStatus>('idle');
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -117,7 +120,7 @@ export function useDIDSession(): [DIDSessionState, DIDSessionActions] {
 
       const options: AgentManagerOptions = {
         auth: { type: 'key', clientKey },
-        streamOptions: { compatibilityMode: 'auto', streamWarmup: true },
+        streamOptions: { compatibilityMode: 'auto', streamWarmup: true, fluent: true, outputResolution: 720 },
         callbacks: {
           onSrcObjectReady(stream: MediaStream) {
             srcObjectRef.current = stream;
@@ -230,8 +233,7 @@ export function useDIDSession(): [DIDSessionState, DIDSessionActions] {
   const speak = useCallback((text: string) => {
     if (!text.trim()) return;
     if (statusRef.current !== 'connected') return; // ref síncrona — sem closure stale
-    agentManagerRef.current?.speak({ type: 'text', input: text });
-    // speak() retorna Promise mas não precisamos aguardar — fire-and-forget
+    agentManagerRef.current?.speak(buildDIDSpeakPayload(text, languageRef.current));
   }, []);
 
   const onSpeakEnd = useCallback((cb: () => void) => {

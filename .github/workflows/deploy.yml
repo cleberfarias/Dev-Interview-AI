@@ -2,10 +2,16 @@ name: Deploy
 
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows: ["CI"]
+    branches: [main]
+    types: [completed]
 
 jobs:
   deploy-frontend:
-    if: ${{ secrets.FIREBASE_TOKEN != '' }}
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -35,7 +41,9 @@ jobs:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
 
   deploy-backend:
-    if: ${{ secrets.GCP_SA_KEY != '' }}
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     env:
       PROJECT_ID: dev-interview-ai

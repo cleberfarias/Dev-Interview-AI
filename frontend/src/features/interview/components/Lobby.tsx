@@ -75,10 +75,6 @@ const LANGUAGE_LABELS: Record<LanguageCode, string> = {
   es: 'Espanol',
 };
 
-const MODE_LABELS = {
-  candidate_coaching_mode: 'Coaching do candidato',
-  hiring_assessment_mode: 'Avaliacao de contratacao',
-} as const;
 
 const RETRIEVAL_QUALITY_LABELS: Record<string, string> = {
   strong: 'Forte',
@@ -135,6 +131,7 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
   const [contextPreviewLoading, setContextPreviewLoading] = useState(false);
   const [contextPreviewError, setContextPreviewError] = useState<string | null>(null);
   const [audioLevel, setAudioLevel] = useState(0);
+  const [micSignalSeen, setMicSignalSeen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showNoJobModal, setShowNoJobModal] = useState(false);
   const [selectedModeLevel, setSelectedModeLevel] = useState<InterviewModeLevel>(
@@ -144,6 +141,8 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
   const audioIntervalRef = useRef<number | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const micSignalSeenRef = useRef(false);
+  const audioLevelThrottleRef = useRef(0);
   const hasCredits = userCredits >= INTERVIEW_SESSION_MIN_CREDITS;
   const profileMissingFields = getMissingCandidateProfileFields(candidateProfile);
   const profileCompleteFromCache = candidateProfile ? isCandidateProfileComplete(candidateProfile) : false;
@@ -151,7 +150,7 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
   const startBlockedByProfile = Boolean(candidateProfile && !profileCompleteFromCache);
   const cameraReady = Boolean(stream);
   const microphonePermissionReady = Boolean(stream?.getAudioTracks().length);
-  const microphoneSignalDetected = audioLevel > 6;
+  const microphoneSignalDetected = micSignalSeen;
   const technicalDifficultyLevel = deriveTechnicalDifficultyLevel(config.seniority);
   const selectedModeMeta = getInterviewModeLevelMeta(selectedModeLevel);
 
@@ -182,7 +181,15 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
         const updateLevel = () => {
           analyser.getByteFrequencyData(dataArray);
           const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
-          setAudioLevel(average);
+          if (!micSignalSeenRef.current && average > 6) {
+            micSignalSeenRef.current = true;
+            setMicSignalSeen(true);
+          }
+          const now = performance.now();
+          if (now - audioLevelThrottleRef.current > 100) {
+            audioLevelThrottleRef.current = now;
+            setAudioLevel(average);
+          }
           audioIntervalRef.current = requestAnimationFrame(updateLevel);
         };
         updateLevel();
@@ -397,46 +404,9 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
   };
 
   const roleLabel = TRACK_LABELS[config.track as Track] || config.track || 'Entrevista tecnica';
-  const modeLabel = MODE_LABELS[config.interviewMode || 'candidate_coaching_mode'];
   const seniorityLabel = SENIORITY_LABELS[config.seniority] || config.seniority;
   const styleLabel = STYLE_LABELS[config.style] || config.style;
   const languageLabel = LANGUAGE_LABELS[config.interviewLanguage] || config.interviewLanguage;
-  const readinessComplete = cameraReady && microphonePermissionReady && hasCredits && !startBlockedByProfile;
-  const readinessItems = [
-    {
-      label: 'Camera',
-      value: cameraReady ? 'Pronta' : 'Permissao pendente',
-      ready: cameraReady,
-    },
-    {
-      label: 'Microfone',
-      value: microphoneSignalDetected
-        ? 'Captando'
-        : microphonePermissionReady
-          ? 'Liberado'
-          : 'Permissao pendente',
-      ready: microphonePermissionReady,
-    },
-    {
-      label: 'Creditos',
-      value: `${userCredits} disponiveis`,
-      ready: hasCredits,
-    },
-    {
-      label: 'Entrada',
-      value: readinessComplete ? 'Liberada' : 'Revisar pendencias',
-      ready: readinessComplete,
-    },
-  ];
-  const sessionFacts = [
-    { label: 'Trilha', value: roleLabel },
-    { label: 'Senioridade', value: seniorityLabel },
-    { label: 'Modo', value: modeLabel },
-    { label: 'Formato', value: selectedModeMeta.label },
-    { label: 'Idioma', value: languageLabel },
-    { label: 'Estilo', value: styleLabel },
-    { label: 'Duracao', value: `${config.duration} min` },
-  ];
   const profileContextLabel = candidateProfile
     ? profileCompleteFromCache
       ? hasJobAnalysisFromCache
@@ -444,14 +414,6 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
         : 'Perfil pronto. A vaga ainda pode ser confirmada no inicio.'
       : `Perfil incompleto: ${profileMissingFields.join(', ')}.`
     : 'Seu perfil sera validado no inicio da sessao.';
-  const checklistItems = [
-    'Teste camera e microfone antes de entrar na sala.',
-    hasJobAnalysisFromCache
-      ? 'A descricao da vaga ja esta conectada ao contexto da entrevista.'
-      : 'Sem analise de vaga, a entrevista segue com contexto mais generico.',
-    'Escolha o formato que melhor representa o apoio visual desejado.',
-    'Tenha um exemplo recente de projeto para abrir a conversa com seguranca.',
-  ];
   const startHint = !hasCredits
     ? `Adicione pelo menos ${INTERVIEW_SESSION_MIN_CREDITS} creditos para iniciar e concluir a entrevista.`
     : startBlockedByProfile
@@ -521,44 +483,11 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
               <span className={`${styles.statusChip} ${microphonePermissionReady ? styles.statusOk : styles.statusWarn}`}>
                 Microfone {microphoneSignalDetected ? 'captando' : microphonePermissionReady ? 'liberado' : 'pendente'}
               </span>
-              <button
-                type="button"
-                className={styles.settingsButton}
-                onClick={() => setError('Ajuste permissoes de camera e microfone nas configuracoes do navegador.')}
-                data-tour-id="lobby-settings"
-              >
-                Configuracoes
-              </button>
             </div>
 
-            <div className={styles.readinessPanel}>
-              <div className={styles.readinessHeader}>
-                <div>
-                  <span className={styles.panelEyebrow}>Checklist rapido</span>
-                  <h2>Tudo pronto para entrar?</h2>
-                </div>
-                <span className={`${styles.readinessBadge} ${readinessComplete ? styles.readyBadge : styles.reviewBadge}`}>
-                  {readinessComplete ? 'Pronto' : 'Revisar'}
-                </span>
-              </div>
-              <div className={styles.readinessGrid}>
-                {readinessItems.map((item) => (
-                  <div key={item.label} className={styles.readinessItem}>
-                    <span className={styles.readinessLabel}>{item.label}</span>
-                    <strong className={item.ready ? styles.readinessValueOk : styles.readinessValueWarn}>{item.value}</strong>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className={styles.factGrid} aria-label="Resumo da sessao">
-              {sessionFacts.map((fact) => (
-                <div key={fact.label} className={styles.factCard}>
-                  <span className={styles.factLabel}>{fact.label}</span>
-                  <strong>{fact.value}</strong>
-                </div>
-              ))}
-            </div>
+            <p className={styles.sessionSummary}>
+              {roleLabel} · {seniorityLabel} · {languageLabel} · {styleLabel} · {config.duration} min
+            </p>
 
             {candidateProfile && !profileCompleteFromCache && (
               <div className={styles.warningBox}>
@@ -583,12 +512,6 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
             {!hasCredits && (
               <div className={styles.warningBox}>
                 Creditos insuficientes. Voce precisa de pelo menos {INTERVIEW_SESSION_MIN_CREDITS} creditos para gerar o roteiro e consolidar o relatorio final.
-              </div>
-            )}
-
-            {cameraReady && microphonePermissionReady && !microphoneSignalDetected && (
-              <div className={styles.warningBox}>
-                Microfone liberado, mas ainda sem atividade detectada. Voce pode entrar mesmo assim ou falar por alguns segundos para testar antes de iniciar.
               </div>
             )}
 
@@ -658,61 +581,14 @@ const Lobby: React.FC<Props> = ({ config, userCredits, candidateProfile, onOpenP
                 <p className={styles.retrievalMuted}>{contextPreviewError}</p>
               )}
 
-              {!contextPreviewLoading && !contextPreviewError && (() => {
-                const knowledgeRetrieval = contextPreview?.knowledgeRetrieval as KnowledgeRetrievalContext | null | undefined;
-                const retrievalSources = (knowledgeRetrieval?.sources || []).slice(0, 4);
-                const queryTerms = (knowledgeRetrieval?.queryTerms || []).slice(0, 6);
-                if (!retrievalSources.length) {
-                  return <p className={styles.retrievalMuted}>Sem fontes adicionais recuperadas ainda.</p>;
-                }
-
-                return (
-                  <>
-                    <p className={styles.retrievalLead}>
-                      {knowledgeRetrieval?.summary || 'Contexto recuperado para montar a entrevista.'}
-                    </p>
-
-                    {(knowledgeRetrieval?.retrievalMode || knowledgeRetrieval?.indexStats?.chunks) && (
-                      <p className={styles.retrievalMeta}>
-                        {knowledgeRetrieval?.retrievalMode === 'semantic' ? 'Modo semantico' : 'Modo estruturado'}
-                        {knowledgeRetrieval?.indexStats?.chunks
-                          ? ` • ${knowledgeRetrieval.indexStats.chunks} chunk(s) indexado(s)`
-                          : ''}
-                      </p>
-                    )}
-
-                    {queryTerms.length > 0 && (
-                      <div className={styles.queryTermRow}>
-                        {queryTerms.map((term) => (
-                          <span key={term} className={styles.queryTermChip}>
-                            {term}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    <div className={styles.retrievalList}>
-                      {retrievalSources.map((source) => (
-                        <article key={source.id} className={styles.retrievalItem}>
-                          <div className={styles.retrievalItemTop}>
-                            <strong>{source.title}</strong>
-                            <span>{Math.round((source.score || 0) * 100)}%</span>
-                          </div>
-                          <p>{source.snippet}</p>
-                          {source.reason && <span className={styles.retrievalReason}>{source.reason}</span>}
-                        </article>
-                      ))}
-                    </div>
-                  </>
-                );
-              })()}
+              {!contextPreviewLoading && !contextPreviewError && (
+              <p className={styles.retrievalLead}>
+                {(contextPreview?.knowledgeRetrieval as KnowledgeRetrievalContext | null | undefined)?.summary
+                  || 'Sem fontes adicionais recuperadas ainda.'}
+              </p>
+            )}
             </div>
 
-            <ul className={styles.checkList}>
-              {checklistItems.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
           </aside>
         </div>
 

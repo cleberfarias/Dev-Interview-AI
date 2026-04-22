@@ -396,6 +396,14 @@
   gap: 10px;
 }
 
+.sessionSummary {
+  margin: 10px 0 0;
+  color: var(--fd-text-secondary);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
 .warningBox {
   margin-top: 12px;
   border-radius: 16px;

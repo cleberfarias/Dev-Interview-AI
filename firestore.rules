@@ -20,13 +20,9 @@ service cloud.firestore {
       allow delete: if false;
 
       function isAllowedUserUpdate() {
-        // Campos que o client NUNCA pode alterar
+        // Verifica apenas os campos que foram alterados na requisição
         let forbidden = ["credits", "plan", "ledger", "uid", "createdAt"];
-        if (request.resource.data.keys().hasAny(forbidden)) {
-          return false;
-        }
-        // Opcional: restrinja o tamanho/format dos campos públicos
-        return true;
+        return !request.resource.data.diff(resource.data).affectedKeys().hasAny(forbidden);
       }
     }
 

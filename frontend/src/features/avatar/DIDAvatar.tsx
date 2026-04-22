@@ -24,6 +24,8 @@ export interface DIDAvatarProps {
    * Use para ativar a gravação do candidato.
    */
   onSpeakEnd?: () => void;
+  /** Idioma para seleção de voz e SSML. Ex: 'pt-BR', 'en', 'es'. */
+  language?: string;
   videoHeight?: number;
   videoWidth?: number;
   className?: string;
@@ -32,12 +34,13 @@ export interface DIDAvatarProps {
 const DIDAvatar: React.FC<DIDAvatarProps> = ({
   question,
   onSpeakEnd,
+  language = 'pt-BR',
   videoHeight = 480,
   videoWidth = 640,
   className,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [state, actions] = useDIDSession();
+  const [state, actions] = useDIDSession(language);
 
   // Rastreia a última pergunta efetivamente falada para evitar double-speak
   const spokenQuestionRef = useRef<string | null>(null);
