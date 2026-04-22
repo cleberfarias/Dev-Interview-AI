@@ -83,11 +83,9 @@ const ProductTourTooltip: React.FC<TooltipProps> = ({
   targetFound,
   tooltipProps,
 }) => {
-  const { role: _role, 'aria-label': _ariaLabel, style: tooltipStyle, ...restTooltipProps } =
-    tooltipProps as TooltipRenderProps & { style?: React.CSSProperties };
-  const { children: _backChildren, onClick: onBackClick, 'data-action': backAction } = backProps;
-  const { children: _primaryChildren, onClick: onPrimaryClick, 'data-action': primaryAction } = primaryProps;
-  const { children: _skipChildren, onClick: onSkipClick, 'data-action': skipAction } = skipProps;
+  const { onClick: onBackClick, 'data-action': backAction } = backProps;
+  const { onClick: onPrimaryClick, 'data-action': primaryAction } = primaryProps;
+  const { onClick: onSkipClick, 'data-action': skipAction } = skipProps;
   const handlePrimaryClick = (event: React.MouseEvent<HTMLElement>) => {
     onPrimaryClick(event);
 
@@ -102,12 +100,11 @@ const ProductTourTooltip: React.FC<TooltipProps> = ({
 
   return (
     <div
-      {...restTooltipProps}
+      {...tooltipProps}
       role="dialog"
       className={styles.popover}
       aria-label={String(step.title || step.content || labels.step)}
       style={{
-        ...tooltipStyle,
         width: `${popoverWidth}px`,
         maxWidth: compact ? 'calc(100vw - 24px)' : 'calc(100vw - 24px)',
       }}
@@ -255,31 +252,22 @@ const ProductTour: React.FC<ProductTourProps> = ({ open, steps, locale = 'pt-BR'
   return (
     <Joyride
       key={tourInstanceKey}
-      callback={handleEvent}
+      onEvent={handleEvent}
       continuous
-      disableCloseOnEsc={false}
-      disableOverlayClose={false}
-      disableScrolling={false}
-      hideCloseButton
       run={open}
-      scrollDuration={300}
-      scrollOffset={20}
       scrollToFirstStep
-      showProgress={false}
-      showSkipButton
-      spotlightClicks={false}
       steps={resolvedSteps}
-      styles={{
-        options: {
-          arrowColor: '#0f172a',
-          overlayColor: 'rgba(2, 6, 23, 0.76)',
-          primaryColor: '#0891b2',
-          spotlightShadow: '0 0 0 1px rgba(103, 232, 249, 0.68), 0 0 32px rgba(34, 211, 238, 0.34)',
-          width: popoverWidth,
-          zIndex: 220,
-        },
+      options={{
+        arrowColor: '#0f172a',
+        overlayColor: 'rgba(2, 6, 23, 0.76)',
+        primaryColor: '#0891b2',
+        scrollDuration: 300,
+        scrollOffset: 20,
+        showProgress: false,
+        spotlightPadding: isCompactViewport ? 6 : 10,
+        width: popoverWidth,
+        zIndex: 220,
       }}
-      spotlightPadding={isCompactViewport ? 6 : 10}
       tooltipComponent={(props) => (
         <ProductTourTooltip
           {...props}

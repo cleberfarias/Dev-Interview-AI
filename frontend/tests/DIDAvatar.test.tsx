@@ -40,6 +40,9 @@ vi.mock('@d-id/client-sdk', () => ({
     Start: 'START',
     Stop: 'STOP',
   },
+  Providers: {
+    Microsoft: 'microsoft',
+  },
 }));
 
 import DIDAvatar from '../src/features/avatar/DIDAvatar';

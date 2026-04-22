@@ -2262,7 +2262,6 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
     if (flowState !== 'awaiting_answer') return;
     if (answerMode !== 'audio') return;
     if (!isMediaReady) return;
-    if (flowState === 'no_response') return;
     if (isRecorderActive) return;
     startRecordingFlow();
   }, [answerMode, flowState, isMediaReady, isRecorderActive, startRecordingFlow]);
@@ -2376,7 +2375,8 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
               : 'Preparando entrevista...';
   const inlineCoachEnabled = isCandidateCoachingMode && !DEFER_ANSWER_REVIEW_TO_FINAL;
   const partialFeedbackVisible = Boolean(partialFeedback && inlineCoachEnabled);
-  const showLiveCoachPanel = inlineCoachEnabled && !isFinished && (liveCoachLoading || liveCoachInsight || liveCoachError);
+  const showLiveCoachPanel =
+    inlineCoachEnabled && !isFinished && Boolean(liveCoachLoading || liveCoachInsight || liveCoachError);
   const showPartialTranscript = inlineCoachEnabled && !isFinished && flowState === 'recording' && Boolean(partialTranscript);
   const stageElapsedMs = Math.max(0, runtimeClockMs - stageStartedAtRef.current);
   const sessionElapsedSeconds =
@@ -3050,7 +3050,7 @@ const InterviewRoomLayout: React.FC<InterviewRoomLayoutProps> = ({
               <button
                 type="button"
                 className={styles.textAnswerSubmit}
-                disabled={!canSubmitText || !textEntryEnabled || flowState === 'evaluating'}
+                disabled={!canSubmitText || !textEntryEnabled}
                 onClick={() => {
                   void submitTextAnswer();
                 }}

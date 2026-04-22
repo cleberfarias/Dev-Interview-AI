@@ -12,7 +12,6 @@ const canUseDom = () => typeof window !== 'undefined' && typeof document !== 'un
 
 const configureAudioElement = (audioEl: HTMLAudioElement) => {
   audioEl.preload = 'auto';
-  audioEl.playsInline = true;
   audioEl.setAttribute('playsinline', 'true');
 };
 

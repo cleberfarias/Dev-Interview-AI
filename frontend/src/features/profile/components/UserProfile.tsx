@@ -83,7 +83,7 @@ const toTurnEvidenceEntries = (
   answers?: Record<string, SessionTurnEvidenceTrace> | null,
 ): Array<SessionTurnEvidenceTrace & { key: string }> =>
   Object.entries(answers || {})
-    .map(([key, value]) => ({ key, ...(value || {}) }))
+    .flatMap(([key, value]) => (value?.answerId ? [{ key, ...value }] : []))
     .sort((left, right) => {
       const leftTime = left.capturedAt ? new Date(left.capturedAt).getTime() : 0;
       const rightTime = right.capturedAt ? new Date(right.capturedAt).getTime() : 0;

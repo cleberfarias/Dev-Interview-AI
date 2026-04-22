@@ -201,7 +201,6 @@ const VrmAvatar: React.FC<VrmAvatarProps> = ({
       const scene = sceneRef.current;
       if (scene && vrmRef.current) {
         scene.remove(vrmRef.current.scene);
-        vrmRef.current.dispose();
       }
       vrmRef.current = null;
 

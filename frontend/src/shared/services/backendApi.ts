@@ -23,7 +23,9 @@ import type {
   LiveCoachProcessResponse,
   MCPToolDebuggerResponse,
   SessionAnalysisTraceResponse,
+  SessionClientRuntimeTrace,
   SessionReportResponse,
+  SpeechMetrics,
   AvatarResponse,
 } from "../types";
 
@@ -445,12 +447,12 @@ export const BackendApi = {
     confirmedName?: string;
     answerId?: string;
     interviewMode?: string;
-    speechMetrics?: Record<string, unknown>;
+    speechMetrics?: SpeechMetrics;
     transcript?: string;
     audioBase64?: string;
     mimeType?: string;
     includeAvatar?: boolean;
-    clientRuntime?: Record<string, unknown>;
+    clientRuntime?: SessionClientRuntimeTrace;
   }) =>
     apiFetch<OrchestratorTurnResponse>("/interview/turn", {
       method: "POST",

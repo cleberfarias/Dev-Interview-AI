@@ -266,6 +266,7 @@ describe('UserProfile', () => {
         onLogout={vi.fn()}
         onAddCredits={vi.fn()}
         onDeleteInterview={vi.fn()}
+        onOpenInterviewReport={vi.fn()}
         onUserUpdated={onUserUpdated}
       />,
     );

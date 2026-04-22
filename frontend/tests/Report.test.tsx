@@ -28,6 +28,7 @@ const insufficientReport: FinalReport = {
     technical: [],
     communication: [],
     posture: [],
+    language: [],
   },
   plan7Days: [],
   reportSource: 'ai',
