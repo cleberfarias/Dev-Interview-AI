@@ -20,6 +20,15 @@ vi.mock('../src/shared/services/backendApi', () => ({
   },
 }));
 
+vi.mock('../src/lib/firebase', () => ({
+  auth: {
+    currentUser: {
+      uid: 'user-1',
+      getIdToken: vi.fn().mockResolvedValue('test-token'),
+    },
+  },
+}));
+
 vi.mock('../src/features/resume', () => ({
   ResumeAnalyzerCard: () => <div>Resume Analyzer</div>,
 }));
