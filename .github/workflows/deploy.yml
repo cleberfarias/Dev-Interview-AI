@@ -75,9 +75,14 @@ jobs:
         with:
           project_id: ${{ env.PROJECT_ID }}
 
+      - name: Verify target project
+        run: |
+          test "$(gcloud config get-value project)" = "${{ env.PROJECT_ID }}"
+
       - name: Build image
         run: |
           gcloud builds submit backend \
+            --project ${{ env.PROJECT_ID }} \
             --tag ${{ env.IMAGE }} \
             --gcs-log-dir ${{ env.BUILD_LOG_DIR }} \
             --service-account projects/${{ env.PROJECT_ID }}/serviceAccounts/${{ env.BUILD_SERVICE_ACCOUNT }}
@@ -88,5 +93,6 @@ jobs:
             --image ${{ env.IMAGE }} \
             --region ${{ env.REGION }} \
             --service-account ${{ env.RUNTIME_SERVICE_ACCOUNT }} \
+            --update-env-vars FIREBASE_PROJECT_ID=${{ env.PROJECT_ID }},GOOGLE_CLOUD_PROJECT=${{ env.PROJECT_ID }} \
             --allow-unauthenticated \
             --project ${{ env.PROJECT_ID }}
